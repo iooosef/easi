@@ -1,0 +1,6 @@
+- add comment documentation on each class and method definition inside classes
+  - brief and short, straightforward easy to understand comments
+  - no comment documentation on the following:
+    - entities
+    - repositories
+    - repository methods
