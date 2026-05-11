@@ -21,6 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import dev.tjj.easi.security.JwtAuthenticationFilter;
 
 import java.util.List;
+import org.springframework.http.HttpMethod;
 
 @Configuration
 @EnableWebSecurity
@@ -34,7 +35,7 @@ public class SecurityConfig {
         this.userDetailsService = userDetailsService;
     }
 
-    /** Permits /api/auth/** and requires authentication for all other requests. */
+    /** Configures route-level access rules; employee endpoints are ADMIN/HR-only except GET /me. */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -46,6 +47,9 @@ public class SecurityConfig {
                         .requestMatchers("/test").permitAll()
                         .requestMatchers("/api/users/forgot-password", "/api/users/reset-password").permitAll()
                         .requestMatchers("/api/users/admin-reset-password").hasAnyRole("ADMIN", "HR")
+                        .requestMatchers(HttpMethod.GET, "/api/employees/me").authenticated()
+                        .requestMatchers("/api/employees").hasAnyRole("ADMIN", "HR")
+                        .requestMatchers("/api/employees/**").hasAnyRole("ADMIN", "HR")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
