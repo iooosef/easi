@@ -6,3 +6,5 @@
     - repository methods
 
 Refer to [Role.java](src/main/java/dev/tjj/easi/entity/Role.java) when doing anything about roles or authorization. 
+
+Add appropriate jakarta.validation for all DTO and ensure input are validated in controllers with @Valid
