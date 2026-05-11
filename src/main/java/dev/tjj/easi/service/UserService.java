@@ -1,8 +1,13 @@
 package dev.tjj.easi.service;
 
+import dev.tjj.easi.dto.RegisterUserRequest;
+import dev.tjj.easi.dto.RegisterUserResponse;
+import dev.tjj.easi.entity.Employee;
+import dev.tjj.easi.entity.Role;
 import dev.tjj.easi.entity.TokenPurpose;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.entity.VerificationToken;
+import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.UserRepository;
 import dev.tjj.easi.repository.VerificationTokenRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -19,6 +24,7 @@ import java.time.LocalDateTime;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
     private final VerificationTokenRepository tokenRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
@@ -27,10 +33,12 @@ public class UserService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     public UserService(UserRepository userRepository,
+                       EmployeeRepository employeeRepository,
                        VerificationTokenRepository tokenRepository,
                        EmailService emailService,
                        PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.employeeRepository = employeeRepository;
         this.tokenRepository = tokenRepository;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
@@ -104,6 +112,53 @@ public class UserService {
 
         target.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(target);
+    }
+
+    /**
+     * Registers a new user account linked to an existing employee.
+     * ADMIN can assign any role; HR cannot register accounts with the ADMIN role.
+     */
+    @Transactional
+    public RegisterUserResponse registerUser(RegisterUserRequest request, UserDetails currentUser) {
+        String callerRole = currentUser.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .orElseThrow(() -> new IllegalArgumentException("Access denied."));
+
+        Role role;
+        try {
+            role = Role.valueOf(request.role().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid role: " + request.role());
+        }
+
+        if ("HR".equals(callerRole) && role == Role.ADMIN) {
+            throw new IllegalArgumentException("HR cannot register an admin account.");
+        }
+
+        if (userRepository.findByEmail(request.email()).isPresent()) {
+            throw new IllegalArgumentException("Email is already in use.");
+        }
+
+        Employee employee = employeeRepository.findById(request.employeeId())
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found."));
+
+        User user = new User();
+        user.setEmail(request.email());
+        user.setPassword(passwordEncoder.encode(request.password()));
+        user.setRole(role.name());
+        user.setEmployee(employee);
+        user.setAddedOn(LocalDateTime.now());
+
+        User saved = userRepository.save(user);
+
+        return new RegisterUserResponse(
+                saved.getUserId(),
+                saved.getEmail(),
+                saved.getRole(),
+                employee.getEmployeeId(),
+                saved.getAddedOn()
+        );
     }
 
     private String generateOtp() {

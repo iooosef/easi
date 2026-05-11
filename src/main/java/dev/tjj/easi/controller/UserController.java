@@ -2,6 +2,8 @@ package dev.tjj.easi.controller;
 
 import dev.tjj.easi.dto.AdminResetPasswordRequest;
 import dev.tjj.easi.dto.ForgotPasswordRequest;
+import dev.tjj.easi.dto.RegisterUserRequest;
+import dev.tjj.easi.dto.RegisterUserResponse;
 import dev.tjj.easi.dto.ResetPasswordRequest;
 import dev.tjj.easi.service.UserService;
 import jakarta.validation.Valid;
@@ -44,5 +46,14 @@ public class UserController {
             @AuthenticationPrincipal UserDetails currentUser) {
         userService.adminResetPassword(request.userId(), request.newPassword(), currentUser);
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
+    }
+
+    /** Registers a new user account; ADMIN can assign any role, HR cannot register ADMIN accounts. */
+    @PostMapping("/register")
+    public ResponseEntity<RegisterUserResponse> registerUser(
+            @Valid @RequestBody RegisterUserRequest request,
+            @AuthenticationPrincipal UserDetails currentUser) {
+        RegisterUserResponse response = userService.registerUser(request, currentUser);
+        return ResponseEntity.status(201).body(response);
     }
 }
