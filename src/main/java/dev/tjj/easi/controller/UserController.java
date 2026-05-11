@@ -4,6 +4,7 @@ import dev.tjj.easi.dto.AdminResetPasswordRequest;
 import dev.tjj.easi.dto.ForgotPasswordRequest;
 import dev.tjj.easi.dto.ResetPasswordRequest;
 import dev.tjj.easi.service.UserService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -24,14 +25,14 @@ public class UserController {
 
     /** Sends a password reset OTP to the given email if it belongs to an active account. */
     @PostMapping("/forgot-password")
-    public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody ForgotPasswordRequest request) {
+    public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         userService.sendPasswordResetOtp(request.email());
         return ResponseEntity.ok(Map.of("message", "If that email is registered, an OTP has been sent."));
     }
 
     /** Resets the user's password after verifying the OTP. */
     @PostMapping("/reset-password")
-    public ResponseEntity<Map<String, String>> resetPassword(@RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<Map<String, String>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
         userService.resetPassword(request.email(), request.otp(), request.newPassword());
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
     }
@@ -39,7 +40,7 @@ public class UserController {
     /** Resets any user's password directly; ADMIN is unrestricted, HR cannot reset ADMIN accounts. */
     @PostMapping("/admin-reset-password")
     public ResponseEntity<Map<String, String>> adminResetPassword(
-            @RequestBody AdminResetPasswordRequest request,
+            @Valid @RequestBody AdminResetPasswordRequest request,
             @AuthenticationPrincipal UserDetails currentUser) {
         userService.adminResetPassword(request.userId(), request.newPassword(), currentUser);
         return ResponseEntity.ok(Map.of("message", "Password reset successfully."));
