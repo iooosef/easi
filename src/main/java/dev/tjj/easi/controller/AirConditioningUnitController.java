@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.AirConditioningUnitResponse;
 import dev.tjj.easi.service.AirConditioningUnitService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for air conditioning unit management.
@@ -39,10 +39,10 @@ public class AirConditioningUnitController {
         return ResponseEntity.ok(acService.update(acNum, request));
     }
 
-    /** Returns all air conditioning unit records. */
+    /** Returns a page of air conditioning unit records. */
     @GetMapping
-    public ResponseEntity<List<AirConditioningUnitResponse>> getAll() {
-        return ResponseEntity.ok(acService.getAll());
+    public ResponseEntity<Page<AirConditioningUnitResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(acService.getAll(pageable));
     }
 
     /** Returns a single air conditioning unit record by ID. */

@@ -5,10 +5,11 @@ import dev.tjj.easi.dto.SupplierResponse;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.SupplierRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.List;
 
 /** Handles supplier business logic: creation, updates, and retrieval. */
 @Service
@@ -38,9 +39,9 @@ public class SupplierService {
         return toResponse(supplierRepository.save(supplier));
     }
 
-    /** Returns all supplier records. */
-    public List<SupplierResponse> getAll() {
-        return supplierRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of supplier records. */
+    public Page<SupplierResponse> getAll(Pageable pageable) {
+        return supplierRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single supplier record by supplier ID. */

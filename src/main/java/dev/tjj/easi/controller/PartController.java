@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.PartResponse;
 import dev.tjj.easi.service.PartService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for part management.
@@ -38,10 +38,10 @@ public class PartController {
         return ResponseEntity.ok(partService.update(partId, request));
     }
 
-    /** Returns all part records. Available to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of part records. Available to ADMIN, ACCOUNTING, and STAFF. */
     @GetMapping
-    public ResponseEntity<List<PartResponse>> getAll() {
-        return ResponseEntity.ok(partService.getAll());
+    public ResponseEntity<Page<PartResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(partService.getAll(pageable));
     }
 
     /** Returns a single part record by ID. Available to ADMIN, ACCOUNTING, and STAFF. */

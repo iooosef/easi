@@ -9,10 +9,11 @@ import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.ServiceReportFindingRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles service report finding business logic: creation, updates, and retrieval. */
 @Service
@@ -48,9 +49,9 @@ public class ServiceReportFindingService {
         return toResponse(findingRepository.save(finding));
     }
 
-    /** Returns all service report finding records. */
-    public List<ServiceReportFindingResponse> getAll() {
-        return findingRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of service report finding records. */
+    public Page<ServiceReportFindingResponse> getAll(Pageable pageable) {
+        return findingRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single service report finding record by ID. */

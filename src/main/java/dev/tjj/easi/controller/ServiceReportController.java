@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.ServiceReportResponse;
 import dev.tjj.easi.service.ServiceReportService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for service report management.
@@ -39,10 +39,10 @@ public class ServiceReportController {
         return ResponseEntity.ok(serviceReportService.update(srNumber, request));
     }
 
-    /** Returns all service report records. Available to ADMIN, STAFF, and CREW. */
+    /** Returns a page of service report records. Available to ADMIN, STAFF, and CREW. */
     @GetMapping
-    public ResponseEntity<List<ServiceReportResponse>> getAll() {
-        return ResponseEntity.ok(serviceReportService.getAll());
+    public ResponseEntity<Page<ServiceReportResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(serviceReportService.getAll(pageable));
     }
 
     /** Returns a single service report record by ID. Available to ADMIN, STAFF, and CREW. */

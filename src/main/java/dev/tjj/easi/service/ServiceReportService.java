@@ -5,10 +5,11 @@ import dev.tjj.easi.dto.ServiceReportResponse;
 import dev.tjj.easi.entity.*;
 import dev.tjj.easi.repository.*;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles service report business logic: creation, updates, and retrieval. */
 @Service
@@ -50,9 +51,9 @@ public class ServiceReportService {
         return toResponse(serviceReportRepository.save(report));
     }
 
-    /** Returns all service report records. */
-    public List<ServiceReportResponse> getAll() {
-        return serviceReportRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of service report records. */
+    public Page<ServiceReportResponse> getAll(Pageable pageable) {
+        return serviceReportRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single service report record by ID. */

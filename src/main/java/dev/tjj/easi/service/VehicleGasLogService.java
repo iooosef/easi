@@ -9,9 +9,9 @@ import dev.tjj.easi.repository.DocumentRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 /** Handles vehicle gas log business logic: creation, updates, and retrieval. */
 @Service
@@ -46,9 +46,9 @@ public class VehicleGasLogService {
         return toResponse(gasLogRepository.save(gasLog));
     }
 
-    /** Returns all vehicle gas log records. */
-    public List<VehicleGasLogResponse> getAll() {
-        return gasLogRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of vehicle gas log records. */
+    public Page<VehicleGasLogResponse> getAll(Pageable pageable) {
+        return gasLogRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single vehicle gas log record by ID. */

@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.ProjectResponse;
 import dev.tjj.easi.service.ProjectService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for project management.
@@ -39,10 +39,10 @@ public class ProjectController {
         return ResponseEntity.ok(projectService.update(projNum, request));
     }
 
-    /** Returns all project records. Available to all authenticated users. */
+    /** Returns a page of project records. Available to all authenticated users. */
     @GetMapping
-    public ResponseEntity<List<ProjectResponse>> getAll() {
-        return ResponseEntity.ok(projectService.getAll());
+    public ResponseEntity<Page<ProjectResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(projectService.getAll(pageable));
     }
 
     /** Returns a single project record by project number. Available to all authenticated users. */

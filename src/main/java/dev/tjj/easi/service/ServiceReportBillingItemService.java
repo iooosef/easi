@@ -7,10 +7,11 @@ import dev.tjj.easi.entity.ServiceReportBillingItem;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles service report billing item business logic: creation, updates, and retrieval. */
 @Service
@@ -43,9 +44,9 @@ public class ServiceReportBillingItemService {
         return toResponse(billingItemRepository.save(item));
     }
 
-    /** Returns all service report billing item records. */
-    public List<ServiceReportBillingItemResponse> getAll() {
-        return billingItemRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of service report billing item records. */
+    public Page<ServiceReportBillingItemResponse> getAll(Pageable pageable) {
+        return billingItemRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single service report billing item record by ID. */

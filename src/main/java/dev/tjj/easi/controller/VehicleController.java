@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.VehicleResponse;
 import dev.tjj.easi.service.VehicleService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for vehicle management.
@@ -39,10 +39,10 @@ public class VehicleController {
         return ResponseEntity.ok(vehicleService.update(vehiclesId, request));
     }
 
-    /** Returns all vehicle records. Available to ADMIN, STAFF, and CREW. */
+    /** Returns a page of vehicle records. Available to ADMIN, STAFF, and CREW. */
     @GetMapping
-    public ResponseEntity<List<VehicleResponse>> getAll() {
-        return ResponseEntity.ok(vehicleService.getAll());
+    public ResponseEntity<Page<VehicleResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(vehicleService.getAll(pageable));
     }
 
     /** Returns a single vehicle record by ID. Available to ADMIN, STAFF, and CREW. */

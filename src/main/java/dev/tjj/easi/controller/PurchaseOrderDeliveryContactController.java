@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.PurchaseOrderDeliveryContactResponse;
 import dev.tjj.easi.service.PurchaseOrderDeliveryContactService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for purchase order delivery contact management.
@@ -38,10 +38,10 @@ public class PurchaseOrderDeliveryContactController {
         return ResponseEntity.ok(contactService.update(poContactNum, request));
     }
 
-    /** Returns all purchase order delivery contact records. Available to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of purchase order delivery contact records. Available to ADMIN, ACCOUNTING, and STAFF. */
     @GetMapping
-    public ResponseEntity<List<PurchaseOrderDeliveryContactResponse>> getAll() {
-        return ResponseEntity.ok(contactService.getAll());
+    public ResponseEntity<Page<PurchaseOrderDeliveryContactResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(contactService.getAll(pageable));
     }
 
     /** Returns a single purchase order delivery contact record by ID. Available to ADMIN, ACCOUNTING, and STAFF. */

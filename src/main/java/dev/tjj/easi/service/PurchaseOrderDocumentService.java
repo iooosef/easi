@@ -9,9 +9,9 @@ import dev.tjj.easi.repository.DocumentRepository;
 import dev.tjj.easi.repository.PurchaseOrderDocumentRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 /** Handles purchase order document business logic: creation, updates, and retrieval. */
 @Service
@@ -46,9 +46,9 @@ public class PurchaseOrderDocumentService {
         return toResponse(poDocumentRepository.save(poDocument));
     }
 
-    /** Returns all purchase order document records. */
-    public List<PurchaseOrderDocumentResponse> getAll() {
-        return poDocumentRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of purchase order document records. */
+    public Page<PurchaseOrderDocumentResponse> getAll(Pageable pageable) {
+        return poDocumentRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single purchase order document record by ID. */

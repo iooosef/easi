@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.VehicleGasLogResponse;
 import dev.tjj.easi.service.VehicleGasLogService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for vehicle gas log management.
@@ -38,10 +38,10 @@ public class VehicleGasLogController {
         return ResponseEntity.ok(gasLogService.update(gasLogId, request));
     }
 
-    /** Returns all vehicle gas log records. Available to ADMIN, CREW, and STAFF. */
+    /** Returns a page of vehicle gas log records. Available to ADMIN, CREW, and STAFF. */
     @GetMapping
-    public ResponseEntity<List<VehicleGasLogResponse>> getAll() {
-        return ResponseEntity.ok(gasLogService.getAll());
+    public ResponseEntity<Page<VehicleGasLogResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(gasLogService.getAll(pageable));
     }
 
     /** Returns a single vehicle gas log record by ID. Available to ADMIN, CREW, and STAFF. */

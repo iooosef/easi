@@ -7,10 +7,11 @@ import dev.tjj.easi.entity.ProjectStatus;
 import dev.tjj.easi.entity.ProjectType;
 import dev.tjj.easi.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles project business logic: registration, updates, and retrieval. */
 @Service
@@ -40,9 +41,9 @@ public class ProjectService {
         return toResponse(projectRepository.save(project));
     }
 
-    /** Returns all project records. */
-    public List<ProjectResponse> getAll() {
-        return projectRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of project records. */
+    public Page<ProjectResponse> getAll(Pageable pageable) {
+        return projectRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single project record by project number. */

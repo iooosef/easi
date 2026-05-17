@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.ServiceAssignmentResponse;
 import dev.tjj.easi.service.ServiceAssignmentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for service assignment management.
@@ -39,10 +39,10 @@ public class ServiceAssignmentController {
         return ResponseEntity.ok(assignmentService.update(servAssgnId, request));
     }
 
-    /** Returns all service assignment records. Available to ADMIN, STAFF, HR, and CREW. */
+    /** Returns a page of service assignment records. Available to ADMIN, STAFF, HR, and CREW. */
     @GetMapping
-    public ResponseEntity<List<ServiceAssignmentResponse>> getAll() {
-        return ResponseEntity.ok(assignmentService.getAll());
+    public ResponseEntity<Page<ServiceAssignmentResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(assignmentService.getAll(pageable));
     }
 
     /** Returns a single service assignment record by ID. Available to ADMIN, STAFF, HR, and CREW. */

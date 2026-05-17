@@ -9,10 +9,11 @@ import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ServiceAssignmentRepository;
 import dev.tjj.easi.repository.ServiceScheduleRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles service assignment business logic: creation, updates, and retrieval. */
 @Service
@@ -48,9 +49,9 @@ public class ServiceAssignmentService {
         return toResponse(assignmentRepository.save(assignment));
     }
 
-    /** Returns all service assignment records. */
-    public List<ServiceAssignmentResponse> getAll() {
-        return assignmentRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of service assignment records. */
+    public Page<ServiceAssignmentResponse> getAll(Pageable pageable) {
+        return assignmentRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single service assignment record by ID. */

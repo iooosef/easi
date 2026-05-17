@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.PurchaseOrderDocumentResponse;
 import dev.tjj.easi.service.PurchaseOrderDocumentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for purchase order document management.
@@ -38,10 +38,10 @@ public class PurchaseOrderDocumentController {
         return ResponseEntity.ok(poDocumentService.update(poDocNum, request));
     }
 
-    /** Returns all purchase order document records. Available to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of purchase order document records. Available to ADMIN, ACCOUNTING, and STAFF. */
     @GetMapping
-    public ResponseEntity<List<PurchaseOrderDocumentResponse>> getAll() {
-        return ResponseEntity.ok(poDocumentService.getAll());
+    public ResponseEntity<Page<PurchaseOrderDocumentResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(poDocumentService.getAll(pageable));
     }
 
     /** Returns a single purchase order document record by ID. Available to ADMIN, ACCOUNTING, and STAFF. */

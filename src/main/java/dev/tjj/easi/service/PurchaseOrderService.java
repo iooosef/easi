@@ -9,10 +9,11 @@ import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles purchase order business logic: creation, updates, and retrieval. */
 @Service
@@ -52,9 +53,9 @@ public class PurchaseOrderService {
         return toResponse(purchaseOrderRepository.save(po));
     }
 
-    /** Returns all purchase order records. */
-    public List<PurchaseOrderResponse> getAll() {
-        return purchaseOrderRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of purchase order records. */
+    public Page<PurchaseOrderResponse> getAll(Pageable pageable) {
+        return purchaseOrderRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single purchase order record by PO number. */

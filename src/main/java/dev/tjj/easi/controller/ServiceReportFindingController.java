@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.ServiceReportFindingResponse;
 import dev.tjj.easi.service.ServiceReportFindingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for service report finding management.
@@ -38,10 +38,10 @@ public class ServiceReportFindingController {
         return ResponseEntity.ok(findingService.update(srFindingsNumber, request));
     }
 
-    /** Returns all service report finding records. Available to ADMIN, STAFF, and CREW. */
+    /** Returns a page of service report finding records. Available to ADMIN, STAFF, and CREW. */
     @GetMapping
-    public ResponseEntity<List<ServiceReportFindingResponse>> getAll() {
-        return ResponseEntity.ok(findingService.getAll());
+    public ResponseEntity<Page<ServiceReportFindingResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(findingService.getAll(pageable));
     }
 
     /** Returns a single service report finding record by ID. Available to ADMIN, STAFF, and CREW. */

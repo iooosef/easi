@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.ServiceReportBillingItemResponse;
 import dev.tjj.easi.service.ServiceReportBillingItemService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for service report billing item management.
@@ -39,10 +39,10 @@ public class ServiceReportBillingItemController {
         return ResponseEntity.ok(billingItemService.update(srBillingNum, request));
     }
 
-    /** Returns all service report billing item records. Available to ADMIN, ACCOUNTING, STAFF, and CREW. */
+    /** Returns a page of service report billing item records. Available to ADMIN, ACCOUNTING, STAFF, and CREW. */
     @GetMapping
-    public ResponseEntity<List<ServiceReportBillingItemResponse>> getAll() {
-        return ResponseEntity.ok(billingItemService.getAll());
+    public ResponseEntity<Page<ServiceReportBillingItemResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(billingItemService.getAll(pageable));
     }
 
     /** Returns a single service report billing item record by ID. Available to ADMIN, ACCOUNTING, STAFF, and CREW. */

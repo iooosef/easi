@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.ServiceScheduleResponse;
 import dev.tjj.easi.service.ServiceScheduleService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for service schedule management.
@@ -39,10 +39,10 @@ public class ServiceScheduleController {
         return ResponseEntity.ok(serviceScheduleService.update(schedId, request));
     }
 
-    /** Returns all service schedule records. */
+    /** Returns a page of service schedule records. */
     @GetMapping
-    public ResponseEntity<List<ServiceScheduleResponse>> getAll() {
-        return ResponseEntity.ok(serviceScheduleService.getAll());
+    public ResponseEntity<Page<ServiceScheduleResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(serviceScheduleService.getAll(pageable));
     }
 
     /** Returns a single service schedule record by ID. */

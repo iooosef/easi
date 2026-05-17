@@ -7,9 +7,9 @@ import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
 import dev.tjj.easi.repository.PurchaseOrderDeliveryContactRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 /** Handles purchase order delivery contact business logic: creation, updates, and retrieval. */
 @Service
@@ -41,9 +41,9 @@ public class PurchaseOrderDeliveryContactService {
         return toResponse(contactRepository.save(contact));
     }
 
-    /** Returns all purchase order delivery contact records. */
-    public List<PurchaseOrderDeliveryContactResponse> getAll() {
-        return contactRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of purchase order delivery contact records. */
+    public Page<PurchaseOrderDeliveryContactResponse> getAll(Pageable pageable) {
+        return contactRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single purchase order delivery contact record by ID. */

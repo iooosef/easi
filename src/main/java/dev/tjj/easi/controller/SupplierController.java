@@ -5,10 +5,10 @@ import dev.tjj.easi.dto.SupplierResponse;
 import dev.tjj.easi.service.SupplierService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for supplier management.
@@ -38,10 +38,10 @@ public class SupplierController {
         return ResponseEntity.ok(supplierService.update(supplierId, request));
     }
 
-    /** Returns all supplier records. Restricted to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of supplier records. Restricted to ADMIN, ACCOUNTING, and STAFF. */
     @GetMapping
-    public ResponseEntity<List<SupplierResponse>> getAll() {
-        return ResponseEntity.ok(supplierService.getAll());
+    public ResponseEntity<Page<SupplierResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(supplierService.getAll(pageable));
     }
 
     /** Returns a single supplier record by ID. Restricted to ADMIN, ACCOUNTING, and STAFF. */

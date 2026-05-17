@@ -11,10 +11,11 @@ import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles vehicle log business logic: creation, updates, and retrieval. */
 @Service
@@ -53,9 +54,9 @@ public class VehicleLogService {
         return toResponse(vehicleLogRepository.save(log));
     }
 
-    /** Returns all vehicle log records. */
-    public List<VehicleLogResponse> getAll() {
-        return vehicleLogRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of vehicle log records. */
+    public Page<VehicleLogResponse> getAll(Pageable pageable) {
+        return vehicleLogRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single vehicle log record by ID. */

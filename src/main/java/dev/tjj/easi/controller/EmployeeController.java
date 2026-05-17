@@ -5,12 +5,12 @@ import dev.tjj.easi.dto.EmployeeResponse;
 import dev.tjj.easi.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST endpoints for employee record management.
@@ -41,10 +41,10 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.update(id, request));
     }
 
-    /** Returns all employee records as a list. Restricted to ADMIN and HR. */
+    /** Returns a page of employee records. Restricted to ADMIN and HR. */
     @GetMapping
-    public ResponseEntity<List<EmployeeResponse>> getAll() {
-        return ResponseEntity.ok(employeeService.getAll());
+    public ResponseEntity<Page<EmployeeResponse>> getAll(Pageable pageable) {
+        return ResponseEntity.ok(employeeService.getAll(pageable));
     }
 
     /** Returns a single employee record by ID. Restricted to ADMIN and HR. */

@@ -7,10 +7,11 @@ import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.ProjectRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles air conditioning unit business logic: registration, updates, and retrieval. */
 @Service
@@ -47,9 +48,9 @@ public class AirConditioningUnitService {
         return toResponse(acRepository.save(unit));
     }
 
-    /** Returns all air conditioning unit records. */
-    public List<AirConditioningUnitResponse> getAll() {
-        return acRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of air conditioning unit records. */
+    public Page<AirConditioningUnitResponse> getAll(Pageable pageable) {
+        return acRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single air conditioning unit record by ID. */

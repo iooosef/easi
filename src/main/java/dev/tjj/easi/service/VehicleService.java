@@ -5,10 +5,11 @@ import dev.tjj.easi.dto.VehicleResponse;
 import dev.tjj.easi.entity.Vehicle;
 import dev.tjj.easi.repository.VehicleRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles vehicle business logic: registration, updates, and retrieval. */
 @Service
@@ -38,9 +39,9 @@ public class VehicleService {
         return toResponse(vehicleRepository.save(vehicle));
     }
 
-    /** Returns all vehicle records. */
-    public List<VehicleResponse> getAll() {
-        return vehicleRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of vehicle records. */
+    public Page<VehicleResponse> getAll(Pageable pageable) {
+        return vehicleRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single vehicle record by vehicle ID. */

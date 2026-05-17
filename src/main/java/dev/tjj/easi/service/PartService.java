@@ -9,10 +9,11 @@ import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.SupplierRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /** Handles part business logic: creation, updates, and retrieval. */
 @Service
@@ -48,9 +49,9 @@ public class PartService {
         return toResponse(partRepository.save(part));
     }
 
-    /** Returns all part records. */
-    public List<PartResponse> getAll() {
-        return partRepository.findAll().stream().map(this::toResponse).toList();
+    /** Returns a page of part records. */
+    public Page<PartResponse> getAll(Pageable pageable) {
+        return partRepository.findAll(pageable).map(this::toResponse);
     }
 
     /** Returns a single part record by ID. */
