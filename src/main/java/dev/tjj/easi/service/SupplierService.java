@@ -4,6 +4,10 @@ import dev.tjj.easi.dto.SupplierRequest;
 import dev.tjj.easi.dto.SupplierResponse;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.SupplierRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,9 +20,11 @@ import java.time.LocalDate;
 public class SupplierService {
 
     private final SupplierRepository supplierRepository;
+    private final LogService logService;
 
-    public SupplierService(SupplierRepository supplierRepository) {
+    public SupplierService(SupplierRepository supplierRepository, LogService logService) {
         this.supplierRepository = supplierRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new supplier record. */
@@ -27,7 +33,9 @@ public class SupplierService {
         Supplier supplier = new Supplier();
         applyRequest(supplier, request);
         supplier.setAddedOn(LocalDate.now());
-        return toResponse(supplierRepository.save(supplier));
+        Supplier saved = supplierRepository.save(supplier);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Supplier", String.valueOf(saved.getSupplierId()), "Created supplier #" + saved.getSupplierId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing supplier's information by supplier ID. */
@@ -36,7 +44,9 @@ public class SupplierService {
         Supplier supplier = supplierRepository.findById(supplierId)
                 .orElseThrow(() -> new IllegalArgumentException("Supplier not found."));
         applyRequest(supplier, request);
-        return toResponse(supplierRepository.save(supplier));
+        Supplier saved = supplierRepository.save(supplier);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Supplier", String.valueOf(supplierId), "Updated supplier #" + supplierId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of supplier records. */
@@ -49,6 +59,11 @@ public class SupplierService {
         return supplierRepository.findById(supplierId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Supplier not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the supplier entity. */

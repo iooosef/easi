@@ -8,6 +8,10 @@ import dev.tjj.easi.entity.ServiceReportFinding;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.ServiceReportFindingRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +26,16 @@ public class ServiceReportFindingService {
     private final ServiceReportFindingRepository findingRepository;
     private final ServiceReportRepository serviceReportRepository;
     private final AirConditioningUnitRepository acUnitRepository;
+    private final LogService logService;
 
     public ServiceReportFindingService(ServiceReportFindingRepository findingRepository,
                                        ServiceReportRepository serviceReportRepository,
-                                       AirConditioningUnitRepository acUnitRepository) {
+                                       AirConditioningUnitRepository acUnitRepository,
+                                       LogService logService) {
         this.findingRepository = findingRepository;
         this.serviceReportRepository = serviceReportRepository;
         this.acUnitRepository = acUnitRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new service report finding record. */
@@ -37,7 +44,9 @@ public class ServiceReportFindingService {
         ServiceReportFinding finding = new ServiceReportFinding();
         applyRequest(finding, request);
         finding.setAddedOn(LocalDateTime.now());
-        return toResponse(findingRepository.save(finding));
+        ServiceReportFinding saved = findingRepository.save(finding);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceReportFinding", String.valueOf(saved.getSrFindingsNumber()), "Created service report finding #" + saved.getSrFindingsNumber(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing service report finding record by ID. */
@@ -46,7 +55,9 @@ public class ServiceReportFindingService {
         ServiceReportFinding finding = findingRepository.findById(srFindingsNumber)
                 .orElseThrow(() -> new IllegalArgumentException("Service report finding not found."));
         applyRequest(finding, request);
-        return toResponse(findingRepository.save(finding));
+        ServiceReportFinding saved = findingRepository.save(finding);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceReportFinding", String.valueOf(srFindingsNumber), "Updated service report finding #" + srFindingsNumber, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of service report finding records. */
@@ -59,6 +70,11 @@ public class ServiceReportFindingService {
         return findingRepository.findById(srFindingsNumber)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service report finding not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the service report finding entity. */

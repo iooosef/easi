@@ -8,6 +8,10 @@ import dev.tjj.easi.entity.VehicleLog;
 import dev.tjj.easi.repository.DocumentRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,13 +24,16 @@ public class VehicleGasLogService {
     private final VehicleGasLogRepository gasLogRepository;
     private final VehicleLogRepository vehicleLogRepository;
     private final DocumentRepository documentRepository;
+    private final LogService logService;
 
     public VehicleGasLogService(VehicleGasLogRepository gasLogRepository,
                                  VehicleLogRepository vehicleLogRepository,
-                                 DocumentRepository documentRepository) {
+                                 DocumentRepository documentRepository,
+                                 LogService logService) {
         this.gasLogRepository = gasLogRepository;
         this.vehicleLogRepository = vehicleLogRepository;
         this.documentRepository = documentRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new vehicle gas log record. */
@@ -34,7 +41,9 @@ public class VehicleGasLogService {
     public VehicleGasLogResponse add(VehicleGasLogRequest request) {
         VehicleGasLog gasLog = new VehicleGasLog();
         applyRequest(gasLog, request);
-        return toResponse(gasLogRepository.save(gasLog));
+        VehicleGasLog saved = gasLogRepository.save(gasLog);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "VehicleGasLog", String.valueOf(saved.getGasLogId()), "Created vehicle gas log #" + saved.getGasLogId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing vehicle gas log record by ID. */
@@ -43,7 +52,9 @@ public class VehicleGasLogService {
         VehicleGasLog gasLog = gasLogRepository.findById(gasLogId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle gas log not found."));
         applyRequest(gasLog, request);
-        return toResponse(gasLogRepository.save(gasLog));
+        VehicleGasLog saved = gasLogRepository.save(gasLog);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "VehicleGasLog", String.valueOf(gasLogId), "Updated vehicle gas log #" + gasLogId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of vehicle gas log records. */
@@ -56,6 +67,11 @@ public class VehicleGasLogService {
         return gasLogRepository.findById(gasLogId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle gas log not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the vehicle gas log entity. */

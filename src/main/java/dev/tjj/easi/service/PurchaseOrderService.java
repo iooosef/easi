@@ -8,6 +8,10 @@ import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +26,16 @@ public class PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final ProjectRepository projectRepository;
     private final ServiceReportRepository serviceReportRepository;
+    private final LogService logService;
 
     public PurchaseOrderService(PurchaseOrderRepository purchaseOrderRepository,
                                 ProjectRepository projectRepository,
-                                ServiceReportRepository serviceReportRepository) {
+                                ServiceReportRepository serviceReportRepository,
+                                LogService logService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.projectRepository = projectRepository;
         this.serviceReportRepository = serviceReportRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new purchase order record. */
@@ -41,7 +48,9 @@ public class PurchaseOrderService {
         po.setPoNum(request.poNum());
         applyRequest(po, request);
         po.setAddedOn(LocalDateTime.now());
-        return toResponse(purchaseOrderRepository.save(po));
+        PurchaseOrder saved = purchaseOrderRepository.save(po);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "PurchaseOrder", saved.getPoNum(), "Created purchase order " + saved.getPoNum(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing purchase order record by PO number. */
@@ -50,7 +59,9 @@ public class PurchaseOrderService {
         PurchaseOrder po = purchaseOrderRepository.findById(poNum)
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order not found."));
         applyRequest(po, request);
-        return toResponse(purchaseOrderRepository.save(po));
+        PurchaseOrder saved = purchaseOrderRepository.save(po);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "PurchaseOrder", poNum, "Updated purchase order " + poNum, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of purchase order records. */
@@ -63,6 +74,11 @@ public class PurchaseOrderService {
         return purchaseOrderRepository.findById(poNum)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the purchase order entity. */

@@ -25,3 +25,14 @@ description: 1-3 sentences explaining behavior, side effects, or edge cases
 use allowableValues on @Schema for string fields with a fixed set of values
 do not duplicate jakarta.validation constraints inside @Schema, they are picked up automatically
 use @Operation(hidden = true) for internal or debug endpoints
+
+### audit logging                                                                                                                     
+Every service method that adds, updates, or deletes data must call `logService.logByEmail(...)` after the operation succeeds.                                                                                                                                                 
+- Inject `LogService` as a constructor dependency in every service that mutates data.                                                   - Retrieve the actor via `SecurityContextHolder.getContext().getAuthentication().getName()` (store in a private `getEmail()` helper).
+- Use `LogType.AUDIT` and `LogSeverity.INFO` for all normal mutations.
+- `action` values: `"CREATE"`, `"UPDATE"`, `"DELETE"`
+- `entityType`: the entity class name (e.g. `"Project"`)
+- `entityId`: the entity's primary key as a String
+- `description`: plain-English summary (e.g. `"Registered project #5"`, `"Deleted employee #12"`)
+- `ipAddress`: pass `null` from service layer (resolved at controller/filter level)
+- Log after `repository.save()` / `repository.delete()` so the entry is only written on success.

@@ -4,6 +4,10 @@ import dev.tjj.easi.dto.ServiceReportRequest;
 import dev.tjj.easi.dto.ServiceReportResponse;
 import dev.tjj.easi.entity.*;
 import dev.tjj.easi.repository.*;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,17 +24,20 @@ public class ServiceReportService {
     private final EmployeeRepository employeeRepository;
     private final ServiceScheduleRepository serviceScheduleRepository;
     private final DocumentRepository documentRepository;
+    private final LogService logService;
 
     public ServiceReportService(ServiceReportRepository serviceReportRepository,
                                 ProjectRepository projectRepository,
                                 EmployeeRepository employeeRepository,
                                 ServiceScheduleRepository serviceScheduleRepository,
-                                DocumentRepository documentRepository) {
+                                DocumentRepository documentRepository,
+                                LogService logService) {
         this.serviceReportRepository = serviceReportRepository;
         this.projectRepository = projectRepository;
         this.employeeRepository = employeeRepository;
         this.serviceScheduleRepository = serviceScheduleRepository;
         this.documentRepository = documentRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new service report record. */
@@ -39,7 +46,9 @@ public class ServiceReportService {
         ServiceReport report = new ServiceReport();
         applyRequest(report, request);
         report.setAddedOn(LocalDateTime.now());
-        return toResponse(serviceReportRepository.save(report));
+        ServiceReport saved = serviceReportRepository.save(report);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceReport", String.valueOf(saved.getSrNumber()), "Created service report #" + saved.getSrNumber(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing service report record by ID. */
@@ -48,7 +57,9 @@ public class ServiceReportService {
         ServiceReport report = serviceReportRepository.findById(srNumber)
                 .orElseThrow(() -> new IllegalArgumentException("Service report not found."));
         applyRequest(report, request);
-        return toResponse(serviceReportRepository.save(report));
+        ServiceReport saved = serviceReportRepository.save(report);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceReport", String.valueOf(srNumber), "Updated service report #" + srNumber, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of service report records. */
@@ -61,6 +72,11 @@ public class ServiceReportService {
         return serviceReportRepository.findById(srNumber)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service report not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the service report entity. */

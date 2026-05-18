@@ -5,6 +5,7 @@ import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.LogRepository;
+import dev.tjj.easi.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,9 +18,28 @@ import java.time.LocalDateTime;
 public class LogService {
 
     private final LogRepository logRepository;
+    private final UserRepository userRepository;
 
-    public LogService(LogRepository logRepository) {
+    public LogService(LogRepository logRepository, UserRepository userRepository) {
         this.logRepository = logRepository;
+        this.userRepository = userRepository;
+    }
+
+    /**
+     * Records a log entry for an authenticated user identified by their email.
+     * Looks up the User entity internally. Use this from services via SecurityContextHolder.
+     */
+    @Transactional
+    public void logByEmail(String email, LogType logType, LogSeverity severity,
+                           String action, String entityType, String entityId,
+                           String description, String ipAddress) {
+        User user = email != null ? userRepository.findByEmail(email).orElse(null) : null;
+        Log entry = buildEntry(logType, severity, action, entityType, entityId, description, ipAddress);
+        entry.setUser(user);
+        if (user == null && email != null) {
+            entry.setActorIdentifier(email);
+        }
+        logRepository.save(entry);
     }
 
     /**

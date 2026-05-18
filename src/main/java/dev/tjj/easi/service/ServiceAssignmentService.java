@@ -8,6 +8,10 @@ import dev.tjj.easi.entity.ServiceSchedule;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ServiceAssignmentRepository;
 import dev.tjj.easi.repository.ServiceScheduleRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +26,16 @@ public class ServiceAssignmentService {
     private final ServiceAssignmentRepository assignmentRepository;
     private final EmployeeRepository employeeRepository;
     private final ServiceScheduleRepository serviceScheduleRepository;
+    private final LogService logService;
 
     public ServiceAssignmentService(ServiceAssignmentRepository assignmentRepository,
                                     EmployeeRepository employeeRepository,
-                                    ServiceScheduleRepository serviceScheduleRepository) {
+                                    ServiceScheduleRepository serviceScheduleRepository,
+                                    LogService logService) {
         this.assignmentRepository = assignmentRepository;
         this.employeeRepository = employeeRepository;
         this.serviceScheduleRepository = serviceScheduleRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new service assignment record. */
@@ -37,7 +44,9 @@ public class ServiceAssignmentService {
         ServiceAssignment assignment = new ServiceAssignment();
         applyRequest(assignment, request);
         assignment.setAddedOn(LocalDateTime.now());
-        return toResponse(assignmentRepository.save(assignment));
+        ServiceAssignment saved = assignmentRepository.save(assignment);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceAssignment", String.valueOf(saved.getServAssgnId()), "Created service assignment #" + saved.getServAssgnId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing service assignment record by ID. */
@@ -46,7 +55,9 @@ public class ServiceAssignmentService {
         ServiceAssignment assignment = assignmentRepository.findById(servAssgnId)
                 .orElseThrow(() -> new IllegalArgumentException("Service assignment not found."));
         applyRequest(assignment, request);
-        return toResponse(assignmentRepository.save(assignment));
+        ServiceAssignment saved = assignmentRepository.save(assignment);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceAssignment", String.valueOf(servAssgnId), "Updated service assignment #" + servAssgnId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of service assignment records. */
@@ -59,6 +70,11 @@ public class ServiceAssignmentService {
         return assignmentRepository.findById(servAssgnId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service assignment not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the service assignment entity. */

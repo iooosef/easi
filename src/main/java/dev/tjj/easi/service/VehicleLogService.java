@@ -10,6 +10,10 @@ import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.VehicleRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,15 +29,18 @@ public class VehicleLogService {
     private final VehicleRepository vehicleRepository;
     private final ProjectRepository projectRepository;
     private final EmployeeRepository employeeRepository;
+    private final LogService logService;
 
     public VehicleLogService(VehicleLogRepository vehicleLogRepository,
                               VehicleRepository vehicleRepository,
                               ProjectRepository projectRepository,
-                              EmployeeRepository employeeRepository) {
+                              EmployeeRepository employeeRepository,
+                              LogService logService) {
         this.vehicleLogRepository = vehicleLogRepository;
         this.vehicleRepository = vehicleRepository;
         this.projectRepository = projectRepository;
         this.employeeRepository = employeeRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new vehicle log record. */
@@ -42,7 +49,9 @@ public class VehicleLogService {
         VehicleLog log = new VehicleLog();
         applyRequest(log, request);
         log.setAddedOn(LocalDateTime.now());
-        return toResponse(vehicleLogRepository.save(log));
+        VehicleLog saved = vehicleLogRepository.save(log);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "VehicleLog", String.valueOf(saved.getVehicleLogId()), "Created vehicle log #" + saved.getVehicleLogId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing vehicle log record by ID. */
@@ -51,7 +60,9 @@ public class VehicleLogService {
         VehicleLog log = vehicleLogRepository.findById(vehicleLogId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle log not found."));
         applyRequest(log, request);
-        return toResponse(vehicleLogRepository.save(log));
+        VehicleLog saved = vehicleLogRepository.save(log);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "VehicleLog", String.valueOf(vehicleLogId), "Updated vehicle log #" + vehicleLogId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of vehicle log records. */
@@ -64,6 +75,11 @@ public class VehicleLogService {
         return vehicleLogRepository.findById(vehicleLogId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle log not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the vehicle log entity. */

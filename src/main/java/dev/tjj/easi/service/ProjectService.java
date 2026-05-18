@@ -6,6 +6,10 @@ import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.ProjectStatus;
 import dev.tjj.easi.entity.ProjectType;
 import dev.tjj.easi.repository.ProjectRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,9 +22,11 @@ import java.time.LocalDateTime;
 public class ProjectService {
 
     private final ProjectRepository projectRepository;
+    private final LogService logService;
 
-    public ProjectService(ProjectRepository projectRepository) {
+    public ProjectService(ProjectRepository projectRepository, LogService logService) {
         this.projectRepository = projectRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new project record. */
@@ -29,7 +35,9 @@ public class ProjectService {
         Project project = new Project();
         applyRequest(project, request);
         project.setAddedOn(LocalDateTime.now());
-        return toResponse(projectRepository.save(project));
+        Project saved = projectRepository.save(project);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Project", String.valueOf(saved.getProjNum()), "Registered project #" + saved.getProjNum(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing project's information by project number. */
@@ -38,7 +46,9 @@ public class ProjectService {
         Project project = projectRepository.findById(projNum)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found."));
         applyRequest(project, request);
-        return toResponse(projectRepository.save(project));
+        Project saved = projectRepository.save(project);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Project", String.valueOf(projNum), "Updated project #" + projNum, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of project records. */
@@ -51,6 +61,11 @@ public class ProjectService {
         return projectRepository.findById(projNum)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Project not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies and validates request fields onto the project entity. */

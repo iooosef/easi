@@ -6,6 +6,10 @@ import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.ServiceSchedule;
 import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.ServiceScheduleRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,11 +23,14 @@ public class ServiceScheduleService {
 
     private final ServiceScheduleRepository serviceScheduleRepository;
     private final ProjectRepository projectRepository;
+    private final LogService logService;
 
     public ServiceScheduleService(ServiceScheduleRepository serviceScheduleRepository,
-                                  ProjectRepository projectRepository) {
+                                  ProjectRepository projectRepository,
+                                  LogService logService) {
         this.serviceScheduleRepository = serviceScheduleRepository;
         this.projectRepository = projectRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new service schedule record. */
@@ -34,7 +41,9 @@ public class ServiceScheduleService {
         ServiceSchedule schedule = new ServiceSchedule();
         applyRequest(schedule, request, project);
         schedule.setAddedOn(LocalDateTime.now());
-        return toResponse(serviceScheduleRepository.save(schedule));
+        ServiceSchedule saved = serviceScheduleRepository.save(schedule);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceSchedule", String.valueOf(saved.getSchedId()), "Created service schedule #" + saved.getSchedId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing service schedule by ID. */
@@ -45,7 +54,9 @@ public class ServiceScheduleService {
         Project project = projectRepository.findById(request.projNum())
                 .orElseThrow(() -> new IllegalArgumentException("Project not found."));
         applyRequest(schedule, request, project);
-        return toResponse(serviceScheduleRepository.save(schedule));
+        ServiceSchedule saved = serviceScheduleRepository.save(schedule);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceSchedule", String.valueOf(schedId), "Updated service schedule #" + schedId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of service schedule records. */
@@ -58,6 +69,11 @@ public class ServiceScheduleService {
         return serviceScheduleRepository.findById(schedId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service schedule not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the service schedule entity. */

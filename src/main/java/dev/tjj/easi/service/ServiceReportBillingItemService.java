@@ -6,6 +6,10 @@ import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.entity.ServiceReportBillingItem;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,11 +23,14 @@ public class ServiceReportBillingItemService {
 
     private final ServiceReportBillingItemRepository billingItemRepository;
     private final ServiceReportRepository serviceReportRepository;
+    private final LogService logService;
 
     public ServiceReportBillingItemService(ServiceReportBillingItemRepository billingItemRepository,
-                                           ServiceReportRepository serviceReportRepository) {
+                                           ServiceReportRepository serviceReportRepository,
+                                           LogService logService) {
         this.billingItemRepository = billingItemRepository;
         this.serviceReportRepository = serviceReportRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new service report billing item record. */
@@ -32,7 +39,9 @@ public class ServiceReportBillingItemService {
         ServiceReportBillingItem item = new ServiceReportBillingItem();
         applyRequest(item, request);
         item.setAddedOn(LocalDateTime.now());
-        return toResponse(billingItemRepository.save(item));
+        ServiceReportBillingItem saved = billingItemRepository.save(item);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceReportBillingItem", String.valueOf(saved.getSrBillingNum()), "Created billing item #" + saved.getSrBillingNum(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing service report billing item record by ID. */
@@ -41,7 +50,9 @@ public class ServiceReportBillingItemService {
         ServiceReportBillingItem item = billingItemRepository.findById(srBillingNum)
                 .orElseThrow(() -> new IllegalArgumentException("Service report billing item not found."));
         applyRequest(item, request);
-        return toResponse(billingItemRepository.save(item));
+        ServiceReportBillingItem saved = billingItemRepository.save(item);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceReportBillingItem", String.valueOf(srBillingNum), "Updated billing item #" + srBillingNum, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of service report billing item records. */
@@ -54,6 +65,11 @@ public class ServiceReportBillingItemService {
         return billingItemRepository.findById(srBillingNum)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Service report billing item not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the service report billing item entity. */

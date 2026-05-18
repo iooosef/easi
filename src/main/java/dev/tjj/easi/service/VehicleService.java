@@ -4,6 +4,10 @@ import dev.tjj.easi.dto.VehicleRequest;
 import dev.tjj.easi.dto.VehicleResponse;
 import dev.tjj.easi.entity.Vehicle;
 import dev.tjj.easi.repository.VehicleRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,9 +20,11 @@ import java.time.LocalDateTime;
 public class VehicleService {
 
     private final VehicleRepository vehicleRepository;
+    private final LogService logService;
 
-    public VehicleService(VehicleRepository vehicleRepository) {
+    public VehicleService(VehicleRepository vehicleRepository, LogService logService) {
         this.vehicleRepository = vehicleRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new vehicle record. */
@@ -27,7 +33,9 @@ public class VehicleService {
         Vehicle vehicle = new Vehicle();
         applyRequest(vehicle, request);
         vehicle.setAddedOn(LocalDateTime.now());
-        return toResponse(vehicleRepository.save(vehicle));
+        Vehicle saved = vehicleRepository.save(vehicle);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Vehicle", String.valueOf(saved.getVehiclesId()), "Registered vehicle #" + saved.getVehiclesId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing vehicle's information by vehicle ID. */
@@ -36,7 +44,9 @@ public class VehicleService {
         Vehicle vehicle = vehicleRepository.findById(vehiclesId)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found."));
         applyRequest(vehicle, request);
-        return toResponse(vehicleRepository.save(vehicle));
+        Vehicle saved = vehicleRepository.save(vehicle);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Vehicle", String.valueOf(vehiclesId), "Updated vehicle #" + vehiclesId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of vehicle records. */
@@ -49,6 +59,11 @@ public class VehicleService {
         return vehicleRepository.findById(vehiclesId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the vehicle entity. */

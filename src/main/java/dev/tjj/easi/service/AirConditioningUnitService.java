@@ -6,6 +6,10 @@ import dev.tjj.easi.entity.AirConditioningUnit;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.ProjectRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,11 +23,14 @@ public class AirConditioningUnitService {
 
     private final AirConditioningUnitRepository acRepository;
     private final ProjectRepository projectRepository;
+    private final LogService logService;
 
     public AirConditioningUnitService(AirConditioningUnitRepository acRepository,
-                                      ProjectRepository projectRepository) {
+                                      ProjectRepository projectRepository,
+                                      LogService logService) {
         this.acRepository = acRepository;
         this.projectRepository = projectRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new air conditioning unit record. */
@@ -34,7 +41,9 @@ public class AirConditioningUnitService {
         AirConditioningUnit unit = new AirConditioningUnit();
         applyRequest(unit, request, project);
         unit.setAddedOn(LocalDateTime.now());
-        return toResponse(acRepository.save(unit));
+        AirConditioningUnit saved = acRepository.save(unit);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "AirConditioningUnit", String.valueOf(saved.getAcNum()), "Registered AC unit #" + saved.getAcNum(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing air conditioning unit record by ID. */
@@ -45,7 +54,9 @@ public class AirConditioningUnitService {
         Project project = projectRepository.findById(request.projNum())
                 .orElseThrow(() -> new IllegalArgumentException("Project not found."));
         applyRequest(unit, request, project);
-        return toResponse(acRepository.save(unit));
+        AirConditioningUnit saved = acRepository.save(unit);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "AirConditioningUnit", String.valueOf(acNum), "Updated AC unit #" + acNum, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of air conditioning unit records. */
@@ -58,6 +69,11 @@ public class AirConditioningUnitService {
         return acRepository.findById(acNum)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Air conditioning unit not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the air conditioning unit entity. */

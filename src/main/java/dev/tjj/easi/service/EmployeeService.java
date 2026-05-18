@@ -6,6 +6,10 @@ import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.UserRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,10 +23,13 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
+    private final LogService logService;
 
-    public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository) {
+    public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository,
+                           LogService logService) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new employee record. */
@@ -31,7 +38,9 @@ public class EmployeeService {
         Employee employee = new Employee();
         applyRequest(employee, request);
         employee.setAddedOn(LocalDateTime.now());
-        return toResponse(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Employee", String.valueOf(saved.getEmployeeId()), "Registered employee #" + saved.getEmployeeId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing employee's information by ID. */
@@ -40,7 +49,9 @@ public class EmployeeService {
         Employee employee = employeeRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found."));
         applyRequest(employee, request);
-        return toResponse(employeeRepository.save(employee));
+        Employee saved = employeeRepository.save(employee);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Employee", String.valueOf(id), "Updated employee #" + id, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of employee records. */
@@ -60,6 +71,11 @@ public class EmployeeService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new IllegalArgumentException("User not found."));
         return toResponse(user.getEmployee());
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     private void applyRequest(Employee employee, EmployeeRequest request) {

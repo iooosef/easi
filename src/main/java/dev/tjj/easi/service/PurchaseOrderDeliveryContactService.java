@@ -6,6 +6,10 @@ import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
 import dev.tjj.easi.repository.PurchaseOrderDeliveryContactRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,11 +21,14 @@ public class PurchaseOrderDeliveryContactService {
 
     private final PurchaseOrderDeliveryContactRepository contactRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final LogService logService;
 
     public PurchaseOrderDeliveryContactService(PurchaseOrderDeliveryContactRepository contactRepository,
-                                               PurchaseOrderRepository purchaseOrderRepository) {
+                                               PurchaseOrderRepository purchaseOrderRepository,
+                                               LogService logService) {
         this.contactRepository = contactRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new purchase order delivery contact record. */
@@ -29,7 +36,9 @@ public class PurchaseOrderDeliveryContactService {
     public PurchaseOrderDeliveryContactResponse add(PurchaseOrderDeliveryContactRequest request) {
         PurchaseOrderDeliveryContact contact = new PurchaseOrderDeliveryContact();
         applyRequest(contact, request);
-        return toResponse(contactRepository.save(contact));
+        PurchaseOrderDeliveryContact saved = contactRepository.save(contact);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "PurchaseOrderDeliveryContact", String.valueOf(saved.getPoContactNum()), "Created PO delivery contact #" + saved.getPoContactNum(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing purchase order delivery contact record by ID. */
@@ -38,7 +47,9 @@ public class PurchaseOrderDeliveryContactService {
         PurchaseOrderDeliveryContact contact = contactRepository.findById(poContactNum)
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order delivery contact not found."));
         applyRequest(contact, request);
-        return toResponse(contactRepository.save(contact));
+        PurchaseOrderDeliveryContact saved = contactRepository.save(contact);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "PurchaseOrderDeliveryContact", String.valueOf(poContactNum), "Updated PO delivery contact #" + poContactNum, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of purchase order delivery contact records. */
@@ -51,6 +62,11 @@ public class PurchaseOrderDeliveryContactService {
         return contactRepository.findById(poContactNum)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order delivery contact not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the purchase order delivery contact entity. */

@@ -8,6 +8,10 @@ import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.SupplierRepository;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,13 +26,16 @@ public class PartService {
     private final PartRepository partRepository;
     private final SupplierRepository supplierRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final LogService logService;
 
     public PartService(PartRepository partRepository,
                        SupplierRepository supplierRepository,
-                       PurchaseOrderRepository purchaseOrderRepository) {
+                       PurchaseOrderRepository purchaseOrderRepository,
+                       LogService logService) {
         this.partRepository = partRepository;
         this.supplierRepository = supplierRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
+        this.logService = logService;
     }
 
     /** Creates and persists a new part record. */
@@ -37,7 +44,9 @@ public class PartService {
         Part part = new Part();
         applyRequest(part, request);
         part.setAddedOn(LocalDateTime.now());
-        return toResponse(partRepository.save(part));
+        Part saved = partRepository.save(part);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Part", String.valueOf(saved.getPartId()), "Created part #" + saved.getPartId(), null);
+        return toResponse(saved);
     }
 
     /** Updates an existing part record by ID. */
@@ -46,7 +55,9 @@ public class PartService {
         Part part = partRepository.findById(partId)
                 .orElseThrow(() -> new IllegalArgumentException("Part not found."));
         applyRequest(part, request);
-        return toResponse(partRepository.save(part));
+        Part saved = partRepository.save(part);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Part", String.valueOf(partId), "Updated part #" + partId, null);
+        return toResponse(saved);
     }
 
     /** Returns a page of part records. */
@@ -59,6 +70,11 @@ public class PartService {
         return partRepository.findById(partId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Part not found."));
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Applies request fields onto the part entity. */
