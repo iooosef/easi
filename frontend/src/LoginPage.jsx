@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
+import logoImg from './assets/logo.png'
 
 export default function LoginPage() {
   const { handleLogin } = useAuth()
@@ -38,7 +39,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-base-200">
       <div className="card w-full max-w-sm bg-base-100 shadow-md">
         <div className="card-body gap-4">
-          <h2 className="card-title text-2xl">Sign in to EASI</h2>
+          <div className=''>
+            <img src={logoImg} alt="EASI Logo" className="h-24 mx-auto mb-2" />
+          </div>
+          <h2 className="card-title text-2xl">Sign in</h2>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">

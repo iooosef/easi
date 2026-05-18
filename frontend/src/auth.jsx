@@ -14,6 +14,13 @@ export function AuthProvider({ children }) {
   const navigate = useNavigate()
 
   const user = accessToken ? parseJwt(accessToken).sub : null
+  const payload = accessToken ? parseJwt(accessToken) : {}
+  const fullName = payload.firstName && payload.lastName
+    ? `${payload.firstName} ${payload.lastName}`
+    : user
+  const role = payload.role ?? null
+  /** Returns true if the current user's role matches any of the given roles */
+  const hasRole = (...allowed) => allowed.includes(role)
 
   function handleLogin(token, refreshToken) {
     localStorage.setItem('accessToken', token)
@@ -36,7 +43,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, accessToken, handleLogin, handleLogout }}>
+    <AuthContext.Provider value={{ user, fullName, role, hasRole, accessToken, handleLogin, handleLogout }}>
       {children}
     </AuthContext.Provider>
   )

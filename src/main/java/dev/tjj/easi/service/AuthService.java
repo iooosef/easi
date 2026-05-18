@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 /** Handles login, token refresh, and logout business logic. */
@@ -64,7 +65,12 @@ public class AuthService {
 
         refreshTokenRepository.revokeAllUserTokens(user);
 
-        String accessToken = jwtService.generateAccessToken(userDetails);
+        Map<String, Object> claims = Map.of(
+                "firstName", user.getEmployee().getFirstName(),
+                "lastName", user.getEmployee().getLastName(),
+                "role", user.getRole()
+        );
+        String accessToken = jwtService.generateAccessToken(claims, userDetails);
         String refreshToken = createRefreshToken(user);
 
         logService.logByEmail(request.email(), LogType.SECURITY, LogSeverity.INFO, "LOGIN", "User", String.valueOf(user.getUserId()), "User logged in: " + request.email(), null);
@@ -87,7 +93,12 @@ public class AuthService {
         stored.setRevoked(true);
         refreshTokenRepository.save(stored);
 
-        String accessToken = jwtService.generateAccessToken(userDetails);
+        Map<String, Object> claims = Map.of(
+                "firstName", user.getEmployee().getFirstName(),
+                "lastName", user.getEmployee().getLastName(),
+                "role", user.getRole()
+        );
+        String accessToken = jwtService.generateAccessToken(claims, userDetails);
         String newRefreshToken = createRefreshToken(user);
 
         logService.log(user, LogType.SECURITY, LogSeverity.INFO, "REFRESH", "User", String.valueOf(user.getUserId()), "Token refreshed for user #" + user.getUserId(), null);
