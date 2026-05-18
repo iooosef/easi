@@ -3,6 +3,8 @@ package dev.tjj.easi.service;
 import dev.tjj.easi.dto.RegisterUserRequest;
 import dev.tjj.easi.dto.RegisterUserResponse;
 import dev.tjj.easi.entity.Employee;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
 import dev.tjj.easi.entity.Role;
 import dev.tjj.easi.entity.TokenPurpose;
 import dev.tjj.easi.entity.User;
@@ -28,6 +30,7 @@ public class UserService {
     private final VerificationTokenRepository tokenRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final LogService logService;
 
     private static final int OTP_EXPIRY_MINUTES = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -36,12 +39,14 @@ public class UserService {
                        EmployeeRepository employeeRepository,
                        VerificationTokenRepository tokenRepository,
                        EmailService emailService,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       LogService logService) {
         this.userRepository = userRepository;
         this.employeeRepository = employeeRepository;
         this.tokenRepository = tokenRepository;
         this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
+        this.logService = logService;
     }
 
     /**
@@ -63,6 +68,7 @@ public class UserService {
             tokenRepository.save(token);
 
             emailService.sendOtp(email, otp, "password reset");
+            logService.log(email, LogType.SECURITY, LogSeverity.INFO, "OTP_REQUEST", "User", String.valueOf(user.getUserId()), "Password reset OTP sent to " + email, null);
         });
     }
 
@@ -90,6 +96,7 @@ public class UserService {
 
         user.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(user);
+        logService.log(email, LogType.SECURITY, LogSeverity.INFO, "UPDATE", "User", String.valueOf(user.getUserId()), "Password reset via OTP for user #" + user.getUserId(), null);
     }
 
     /**
@@ -112,6 +119,7 @@ public class UserService {
 
         target.setPassword(passwordEncoder.encode(newPassword));
         userRepository.save(target);
+        logService.logByEmail(currentUser.getUsername(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "User", String.valueOf(targetUserId), "Admin reset password for user #" + targetUserId, null);
     }
 
     /**
@@ -151,6 +159,7 @@ public class UserService {
         user.setAddedOn(LocalDateTime.now());
 
         User saved = userRepository.save(user);
+        logService.logByEmail(currentUser.getUsername(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "User", String.valueOf(saved.getUserId()), "Registered user #" + saved.getUserId() + " with role " + role.name(), null);
 
         return new RegisterUserResponse(
                 saved.getUserId(),

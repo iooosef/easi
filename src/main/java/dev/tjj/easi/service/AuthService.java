@@ -4,6 +4,8 @@ import dev.tjj.easi.config.JwtProperties;
 import dev.tjj.easi.dto.AuthResponse;
 import dev.tjj.easi.dto.LoginRequest;
 import dev.tjj.easi.dto.RefreshTokenRequest;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
 import dev.tjj.easi.entity.RefreshToken;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.RefreshTokenRepository;
@@ -30,6 +32,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
+    private final LogService logService;
 
     public AuthService(
             AuthenticationManager authenticationManager,
@@ -37,7 +40,8 @@ public class AuthService {
             JwtService jwtService,
             JwtProperties jwtProperties,
             RefreshTokenRepository refreshTokenRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            LogService logService
     ) {
         this.authenticationManager = authenticationManager;
         this.userDetailsService = userDetailsService;
@@ -45,6 +49,7 @@ public class AuthService {
         this.jwtProperties = jwtProperties;
         this.refreshTokenRepository = refreshTokenRepository;
         this.userRepository = userRepository;
+        this.logService = logService;
     }
 
     /** Authenticates credentials and returns a new access and refresh token pair. */
@@ -62,6 +67,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(userDetails);
         String refreshToken = createRefreshToken(user);
 
+        logService.logByEmail(request.email(), LogType.SECURITY, LogSeverity.INFO, "LOGIN", "User", String.valueOf(user.getUserId()), "User logged in: " + request.email(), null);
         return new AuthResponse(accessToken, refreshToken);
     }
 
@@ -84,6 +90,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(userDetails);
         String newRefreshToken = createRefreshToken(user);
 
+        logService.log(user, LogType.SECURITY, LogSeverity.INFO, "REFRESH", "User", String.valueOf(user.getUserId()), "Token refreshed for user #" + user.getUserId(), null);
         return new AuthResponse(accessToken, newRefreshToken);
     }
 
@@ -92,6 +99,7 @@ public class AuthService {
     public void logout(String email) {
         User user = userRepository.findByEmail(email).orElseThrow();
         refreshTokenRepository.revokeAllUserTokens(user);
+        logService.logByEmail(email, LogType.SECURITY, LogSeverity.INFO, "LOGOUT", "User", String.valueOf(user.getUserId()), "User logged out: " + email, null);
     }
 
     private String createRefreshToken(User user) {
