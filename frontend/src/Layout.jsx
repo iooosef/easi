@@ -2,7 +2,7 @@ import { useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
 import logoImg from './assets/logo.png'
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { page: 'home',            label: 'Home',             icon: 'icon-[tabler--home]',        roles: null },
   { page: 'projects',        label: 'Projects',         icon: 'icon-[tabler--folder]',       roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
   { page: 'service-report',  label: 'Service Report',   icon: 'icon-[tabler--file-report]',  roles: ['ADMIN','STAFF','CREW'] },

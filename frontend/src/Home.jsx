@@ -1,12 +1,30 @@
 import { useAuth } from './auth'
-import Layout from './Layout'
+import Layout, { NAV_ITEMS } from './Layout'
 
 export default function Home() {
-  const { fullName } = useAuth()
+  const { fullName, hasRole } = useAuth()
+
+  const navCards = NAV_ITEMS.filter(
+    ({ page, roles }) => page !== 'home' && (roles === null || hasRole(...roles))
+  )
 
   return (
     <Layout activePage="home">
-      <h1 className="text-3xl font-semibold">Welcome, {fullName}</h1>
+      <h1 className="text-3xl font-semibold mb-1">Welcome, {fullName}</h1>
+      <p className="text-base-content/60 mb-8">What would you like to do today?</p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        {navCards.map(({ page, label, icon }) => (
+          <div key={page} className="group">
+            <div className="card bg-base-100 border border-base-300 cursor-pointer transition-transform duration-300 group-hover:-translate-y-2 h-full">
+              <div className="card-body items-center justify-center text-center gap-3 py-8">
+                <span className={`${icon} size-10 text-primary`}></span>
+                <p className="font-medium text-base-content">{label}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </Layout>
   )
 }
