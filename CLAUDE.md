@@ -36,3 +36,7 @@ Every service method that adds, updates, or deletes data must call `logService.l
 - `description`: plain-English summary (e.g. `"Registered project #5"`, `"Deleted employee #12"`)
 - `ipAddress`: pass `null` from service layer (resolved at controller/filter level)
 - Log after `repository.save()` / `repository.delete()` so the entry is only written on success.
+
+### FRONTEND
+Frontend in /frontend dir
+Frontend framework is React using FluentUI React v9
