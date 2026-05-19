@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from './auth'
 import Layout from './Layout'
+import ManageMenu from './ManageMenu'
 import { notyfSuccess } from './notyf'
 
 const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
@@ -53,6 +54,7 @@ export default function Projects() {
   const [formError, setFormError]   = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const modalCloseBtnRef = useRef(null)
+  const [selectedProject, setSelectedProject] = useState(null)
 
   function closeModal() {
     setForm(EMPTY_FORM)
@@ -237,16 +239,13 @@ export default function Projects() {
                         <p>Started: {formatDate(project.addedOn)}</p>
                       </div>
                       <div className="card-actions mt-2">
-                        <button className="btn btn-soft btn-info btn-sm flex-1">
-                          <span className="icon-[tabler--eye] size-4"></span>
-                          View
+                        <button
+                          className="btn btn-soft btn-primary btn-sm flex-1"
+                          onClick={() => setSelectedProject(project)}
+                        >
+                          <span className="icon-[tabler--settings] size-4"></span>
+                          Manage
                         </button>
-                        {canEdit && (
-                          <button className="btn btn-soft btn-success btn-sm flex-1">
-                            <span className="icon-[tabler--pencil] size-4"></span>
-                            Edit
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -270,6 +269,17 @@ export default function Projects() {
           )}
         </>
       )}
+
+      {/* Manage Project Modal */}
+      <ManageMenu
+        project={selectedProject}
+        isOpen={!!selectedProject}
+        onClose={() => setSelectedProject(null)}
+        onMenuSelect={(key, project) => {
+          // future: handle each action key
+          console.log('menu action', key, project.projNum)
+        }}
+      />
 
       {/* New Project Modal */}
       <div id="new-project-modal" className="overlay modal overlay-open:opacity-100 hidden overlay-open:duration-300" role="dialog" tabIndex="-1">
