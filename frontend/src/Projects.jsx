@@ -348,7 +348,37 @@ export default function Projects() {
 
       {/* Manage Project Modal */}
       <ManageMenu
-        project={selectedProject}
+        title={selectedProject?.name}
+        subtitle={`Project #${selectedProject?.projNum}`}
+        item={selectedProject}
+        details={selectedProject ? [
+          { label: 'Type',   value: selectedProject.type?.charAt(0) + selectedProject.type?.slice(1).toLowerCase() },
+          { label: 'Status', value: selectedProject.status?.charAt(0).toUpperCase() + selectedProject.status?.slice(1) },
+          { label: 'Started', value: formatDate(selectedProject.addedOn) },
+          { label: 'Address', value: selectedProject.address, fullWidth: true },
+          { label: 'Contact Name',   value: selectedProject.contactName },
+          { label: 'Contact Number', value: selectedProject.contactNumber },
+          { label: 'Contact Email',  value: selectedProject.contactEmail },
+          { label: 'Warranty Status', value: selectedProject.warrantyStatus === 1 ? 'Active' : 'Expired' },
+          { label: 'Warranty Date',   value: formatDate(selectedProject.warrantyDate) },
+          {
+            fullWidth: true,
+            component: (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-base-content/50 uppercase tracking-wide">Installation Progress</span>
+                  <span className="text-xs font-semibold text-primary">{selectedProject.installationProgress}%</span>
+                </div>
+                <div className="w-full bg-base-300 rounded-full h-2">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${selectedProject.installationProgress}%` }}
+                  />
+                </div>
+              </div>
+            ),
+          },
+        ] : []}
         isOpen={!!selectedProject}
         onClose={() => setSelectedProject(null)}
         hasRole={hasRole}

@@ -3,10 +3,18 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
+import ManageMenu from './ManageMenu'
 import { notyfSuccess, notyfError } from './notyf'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS  = ['unpaid', 'paid', 'partial']
+
+const SR_MENU_ITEMS = [
+  { key: 'update',    label: 'Update Details',       icon: 'icon-[tabler--pencil]',    roles: ['ADMIN', 'STAFF'] },
+  { key: 'findings',  label: 'Manage Findings',      icon: 'icon-[tabler--checklist]', roles: null },
+  { key: 'billing',   label: 'Manage Billing Items', icon: 'icon-[tabler--receipt]',   roles: null },
+  { key: 'documents', label: 'Manage Documents',     icon: 'icon-[tabler--files]',     roles: null },
+]
 
 const EMPTY_FORM = {
   projNum: '',
@@ -70,6 +78,8 @@ export default function ServiceReports() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   const canEdit = hasRole('ADMIN', 'STAFF')
+
+  const [selectedReport, setSelectedReport] = useState(null)
 
   function openModal() { setModalOpen(true) }
 
@@ -184,7 +194,7 @@ export default function ServiceReports() {
               onClick={openModal}
             >
               <span className="icon-[tabler--plus] size-4"></span>
-              New Report
+              New Project Service Report
             </button>
           )}
         </div>
@@ -239,6 +249,7 @@ export default function ServiceReports() {
                   <tr>
                     <th>SR #</th>
                     <th>Project</th>
+                    <th>Complaint</th>
                     <th>Schedule Date</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -248,8 +259,11 @@ export default function ServiceReports() {
                   {filtered.map(r => (
                     <tr key={r.srNumber}>
                       <td className="font-mono font-semibold">{r.srNumber}</td>
-                      <td className="max-w-48">
+                      <td className="max-w-36">
                         <span className="line-clamp-1 text-sm" title={r.projectName}>{r.projectName}</span>
+                      </td>
+                      <td className="max-w-56">
+                        <span className="line-clamp-2 text-sm" title={r.complaint}>{r.complaint}</span>
                       </td>
                       <td className="text-sm">{formatDate(r.scheduleDate)}</td>
                       <td>
@@ -260,7 +274,7 @@ export default function ServiceReports() {
                       <td>
                         <button
                           className="btn btn-soft btn-primary btn-sm"
-                          onClick={() => {/* manage action wired up later */}}
+                          onClick={() => setSelectedReport(r)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           Manage
@@ -425,6 +439,29 @@ export default function ServiceReports() {
           </div>
         </form>
       </Modal>
+      {/* Service Report Manage Modal */}
+      <ManageMenu
+        title={selectedReport ? `SR #${selectedReport.srNumber}` : ''}
+        subtitle={selectedReport?.projectName}
+        item={selectedReport}
+        details={selectedReport ? [
+          { label: 'Complaint', value: selectedReport.complaint, fullWidth: true },
+          { label: 'Work Done', value: selectedReport.workDone, fullWidth: true },
+          { label: 'Location',         value: selectedReport.location },
+          { label: 'Status',           value: selectedReport.status },
+          { label: 'Payment Method',   value: selectedReport.paymentMethod },
+          { label: 'Schedule Date',    value: formatDate(selectedReport.scheduleDate) },
+          { label: 'Receipt Date',     value: formatDate(selectedReport.receiptReceiveDate) },
+          { label: 'Engineer Emp. ID', value: selectedReport.engineerEmployeeId ?? null },
+        ] : []}
+        isOpen={!!selectedReport}
+        onClose={() => setSelectedReport(null)}
+        hasRole={hasRole}
+        menuItems={SR_MENU_ITEMS}
+        onMenuSelect={(key, report) => {
+          setSelectedReport(null)
+        }}
+      />
     </Layout>
   )
 }
