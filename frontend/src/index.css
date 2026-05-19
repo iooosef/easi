@@ -1,4 +1,9 @@
 @import "tailwindcss";
+@import "../node_modules/flyonui/variants.css";
+@import "../node_modules/notyf/notyf.min.css";
+@import "../node_modules/flyonui/src/vendor/notyf.css";
+
+@source "../node_modules/flyonui/dist/index.js";
 
 @plugin "@iconify/tailwind4";
 
