@@ -43,7 +43,7 @@ public class ServiceReport {
     @Column(name = "location", nullable = false)
     @Getter
     @Setter
-    private Integer location;
+    private String location;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sched_id", nullable = false)

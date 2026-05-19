@@ -21,8 +21,9 @@ public record ServiceReportRequest(
 
         Integer engineerEmployeeId,
 
-        @NotNull(message = "Location is required")
-        Integer location,
+        @NotBlank(message = "Location is required")
+        @Size(max = 255, message = "Location must not exceed 255 characters")
+        String location,
 
         @NotNull(message = "Schedule ID is required")
         Integer schedId,

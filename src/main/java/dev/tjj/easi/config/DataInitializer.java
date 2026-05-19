@@ -185,26 +185,26 @@ public class DataInitializer implements CommandLineRunner {
 
         // --- Service reports (Jan–Apr 2026) ---
         // Project 1 — 5 reports
-        report(p1, ss1,  "Unit not cooling properly in 3rd floor east wing",  "Replaced capacitor and recharged refrigerant",            1, "cash",  LocalDate.of(2026, 1, 9),  null, "paid",    LocalDateTime.of(2026, 1, 8, 14, 0));
-        report(p1, ss2,  "Noisy compressor on rooftop unit A",                "Tightened mounting bolts and lubricated moving parts",    1, "gcash", LocalDate.of(2026, 1, 23), null, "paid",    LocalDateTime.of(2026, 1, 22, 15, 0));
-        report(p1, ss3,  "Water dripping from ceiling cassette unit",         "Cleared blocked drain line and cleaned air filter",       1, "cash",  LocalDate.of(2026, 2, 13), null, "paid",    LocalDateTime.of(2026, 2, 12, 11, 0));
-        report(p1, ss4,  "Routine preventive maintenance check",              "Full system inspection, coil cleaning, filter replacement", 1, "check", null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 5, 9, 0));
-        report(p1, ss5,  "Thermostat reading inaccurate",                     "Recalibrated thermostat sensor and tested operation",     1, "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 10, 10, 0));
+        report(p1, ss1,  "Unit not cooling properly in 3rd floor east wing",  "Replaced capacitor and recharged refrigerant",                          "3rd Floor East Wing, ABC Corp",       "cash",  LocalDate.of(2026, 1, 9),  null, "paid",    LocalDateTime.of(2026, 1, 8, 14, 0));
+        report(p1, ss2,  "Noisy compressor on rooftop unit A",                "Tightened mounting bolts and lubricated moving parts",                  "Rooftop, ABC Corp",                   "gcash", LocalDate.of(2026, 1, 23), null, "paid",    LocalDateTime.of(2026, 1, 22, 15, 0));
+        report(p1, ss3,  "Water dripping from ceiling cassette unit",         "Cleared blocked drain line and cleaned air filter",                     "2nd Floor Lobby, ABC Corp",           "cash",  LocalDate.of(2026, 2, 13), null, "paid",    LocalDateTime.of(2026, 2, 12, 11, 0));
+        report(p1, ss4,  "Routine preventive maintenance check",              "Full system inspection, coil cleaning, filter replacement",             "All Floors, ABC Corp",                "check", null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 5, 9, 0));
+        report(p1, ss5,  "Thermostat reading inaccurate",                     "Recalibrated thermostat sensor and tested operation",                   "1st Floor Office, ABC Corp",          "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 10, 10, 0));
 
         // Project 2 — 5 reports
-        report(p2, ss6,  "Split unit not turning on after power outage",      "Reset circuit breaker and replaced blown fuse on PCB",    2, "cash",  LocalDate.of(2026, 1, 15), null, "paid",    LocalDateTime.of(2026, 1, 14, 13, 0));
-        report(p2, ss7,  "Foul smell from indoor unit",                       "Deep cleaned evaporator coil and applied anti-fungal treatment", 2, "cash", LocalDate.of(2026, 2, 6), null, "paid", LocalDateTime.of(2026, 2, 5, 10, 0));
-        report(p2, ss8,  "Unit leaking water indoors",                        "Fixed clogged condensate drain and re-sealed drain pan", 2, "gcash", LocalDate.of(2026, 2, 26), null, "paid",    LocalDateTime.of(2026, 2, 25, 14, 0));
-        report(p2, ss9,  "Compressor overheating and shutting off",           "Cleaned condenser coil and topped up refrigerant to spec", 2, "check", null,                    null, "partial", LocalDateTime.of(2026, 3, 18, 9, 30));
-        report(p2, ss10, "Remote control not working and unit unresponsive",  "Replaced faulty receiver module and tested remote pairing", 2, "unset", null,                   null, "unpaid",  LocalDateTime.of(2026, 4, 22, 11, 0));
+        report(p2, ss6,  "Split unit not turning on after power outage",      "Reset circuit breaker and replaced blown fuse on PCB",                  "Master Bedroom, Santos Residence",    "cash",  LocalDate.of(2026, 1, 15), null, "paid",    LocalDateTime.of(2026, 1, 14, 13, 0));
+        report(p2, ss7,  "Foul smell from indoor unit",                       "Deep cleaned evaporator coil and applied anti-fungal treatment",         "Living Room, Santos Residence",       "cash",  LocalDate.of(2026, 2, 6),  null, "paid",    LocalDateTime.of(2026, 2, 5, 10, 0));
+        report(p2, ss8,  "Unit leaking water indoors",                        "Fixed clogged condensate drain and re-sealed drain pan",                 "2nd Floor Hallway, Santos Residence", "gcash", LocalDate.of(2026, 2, 26), null, "paid",    LocalDateTime.of(2026, 2, 25, 14, 0));
+        report(p2, ss9,  "Compressor overheating and shutting off",           "Cleaned condenser coil and topped up refrigerant to spec",               "Outdoor Unit, Santos Residence",      "check", null,                      null, "partial", LocalDateTime.of(2026, 3, 18, 9, 30));
+        report(p2, ss10, "Remote control not working and unit unresponsive",  "Replaced faulty receiver module and tested remote pairing",              "Guest Room, Santos Residence",        "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 22, 11, 0));
 
         // Project 3 — 6 reports
-        report(p3, ss11, "Multiple units tripping breaker simultaneously",    "Identified overloaded circuit; redistributed unit loads across panels", 3, "cash",  LocalDate.of(2026, 1, 8),  null, "paid",    LocalDateTime.of(2026, 1, 7, 9, 0));
-        report(p3, ss12, "Evaporator coil frozen on unit B2",                 "Defrosted coil, replaced air filter, checked refrigerant level",        3, "cash",  LocalDate.of(2026, 1, 29), null, "paid",    LocalDateTime.of(2026, 1, 28, 15, 0));
-        report(p3, ss13, "Loud rattling noise from ductwork",                 "Secured loose duct sections with sheet metal screws and tape",          3, "check", LocalDate.of(2026, 2, 19), null, "paid",    LocalDateTime.of(2026, 2, 18, 10, 0));
-        report(p3, ss14, "Central AHU fan motor failure",                     "Replaced fan motor and capacitor; tested rotation and airflow",         3, "check", LocalDate.of(2026, 3, 12), null, "paid",    LocalDateTime.of(2026, 3, 11, 8, 0));
-        report(p3, ss15, "Routine preventive maintenance — all units",        "Full cleaning, belt inspection, coil washing, and refrigerant check",   3, "cash",  null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 31, 9, 0));
-        report(p3, ss16, "Post-maintenance follow-up inspection",             "Verified all units operating within spec after March PM",              3, "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 15, 13, 0));
+        report(p3, ss11, "Multiple units tripping breaker simultaneously",    "Identified overloaded circuit; redistributed unit loads across panels",  "Main Electrical Room, Greenfield B",  "cash",  LocalDate.of(2026, 1, 8),  null, "paid",    LocalDateTime.of(2026, 1, 7, 9, 0));
+        report(p3, ss12, "Evaporator coil frozen on unit B2",                 "Defrosted coil, replaced air filter, checked refrigerant level",         "Unit B2 Server Room, Greenfield B",   "cash",  LocalDate.of(2026, 1, 29), null, "paid",    LocalDateTime.of(2026, 1, 28, 15, 0));
+        report(p3, ss13, "Loud rattling noise from ductwork",                 "Secured loose duct sections with sheet metal screws and tape",           "Ceiling Duct, Wing C, Greenfield B",  "check", LocalDate.of(2026, 2, 19), null, "paid",    LocalDateTime.of(2026, 2, 18, 10, 0));
+        report(p3, ss14, "Central AHU fan motor failure",                     "Replaced fan motor and capacitor; tested rotation and airflow",          "AHU Room, Basement, Greenfield B",    "check", LocalDate.of(2026, 3, 12), null, "paid",    LocalDateTime.of(2026, 3, 11, 8, 0));
+        report(p3, ss15, "Routine preventive maintenance — all units",        "Full cleaning, belt inspection, coil washing, and refrigerant check",    "All Areas, Greenfield B",             "cash",  null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 31, 9, 0));
+        report(p3, ss16, "Post-maintenance follow-up inspection",             "Verified all units operating within spec after March PM",                "All Areas, Greenfield B",             "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 15, 13, 0));
 
         log.info("Sample project data seeded: 3 projects, 18 service schedules, 16 service reports.");
     }
@@ -222,7 +222,7 @@ public class DataInitializer implements CommandLineRunner {
 
     /** Creates and saves a ServiceReport. */
     private void report(Project project, ServiceSchedule schedule, String complaint, String workDone,
-                        Integer location, String paymentMethod, LocalDate receiptDate,
+                        String location, String paymentMethod, LocalDate receiptDate,
                         Integer docuId, String status, LocalDateTime addedOn) {
         ServiceReport r = new ServiceReport();
         r.setProject(project);

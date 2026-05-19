@@ -9,7 +9,7 @@ public record ServiceReportResponse(
         String complaint,
         String workDone,
         Integer engineerEmployeeId,
-        Integer location,
+        String location,
         Integer schedId,
         String paymentMethod,
         LocalDate receiptReceiveDate,
