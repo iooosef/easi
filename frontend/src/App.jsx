@@ -3,6 +3,7 @@ import { useAuth, LogoutPage } from './auth'
 import LoginPage from './LoginPage'
 import Home from './Home'
 import Projects from './Projects'
+import ServiceReports from './ServiceReports'
 
 function App() {
   const { user } = useAuth()
@@ -19,6 +20,7 @@ function App() {
       <Route path="/" element={<Private element={<Home />} />} />
       <Route path="/home" element={<Private element={<Home />} />} />
       <Route path="/projects" element={<Private element={<Projects />} />} />
+      <Route path="/service-report" element={<Private element={<ServiceReports />} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

@@ -6,11 +6,13 @@ import java.time.LocalDateTime;
 public record ServiceReportResponse(
         Integer srNumber,
         Integer projNum,
+        String projectName,
         String complaint,
         String workDone,
         Integer engineerEmployeeId,
         String location,
         Integer schedId,
+        LocalDate scheduleDate,
         String paymentMethod,
         LocalDate receiptReceiveDate,
         Integer docuId,

@@ -122,11 +122,13 @@ public class ServiceReportService {
         return new ServiceReportResponse(
                 r.getSrNumber(),
                 r.getProject().getProjNum(),
+                r.getProject().getName(),
                 r.getComplaint(),
                 r.getWorkDone(),
                 r.getEngineerEmployee() != null ? r.getEngineerEmployee().getEmployeeId() : null,
                 r.getLocation(),
                 r.getServiceSchedule().getSchedId(),
+                r.getServiceSchedule().getDate(),
                 r.getPaymentMethod(),
                 r.getReceiptReceiveDate(),
                 r.getDocument() != null ? r.getDocument().getDocuId() : null,
