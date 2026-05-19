@@ -50,12 +50,16 @@ export default function Projects() {
   const [totalPages, setTotalPages]     = useState(0)
   const [totalElements, setTotalElements] = useState(0)
 
-  // Modal state
+  // Create modal state
   const [modalOpen, setModalOpen]   = useState(false)
   const [form, setForm]             = useState(EMPTY_FORM)
   const [formError, setFormError]   = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [selectedProject, setSelectedProject] = useState(null)
+
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen]   = useState(false)
+  const [editingProjNum, setEditingProjNum] = useState(null)
 
   function openModal() { setModalOpen(true) }
 
@@ -63,6 +67,57 @@ export default function Projects() {
     setModalOpen(false)
     setForm(EMPTY_FORM)
     setFormError(null)
+  }
+
+  function openEditModal(project) {
+    setForm({
+      name:                 project.name,
+      address:              project.address,
+      type:                 project.type,
+      contactName:          project.contactName,
+      contactNumber:        project.contactNumber,
+      contactEmail:         project.contactEmail,
+      installationProgress: project.installationProgress,
+      warrantyStatus:       project.warrantyStatus,
+      warrantyDate:         project.warrantyDate ? project.warrantyDate.slice(0, 10) : '',
+      status:               project.status,
+    })
+    setEditingProjNum(project.projNum)
+    setFormError(null)
+    setEditModalOpen(true)
+  }
+
+  function closeEditModal() {
+    setEditModalOpen(false)
+    setEditingProjNum(null)
+    setForm(EMPTY_FORM)
+    setFormError(null)
+  }
+
+  async function handleUpdate(e) {
+    e.preventDefault()
+    setFormError(null)
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/projects/${editingProjNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          installationProgress: Number(form.installationProgress),
+          warrantyStatus: Number(form.warrantyStatus),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message ?? `Error ${res.status}`)
+      closeEditModal()
+      setTimeout(() => notyfSuccess(`Project "${data.name}" updated successfully.`), 150)
+      await fetchProjects()
+    } catch (err) {
+      setFormError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const canEdit = hasRole('ADMIN', 'STAFF')
@@ -267,11 +322,125 @@ export default function Projects() {
         project={selectedProject}
         isOpen={!!selectedProject}
         onClose={() => setSelectedProject(null)}
+        hasRole={hasRole}
         onMenuSelect={(key, project) => {
-          // future: handle each action key
-          console.log('menu action', key, project.projNum)
+          if (key === 'update') {
+            setSelectedProject(null)
+            openEditModal(project)
+          }
         }}
       />
+
+      {/* Edit Project Modal */}
+      <Modal
+        isOpen={editModalOpen}
+        onClose={closeEditModal}
+        title="Update Project"
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
+              Cancel
+            </button>
+            <button type="submit" form="edit-project-form" className="btn btn-primary" disabled={submitting}>
+              {submitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--device-floppy] size-4"></span>
+              }
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <form id="edit-project-form" onSubmit={handleUpdate}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
+              <input type="text" name="name" className="input input-bordered w-full"
+                placeholder="e.g. ABC Corporation HVAC" maxLength={255} required
+                value={form.name} onChange={handleFormChange} />
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+              <textarea name="address" className="textarea textarea-bordered w-full"
+                placeholder="Full project site address" maxLength={600} rows={2} required
+                value={form.address} onChange={handleFormChange} />
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Type <span className="text-error">*</span></label>
+              <select name="type" className="select select-bordered w-full" required
+                value={form.type} onChange={handleFormChange}>
+                <option value="" disabled>Select type</option>
+                {TYPE_OPTIONS.map(t => (
+                  <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+              <input type="text" name="contactName" className="input input-bordered w-full"
+                placeholder="e.g. Juan Dela Cruz" maxLength={300} required
+                value={form.contactName} onChange={handleFormChange} />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+              <input type="tel" name="contactNumber" className="input input-bordered w-full"
+                placeholder="e.g. +63 912 345 6789" maxLength={16} required
+                value={form.contactNumber} onChange={handleFormChange} />
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
+              <input type="email" name="contactEmail" className="input input-bordered w-full"
+                placeholder="e.g. contact@example.com" maxLength={255} required
+                value={form.contactEmail} onChange={handleFormChange} />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Installation Progress (%)</label>
+              <input type="number" name="installationProgress" className="input input-bordered w-full"
+                min={0} max={100} required
+                value={form.installationProgress} onChange={handleFormChange} />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status" className="select select-bordered w-full"
+                value={form.status} onChange={handleFormChange}>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Warranty Status</label>
+              <select name="warrantyStatus" className="select select-bordered w-full"
+                value={form.warrantyStatus} onChange={handleFormChange}>
+                <option value={1}>Active</option>
+                <option value={0}>Expired</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
+              <input type="date" name="warrantyDate" className="input input-bordered w-full" required
+                value={form.warrantyDate} onChange={handleFormChange} />
+            </div>
+
+            {formError && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4"></span>
+                <span className="text-sm">{formError}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
 
       {/* New Project Modal */}
       <Modal
