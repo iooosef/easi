@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
+import Modal from './Modal'
 import { notyfSuccess } from './notyf'
 
 const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
@@ -50,27 +51,21 @@ export default function Projects() {
   const [totalElements, setTotalElements] = useState(0)
 
   // Modal state
+  const [modalOpen, setModalOpen]   = useState(false)
   const [form, setForm]             = useState(EMPTY_FORM)
   const [formError, setFormError]   = useState(null)
   const [submitting, setSubmitting] = useState(false)
-  const modalCloseBtnRef = useRef(null)
   const [selectedProject, setSelectedProject] = useState(null)
 
+  function openModal() { setModalOpen(true) }
+
   function closeModal() {
+    setModalOpen(false)
     setForm(EMPTY_FORM)
     setFormError(null)
-    // Directly tear down FlyonUI overlay — programmatic click is unreliable after async ops
-    const modal    = document.getElementById('new-project-modal')
-    const backdrop = document.getElementById('new-project-modal-backdrop')
-    if (modal)    { modal.classList.remove('open'); modal.classList.add('hidden') }
-    if (backdrop) backdrop.remove()
-    document.body.classList.remove('overlay-body-open')
   }
 
   const canEdit = hasRole('ADMIN', 'STAFF')
-
-  // Initialize FlyonUI overlay bindings after this component's DOM is ready
-  useEffect(() => { window.HSStaticMethods?.autoInit() }, [])
 
   async function fetchProjects() {
     setLoading(true)
@@ -153,10 +148,7 @@ export default function Projects() {
           <button
             type="button"
             className="btn btn-primary h-full min-h-0"
-            aria-haspopup="dialog"
-            aria-expanded="false"
-            aria-controls="new-project-modal"
-            data-overlay="#new-project-modal"
+            onClick={openModal}
           >
             <span className="icon-[tabler--plus] size-4"></span>
             New Project
@@ -282,170 +274,157 @@ export default function Projects() {
       />
 
       {/* New Project Modal */}
-      <div id="new-project-modal" className="overlay modal overlay-open:opacity-100 hidden overlay-open:duration-300" role="dialog" tabIndex="-1">
-        <div className="modal-dialog modal-dialog-lg">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3 className="modal-title">New Project</h3>
-              <button
-                ref={modalCloseBtnRef}
-                type="button"
-                className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-                aria-label="Close"
-                data-overlay="#new-project-modal"
-                onClick={() => { setForm(EMPTY_FORM); setFormError(null) }}
-              >
-                <span className="icon-[tabler--x] size-4"></span>
-              </button>
+      <Modal
+        isOpen={modalOpen}
+        onClose={closeModal}
+        title="New Project"
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeModal}>
+              Cancel
+            </button>
+            <button type="submit" form="new-project-form" className="btn btn-primary" disabled={submitting}>
+              {submitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--plus] size-4"></span>
+              }
+              Create Project
+            </button>
+          </>
+        }
+      >
+        <form id="new-project-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            {/* Project Name */}
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
+              <input
+                type="text"
+                name="name"
+                className="input input-bordered w-full"
+                placeholder="e.g. ABC Corporation HVAC"
+                maxLength={255}
+                required
+                value={form.name}
+                onChange={handleFormChange}
+              />
             </div>
 
-            <form onSubmit={handleSubmit}>
-              <div className="modal-body grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-y-auto max-h-[60vh]">
+            {/* Address */}
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+              <textarea
+                name="address"
+                className="textarea textarea-bordered w-full"
+                placeholder="Full project site address"
+                maxLength={600}
+                rows={2}
+                required
+                value={form.address}
+                onChange={handleFormChange}
+              />
+            </div>
 
-                {/* Project Name */}
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
-                  <input
-                    type="text"
-                    name="name"
-                    className="input input-bordered w-full"
-                    placeholder="e.g. ABC Corporation HVAC"
-                    maxLength={255}
-                    required
-                    value={form.name}
-                    onChange={handleFormChange}
-                  />
-                </div>
+            {/* Type */}
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Type <span className="text-error">*</span></label>
+              <select
+                name="type"
+                className="select select-bordered w-full"
+                required
+                value={form.type}
+                onChange={handleFormChange}
+              >
+                <option value="" disabled>Select type</option>
+                {TYPE_OPTIONS.map(t => (
+                  <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
+                ))}
+              </select>
+            </div>
 
-                {/* Address */}
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-                  <textarea
-                    name="address"
-                    className="textarea textarea-bordered w-full"
-                    placeholder="Full project site address"
-                    maxLength={600}
-                    rows={2}
-                    required
-                    value={form.address}
-                    onChange={handleFormChange}
-                  />
-                </div>
+            {/* Contact Name */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+              <input
+                type="text"
+                name="contactName"
+                className="input input-bordered w-full"
+                placeholder="e.g. Juan Dela Cruz"
+                maxLength={300}
+                required
+                value={form.contactName}
+                onChange={handleFormChange}
+              />
+            </div>
 
-                {/* Type */}
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Type <span className="text-error">*</span></label>
-                  <select
-                    name="type"
-                    className="select select-bordered w-full"
-                    required
-                    value={form.type}
-                    onChange={handleFormChange}
-                  >
-                    <option value="" disabled>Select type</option>
-                    {TYPE_OPTIONS.map(t => (
-                      <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
-                    ))}
-                  </select>
-                </div>
+            {/* Contact Number */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+              <input
+                type="tel"
+                name="contactNumber"
+                className="input input-bordered w-full"
+                placeholder="e.g. +63 912 345 6789"
+                maxLength={16}
+                required
+                value={form.contactNumber}
+                onChange={handleFormChange}
+              />
+            </div>
 
-                {/* Contact Name */}
-                <div className="flex flex-col gap-1">
-                  <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-                  <input
-                    type="text"
-                    name="contactName"
-                    className="input input-bordered w-full"
-                    placeholder="e.g. Juan Dela Cruz"
-                    maxLength={300}
-                    required
-                    value={form.contactName}
-                    onChange={handleFormChange}
-                  />
-                </div>
+            {/* Contact Email */}
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
+              <input
+                type="email"
+                name="contactEmail"
+                className="input input-bordered w-full"
+                placeholder="e.g. contact@example.com"
+                maxLength={255}
+                required
+                value={form.contactEmail}
+                onChange={handleFormChange}
+              />
+            </div>
 
-                {/* Contact Number */}
-                <div className="flex flex-col gap-1">
-                  <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-                  <input
-                    type="tel"
-                    name="contactNumber"
-                    className="input input-bordered w-full"
-                    placeholder="e.g. +63 912 345 6789"
-                    maxLength={16}
-                    required
-                    value={form.contactNumber}
-                    onChange={handleFormChange}
-                  />
-                </div>
+            {/* Warranty Status */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Warranty Status <span className="text-error">*</span></label>
+              <select
+                name="warrantyStatus"
+                className="select select-bordered w-full"
+                value={form.warrantyStatus}
+                onChange={handleFormChange}
+              >
+                <option value={1}>Active</option>
+                <option value={0}>Expired</option>
+              </select>
+            </div>
 
-                {/* Contact Email */}
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
-                  <input
-                    type="email"
-                    name="contactEmail"
-                    className="input input-bordered w-full"
-                    placeholder="e.g. contact@example.com"
-                    maxLength={255}
-                    required
-                    value={form.contactEmail}
-                    onChange={handleFormChange}
-                  />
-                </div>
+            {/* Warranty Date */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
+              <input
+                type="date"
+                name="warrantyDate"
+                className="input input-bordered w-full"
+                required
+                value={form.warrantyDate}
+                onChange={handleFormChange}
+              />
+            </div>
 
-                {/* Warranty Status */}
-                <div className="flex flex-col gap-1">
-                  <label className="label-text font-medium">Warranty Status <span className="text-error">*</span></label>
-                  <select
-                    name="warrantyStatus"
-                    className="select select-bordered w-full"
-                    value={form.warrantyStatus}
-                    onChange={handleFormChange}
-                  >
-                    <option value={1}>Active</option>
-                    <option value={0}>Expired</option>
-                  </select>
-                </div>
-
-                {/* Warranty Date */}
-                <div className="flex flex-col gap-1">
-                  <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
-                  <input
-                    type="date"
-                    name="warrantyDate"
-                    className="input input-bordered w-full"
-                    required
-                    value={form.warrantyDate}
-                    onChange={handleFormChange}
-                  />
-                </div>
-
-                {/* Form error */}
-                {formError && (
-                  <div className="sm:col-span-2 alert alert-error py-2">
-                    <span className="icon-[tabler--alert-circle] size-4"></span>
-                    <span className="text-sm">{formError}</span>
-                  </div>
-                )}
+            {/* Form error */}
+            {formError && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4"></span>
+                <span className="text-sm">{formError}</span>
               </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" data-overlay="#new-project-modal" onClick={closeModal}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--plus] size-4"></span>
-                  }
-                  Create Project
-                </button>
-              </div>
-            </form>
+            )}
           </div>
-        </div>
-      </div>
+        </form>
+      </Modal>
     </Layout>
   )
 }
