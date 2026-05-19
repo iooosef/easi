@@ -62,8 +62,11 @@ public class ServiceReportService {
         return toResponse(saved);
     }
 
-    /** Returns a page of service report records. */
-    public Page<ServiceReportResponse> getAll(Pageable pageable) {
+    /** Returns a page of service report records, optionally filtered by project number. */
+    public Page<ServiceReportResponse> getAll(Integer projNum, Pageable pageable) {
+        if (projNum != null) {
+            return serviceReportRepository.findAllByProject_ProjNum(projNum, pageable).map(this::toResponse);
+        }
         return serviceReportRepository.findAll(pageable).map(this::toResponse);
     }
 

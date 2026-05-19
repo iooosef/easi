@@ -41,8 +41,10 @@ public class ServiceReportController {
 
     /** Returns a page of service report records. Available to ADMIN, STAFF, and CREW. */
     @GetMapping
-    public ResponseEntity<Page<ServiceReportResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(serviceReportService.getAll(pageable));
+    public ResponseEntity<Page<ServiceReportResponse>> getAll(
+            @RequestParam(required = false) Integer projNum,
+            Pageable pageable) {
+        return ResponseEntity.ok(serviceReportService.getAll(projNum, pageable));
     }
 
     /** Returns a single service report record by ID. Available to ADMIN, STAFF, and CREW. */

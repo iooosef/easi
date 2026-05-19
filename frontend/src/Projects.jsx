@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
@@ -9,10 +10,11 @@ const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
 const TYPE_OPTIONS   = ['ESTABLISHMENT', 'HOUSEHOLD']
 
 const PROJECT_MENU_ITEMS = [
-  { key: 'update',    label: 'Update Details',          icon: 'icon-[tabler--pencil]',    roles: ['ADMIN', 'STAFF'] },
-  { key: 'schedule',  label: 'Manage Schedule',         icon: 'icon-[tabler--calendar]',  roles: null },
-  { key: 'documents', label: 'Manage Documents',        icon: 'icon-[tabler--files]',     roles: null },
-  { key: 'ac',        label: 'Manage Air Conditioners', icon: 'icon-[tabler--snowflake]', roles: null },
+  { key: 'update',          label: 'Update Details',          icon: 'icon-[tabler--pencil]',      roles: ['ADMIN', 'STAFF'] },
+  { key: 'service-reports', label: 'Project Service Reports', icon: 'icon-[tabler--file-report]', roles: null },
+  { key: 'schedule',        label: 'Manage Schedule',         icon: 'icon-[tabler--calendar]',    roles: null },
+  { key: 'documents',       label: 'Manage Documents',        icon: 'icon-[tabler--files]',       roles: null },
+  { key: 'ac',              label: 'Manage Air Conditioners', icon: 'icon-[tabler--snowflake]',   roles: null },
 ]
 
 const EMPTY_FORM = {
@@ -59,6 +61,7 @@ const PAGE_SIZE = 12
 
 export default function Projects() {
   const { apiFetch, hasRole } = useAuth()
+  const navigate = useNavigate()
   const [projects, setProjects]         = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
@@ -354,6 +357,9 @@ export default function Projects() {
           if (key === 'update') {
             setSelectedProject(null)
             openEditModal(project)
+          } else if (key === 'service-reports') {
+            setSelectedProject(null)
+            navigate(`/service-report/project/${project.projNum}`, { state: { projectName: project.name } })
           }
         }}
       />

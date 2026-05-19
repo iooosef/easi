@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
@@ -46,6 +47,12 @@ const PAGE_SIZE = 10
 
 export default function ServiceReports() {
   const { apiFetch, hasRole } = useAuth()
+  const { projNum: projNumParam } = useParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const projNumFilter  = projNumParam ? Number(projNumParam) : null
+  const filterProjName = location.state?.projectName ?? null
+
   const [reports, setReports]           = useState([])
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState(null)
@@ -60,6 +67,8 @@ export default function ServiceReports() {
   const [formError, setFormError]   = useState({})
   const [submitting, setSubmitting] = useState(false)
 
+  const [refreshKey, setRefreshKey] = useState(0)
+
   const canEdit = hasRole('ADMIN', 'STAFF')
 
   function openModal() { setModalOpen(true) }
@@ -70,30 +79,35 @@ export default function ServiceReports() {
     setFormError({})
   }
 
-  /** Fetches one page of service reports from the API */
-  async function fetchReports() {
+  // Reset to page 0 whenever the project filter changes
+  useEffect(() => { setPage(0) }, [projNumFilter])
+
+  /** Fetches service reports; re-runs whenever page, filter, or refreshKey changes. */
+  useEffect(() => {
+    let active = true
     setLoading(true)
     setError(null)
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        size: String(PAGE_SIZE),
-        sort: 'srNumber,asc',
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(PAGE_SIZE),
+      sort: 'srNumber,asc',
+    })
+    if (projNumFilter) params.append('projNum', String(projNumFilter))
+    apiFetch(`/api/service-reports?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to load service reports (${res.status})`)
+        return res.json()
       })
-      const res = await apiFetch(`/api/service-reports?${params}`)
-      if (!res.ok) throw new Error(`Failed to load service reports (${res.status})`)
-      const data = await res.json()
-      setReports(data.content ?? [])
-      setTotalPages(data.totalPages ?? 0)
-      setTotalElements(data.totalElements ?? 0)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { fetchReports() }, [apiFetch, page])
+      .then(data => {
+        if (!active) return
+        setReports(data.content ?? [])
+        setTotalPages(data.totalPages ?? 0)
+        setTotalElements(data.totalElements ?? 0)
+      })
+      .catch(err => { if (active) setError(err.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, page, projNumFilter, refreshKey])
 
   // Client-side search on complaint text or project/SR number
   const filtered = reports.filter(r => {
@@ -141,7 +155,7 @@ export default function ServiceReports() {
       closeModal()
       setTimeout(() => notyfSuccess(`Service Report #${data.srNumber} created successfully.`), 150)
       setPage(0)
-      await fetchReports()
+      setRefreshKey(k => k + 1)
     } catch (err) {
       setFormError({ _general: err.message })
     } finally {
@@ -154,7 +168,11 @@ export default function ServiceReports() {
       {/* Header row */}
       <div className="flex items-stretch justify-between h-16 mb-6">
         <div>
-          <h1 className="text-3xl font-semibold">Service Reports</h1>
+          <h1 className="text-3xl font-semibold">
+            {projNumFilter
+              ? `Project Service Reports of ${filterProjName ?? '...'}`
+              : 'All Project Service Reports'}
+          </h1>
           <p className="text-base-content/60 mt-1">View and manage Project Service Reports (PSR)</p>
         </div>
 
@@ -257,15 +275,24 @@ export default function ServiceReports() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-8">
-              <button className="btn btn-sm btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
-                <span className="icon-[tabler--chevron-left] size-4"></span>
-                Prev
-              </button>
-              <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
-              <button className="btn btn-sm btn-ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
-                Next
-                <span className="icon-[tabler--chevron-right] size-4"></span>
-              </button>
+              {projNumFilter ? (
+                <button className="btn btn-sm btn-ghost" onClick={() => navigate('/service-report')}>
+                  <span className="icon-[tabler--list] size-4"></span>
+                  View All Reports
+                </button>
+              ) : (
+                <>
+                  <button className="btn btn-sm btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                    <span className="icon-[tabler--chevron-left] size-4"></span>
+                    Prev
+                  </button>
+                  <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
+                  <button className="btn btn-sm btn-ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                    Next
+                    <span className="icon-[tabler--chevron-right] size-4"></span>
+                  </button>
+                </>
+              )}
             </div>
           )}
         </>
