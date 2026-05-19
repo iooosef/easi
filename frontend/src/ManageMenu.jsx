@@ -4,12 +4,6 @@
  * Controlled via isOpen / onClose props — no FlyonUI JS dependency.
  */
 
-const MENU_ITEMS = [
-  { key: 'update',    label: 'Update Details',          icon: 'icon-[tabler--pencil]',    roles: ['ADMIN', 'STAFF'] },
-  { key: 'schedule',  label: 'Manage Schedule',         icon: 'icon-[tabler--calendar]',  roles: null },
-  { key: 'documents', label: 'Manage Documents',        icon: 'icon-[tabler--files]',     roles: null },
-  { key: 'ac',        label: 'Manage Air Conditioners', icon: 'icon-[tabler--snowflake]', roles: null },
-]
 
 /** Detail row for the info grid */
 function DetailRow({ label, value }) {
@@ -27,8 +21,8 @@ function formatDate(dt) {
   return new Date(dt).toISOString().slice(0, 10)
 }
 
-/** Props: project, isOpen, onClose, onMenuSelect(key, project), hasRole */
-export default function ManageMenu({ project, isOpen, onClose, onMenuSelect, hasRole }) {
+/** Props: project, isOpen, onClose, onMenuSelect(key, project), hasRole, menuItems */
+export default function ManageMenu({ project, isOpen, onClose, onMenuSelect, hasRole, menuItems = [] }) {
   if (!isOpen || !project) return null
 
   return (
@@ -101,7 +95,7 @@ export default function ManageMenu({ project, isOpen, onClose, onMenuSelect, has
             <div>
               <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Manage</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {MENU_ITEMS.filter(({ roles }) => roles === null || hasRole?.(...roles)).map(({ key, label, icon }) => (
+                {menuItems.filter(({ roles }) => roles === null || hasRole?.(...roles)).map(({ key, label, icon }) => (
                   <button
                     key={key}
                     type="button"

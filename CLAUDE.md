@@ -39,4 +39,30 @@ Every service method that adds, updates, or deletes data must call `logService.l
 
 ### FRONTEND
 Frontend in /frontend dir
-Frontend framework is React using FluentUI React v9
+Frontend framework is React using FlyonUI (Tailwind CSS component library)
+
+### frontend form validation
+All forms that submit to the API must handle validation errors inline on each field using FlyonUI's `is-invalid` and `helper-text` pattern.
+
+Backend returns `{ "errors": { "fieldName": "message" } }` for `@Valid` violations, or `{ "error": "message" }` for other errors.
+
+Parse errors with this helper (defined per page file):
+```js
+async function parseApiError(res) {
+  const data = await res.json().catch(() => ({}))
+  if (data.errors) return data.errors
+  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
+}
+```
+
+Form error state is an object `{}` (not a string or null). On a failed response:
+1. `setFormError(await parseApiError(res))` — sets field-level errors
+2. `notyfError('Action failed')` — shows a toast immediately
+
+Each field renders:
+```jsx
+<input className={`input input-bordered w-full${formError.fieldName ? ' is-invalid' : ''}`} ... />
+{formError.fieldName && <span className="helper-text">{formError.fieldName}</span>}
+```
+
+General (non-field) errors use key `_general` and render as a compact alert at the bottom of the form. Reset `formError` to `{}` (not `null`) when opening or closing a modal.

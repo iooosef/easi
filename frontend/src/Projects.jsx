@@ -3,10 +3,17 @@ import { useAuth } from './auth'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
 import Modal from './Modal'
-import { notyfSuccess } from './notyf'
+import { notyfSuccess, notyfError } from './notyf'
 
 const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
 const TYPE_OPTIONS   = ['ESTABLISHMENT', 'HOUSEHOLD']
+
+const PROJECT_MENU_ITEMS = [
+  { key: 'update',    label: 'Update Details',          icon: 'icon-[tabler--pencil]',    roles: ['ADMIN', 'STAFF'] },
+  { key: 'schedule',  label: 'Manage Schedule',         icon: 'icon-[tabler--calendar]',  roles: null },
+  { key: 'documents', label: 'Manage Documents',        icon: 'icon-[tabler--files]',     roles: null },
+  { key: 'ac',        label: 'Manage Air Conditioners', icon: 'icon-[tabler--snowflake]', roles: null },
+]
 
 const EMPTY_FORM = {
   name: '',
@@ -19,6 +26,17 @@ const EMPTY_FORM = {
   warrantyStatus: 1,
   warrantyDate: '',
   status: 'active',
+}
+
+/**
+ * Parses a failed API response.
+ * Returns { fieldName: message } for validation errors,
+ * or { _general: message } for other errors.
+ */
+async function parseApiError(res) {
+  const data = await res.json().catch(() => ({}))
+  if (data.errors) return data.errors
+  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
 }
 
 /** Returns badge class based on project type */
@@ -53,7 +71,7 @@ export default function Projects() {
   // Create modal state
   const [modalOpen, setModalOpen]   = useState(false)
   const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState(null)
+  const [formError, setFormError]   = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [selectedProject, setSelectedProject] = useState(null)
 
@@ -66,7 +84,7 @@ export default function Projects() {
   function closeModal() {
     setModalOpen(false)
     setForm(EMPTY_FORM)
-    setFormError(null)
+    setFormError({})
   }
 
   function openEditModal(project) {
@@ -83,7 +101,7 @@ export default function Projects() {
       status:               project.status,
     })
     setEditingProjNum(project.projNum)
-    setFormError(null)
+    setFormError({})
     setEditModalOpen(true)
   }
 
@@ -91,12 +109,12 @@ export default function Projects() {
     setEditModalOpen(false)
     setEditingProjNum(null)
     setForm(EMPTY_FORM)
-    setFormError(null)
+    setFormError({})
   }
 
   async function handleUpdate(e) {
     e.preventDefault()
-    setFormError(null)
+    setFormError({})
     setSubmitting(true)
     try {
       const res = await apiFetch(`/api/projects/${editingProjNum}`, {
@@ -108,8 +126,12 @@ export default function Projects() {
           warrantyStatus: Number(form.warrantyStatus),
         }),
       })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.message ?? `Error ${res.status}`)
       closeEditModal()
       setTimeout(() => notyfSuccess(`Project "${data.name}" updated successfully.`), 150)
       await fetchProjects()
@@ -164,7 +186,7 @@ export default function Projects() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setFormError(null)
+    setFormError({})
     setSubmitting(true)
     try {
       const res = await apiFetch('/api/projects', {
@@ -176,8 +198,12 @@ export default function Projects() {
           warrantyStatus: Number(form.warrantyStatus),
         }),
       })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add failed')
+        return
+      }
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.message ?? `Error ${res.status}`)
       closeModal()
       setTimeout(() => notyfSuccess(`Project "${data.name}" created successfully.`), 150)
       setPage(0)
@@ -323,6 +349,7 @@ export default function Projects() {
         isOpen={!!selectedProject}
         onClose={() => setSelectedProject(null)}
         hasRole={hasRole}
+        menuItems={PROJECT_MENU_ITEMS}
         onMenuSelect={(key, project) => {
           if (key === 'update') {
             setSelectedProject(null)
@@ -356,86 +383,104 @@ export default function Projects() {
 
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
-              <input type="text" name="name" className="input input-bordered w-full"
+              <input type="text" name="name" className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
                 placeholder="e.g. ABC Corporation HVAC" maxLength={255} required
                 value={form.name} onChange={handleFormChange} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
             </div>
 
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-              <textarea name="address" className="textarea textarea-bordered w-full"
+              <textarea name="address" className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
                 placeholder="Full project site address" maxLength={600} rows={2} required
                 value={form.address} onChange={handleFormChange} />
+              {formError.address && <span className="helper-text">{formError.address}</span>}
             </div>
 
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Type <span className="text-error">*</span></label>
-              <select name="type" className="select select-bordered w-full" required
+              <select name="type" className={`select select-bordered w-full${formError.type ? ' is-invalid' : ''}`} required
                 value={form.type} onChange={handleFormChange}>
                 <option value="" disabled>Select type</option>
                 {TYPE_OPTIONS.map(t => (
                   <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
                 ))}
               </select>
+              {formError.type && <span className="helper-text">{formError.type}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-              <input type="text" name="contactName" className="input input-bordered w-full"
+              <input type="text" name="contactName" className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
                 placeholder="e.g. Juan Dela Cruz" maxLength={300} required
                 value={form.contactName} onChange={handleFormChange} />
+              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-              <input type="tel" name="contactNumber" className="input input-bordered w-full"
+              <input type="tel" name="contactNumber" className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
                 placeholder="e.g. +63 912 345 6789" maxLength={16} required
                 value={form.contactNumber} onChange={handleFormChange} />
+              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
             </div>
 
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
-              <input type="email" name="contactEmail" className="input input-bordered w-full"
+              <input type="email" name="contactEmail" className={`input input-bordered w-full${formError.contactEmail ? ' is-invalid' : ''}`}
                 placeholder="e.g. contact@example.com" maxLength={255} required
                 value={form.contactEmail} onChange={handleFormChange} />
+              {formError.contactEmail && <span className="helper-text">{formError.contactEmail}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Installation Progress (%)</label>
-              <input type="number" name="installationProgress" className="input input-bordered w-full"
-                min={0} max={100} required
-                value={form.installationProgress} onChange={handleFormChange} />
+              <div className="flex items-center justify-between">
+                <label className="label-text font-medium">Installation Progress</label>
+                <span className="text-sm font-semibold text-primary">{form.installationProgress}%</span>
+              </div>
+              <input
+                type="range"
+                name="installationProgress"
+                className="range range-primary range-sm"
+                min={0} max={100} step={1}
+                value={form.installationProgress}
+                onChange={handleFormChange}
+              />
+              {formError.installationProgress && <span className="helper-text">{formError.installationProgress}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Status</label>
-              <select name="status" className="select select-bordered w-full"
+              <select name="status" className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
                 value={form.status} onChange={handleFormChange}>
                 <option value="active">Active</option>
                 <option value="completed">Completed</option>
                 <option value="inactive">Inactive</option>
               </select>
+              {formError.status && <span className="helper-text">{formError.status}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Warranty Status</label>
-              <select name="warrantyStatus" className="select select-bordered w-full"
+              <select name="warrantyStatus" className={`select select-bordered w-full${formError.warrantyStatus ? ' is-invalid' : ''}`}
                 value={form.warrantyStatus} onChange={handleFormChange}>
                 <option value={1}>Active</option>
                 <option value={0}>Expired</option>
               </select>
+              {formError.warrantyStatus && <span className="helper-text">{formError.warrantyStatus}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
-              <input type="date" name="warrantyDate" className="input input-bordered w-full" required
+              <input type="date" name="warrantyDate" className={`input input-bordered w-full${formError.warrantyDate ? ' is-invalid' : ''}`} required
                 value={form.warrantyDate} onChange={handleFormChange} />
+              {formError.warrantyDate && <span className="helper-text">{formError.warrantyDate}</span>}
             </div>
 
-            {formError && (
+            {formError._general && (
               <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4"></span>
-                <span className="text-sm">{formError}</span>
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
               </div>
             )}
           </div>
@@ -471,13 +516,14 @@ export default function Projects() {
               <input
                 type="text"
                 name="name"
-                className="input input-bordered w-full"
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
                 placeholder="e.g. ABC Corporation HVAC"
                 maxLength={255}
                 required
                 value={form.name}
                 onChange={handleFormChange}
               />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
             </div>
 
             {/* Address */}
@@ -485,7 +531,7 @@ export default function Projects() {
               <label className="label-text font-medium">Address <span className="text-error">*</span></label>
               <textarea
                 name="address"
-                className="textarea textarea-bordered w-full"
+                className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
                 placeholder="Full project site address"
                 maxLength={600}
                 rows={2}
@@ -493,6 +539,7 @@ export default function Projects() {
                 value={form.address}
                 onChange={handleFormChange}
               />
+              {formError.address && <span className="helper-text">{formError.address}</span>}
             </div>
 
             {/* Type */}
@@ -500,7 +547,7 @@ export default function Projects() {
               <label className="label-text font-medium">Type <span className="text-error">*</span></label>
               <select
                 name="type"
-                className="select select-bordered w-full"
+                className={`select select-bordered w-full${formError.type ? ' is-invalid' : ''}`}
                 required
                 value={form.type}
                 onChange={handleFormChange}
@@ -510,6 +557,7 @@ export default function Projects() {
                   <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
                 ))}
               </select>
+              {formError.type && <span className="helper-text">{formError.type}</span>}
             </div>
 
             {/* Contact Name */}
@@ -518,13 +566,14 @@ export default function Projects() {
               <input
                 type="text"
                 name="contactName"
-                className="input input-bordered w-full"
+                className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
                 placeholder="e.g. Juan Dela Cruz"
                 maxLength={300}
                 required
                 value={form.contactName}
                 onChange={handleFormChange}
               />
+              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
             </div>
 
             {/* Contact Number */}
@@ -533,13 +582,14 @@ export default function Projects() {
               <input
                 type="tel"
                 name="contactNumber"
-                className="input input-bordered w-full"
+                className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
                 placeholder="e.g. +63 912 345 6789"
                 maxLength={16}
                 required
                 value={form.contactNumber}
                 onChange={handleFormChange}
               />
+              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
             </div>
 
             {/* Contact Email */}
@@ -548,13 +598,14 @@ export default function Projects() {
               <input
                 type="email"
                 name="contactEmail"
-                className="input input-bordered w-full"
+                className={`input input-bordered w-full${formError.contactEmail ? ' is-invalid' : ''}`}
                 placeholder="e.g. contact@example.com"
                 maxLength={255}
                 required
                 value={form.contactEmail}
                 onChange={handleFormChange}
               />
+              {formError.contactEmail && <span className="helper-text">{formError.contactEmail}</span>}
             </div>
 
             {/* Warranty Status */}
@@ -562,13 +613,14 @@ export default function Projects() {
               <label className="label-text font-medium">Warranty Status <span className="text-error">*</span></label>
               <select
                 name="warrantyStatus"
-                className="select select-bordered w-full"
+                className={`select select-bordered w-full${formError.warrantyStatus ? ' is-invalid' : ''}`}
                 value={form.warrantyStatus}
                 onChange={handleFormChange}
               >
                 <option value={1}>Active</option>
                 <option value={0}>Expired</option>
               </select>
+              {formError.warrantyStatus && <span className="helper-text">{formError.warrantyStatus}</span>}
             </div>
 
             {/* Warranty Date */}
@@ -577,18 +629,19 @@ export default function Projects() {
               <input
                 type="date"
                 name="warrantyDate"
-                className="input input-bordered w-full"
+                className={`input input-bordered w-full${formError.warrantyDate ? ' is-invalid' : ''}`}
                 required
                 value={form.warrantyDate}
                 onChange={handleFormChange}
               />
+              {formError.warrantyDate && <span className="helper-text">{formError.warrantyDate}</span>}
             </div>
 
-            {/* Form error */}
-            {formError && (
+            {/* General server error */}
+            {formError._general && (
               <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4"></span>
-                <span className="text-sm">{formError}</span>
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
               </div>
             )}
           </div>
