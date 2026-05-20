@@ -60,8 +60,11 @@ public class ServiceReportFindingService {
         return toResponse(saved);
     }
 
-    /** Returns a page of service report finding records. */
-    public Page<ServiceReportFindingResponse> getAll(Pageable pageable) {
+    /** Returns a page of service report finding records, optionally filtered by service report number. */
+    public Page<ServiceReportFindingResponse> getAll(Integer srNumber, Pageable pageable) {
+        if (srNumber != null) {
+            return findingRepository.findByServiceReportSrNumber(srNumber, pageable).map(this::toResponse);
+        }
         return findingRepository.findAll(pageable).map(this::toResponse);
     }
 

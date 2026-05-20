@@ -695,6 +695,9 @@ export default function ServiceReports() {
         onMenuSelect={(key, report) => {
           setSelectedReport(null)
           if (key === 'update') openEditModal(report)
+          if (key === 'findings') navigate(`/service-report/${report.srNumber}/findings`, {
+            state: { projectName: report.projectName, projNum: report.projNum },
+          })
         }}
       />
     </Layout>

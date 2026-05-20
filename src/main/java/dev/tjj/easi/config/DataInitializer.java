@@ -13,11 +13,13 @@ import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.Role;
 import dev.tjj.easi.entity.ServiceReport;
+import dev.tjj.easi.entity.ServiceReportFinding;
 import dev.tjj.easi.entity.ServiceSchedule;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
+import dev.tjj.easi.repository.ServiceReportFindingRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import dev.tjj.easi.repository.ServiceScheduleRepository;
 import dev.tjj.easi.repository.UserRepository;
@@ -38,6 +40,7 @@ public class DataInitializer implements CommandLineRunner {
     private final ServiceScheduleRepository serviceScheduleRepository;
     private final ServiceReportRepository serviceReportRepository;
     private final AirConditioningUnitRepository acUnitRepository;
+    private final ServiceReportFindingRepository findingRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -114,6 +117,7 @@ public class DataInitializer implements CommandLineRunner {
         if (projectRepository.count() > 0) {
             log.info("Project data already exists, skipping project/schedule/report seed.");
             seedAcUnits();
+            seedFindings();
             return;
         }
 
@@ -211,8 +215,9 @@ public class DataInitializer implements CommandLineRunner {
         report(p3, ss16, "Post-maintenance follow-up inspection",             "Verified all units operating within spec after March PM",                "All Areas, Greenfield B",             "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 15, 13, 0));
 
         seedAcUnitsForProjects(p1, p2, p3);
+        seedFindings();
 
-        log.info("Sample project data seeded: 3 projects, 18 service schedules, 16 service reports, 11 AC units.");
+        log.info("Sample project data seeded: 3 projects, 18 service schedules, 16 service reports, 11 AC units, 12 findings.");
     }
 
     /** Creates and saves a ServiceSchedule. */
@@ -296,6 +301,98 @@ public class DataInitializer implements CommandLineRunner {
         r.setStatus(status);
         r.setAddedOn(addedOn);
         serviceReportRepository.save(r);
+    }
+
+    /** Seeds sample findings across service reports if none exist. */
+    private void seedFindings() {
+        if (findingRepository.count() > 0) {
+            log.info("Finding data already exists, skipping findings seed.");
+            return;
+        }
+        var pageReq = org.springframework.data.domain.PageRequest.of(0, 3,
+                org.springframework.data.domain.Sort.by("projNum").ascending());
+        var projects = projectRepository.findAll(pageReq).getContent();
+        if (projects.size() < 3) {
+            log.warn("Not enough projects to seed findings, skipping.");
+            return;
+        }
+        var srPage = org.springframework.data.domain.PageRequest.of(0, 3,
+                org.springframework.data.domain.Sort.by("srNumber").ascending());
+        var acPage = org.springframework.data.domain.PageRequest.of(0, 10,
+                org.springframework.data.domain.Sort.by("acNum").ascending());
+
+        var p1Reports = serviceReportRepository.findAllByProject_ProjNum(projects.get(0).getProjNum(), srPage).getContent();
+        var p2Reports = serviceReportRepository.findAllByProject_ProjNum(projects.get(1).getProjNum(), srPage).getContent();
+        var p3Reports = serviceReportRepository.findAllByProject_ProjNum(projects.get(2).getProjNum(), srPage).getContent();
+
+        var p1Ac = acUnitRepository.findByProjectProjNum(projects.get(0).getProjNum(), acPage).getContent();
+        var p2Ac = acUnitRepository.findByProjectProjNum(projects.get(1).getProjNum(), acPage).getContent();
+        var p3Ac = acUnitRepository.findByProjectProjNum(projects.get(2).getProjNum(), acPage).getContent();
+
+        // Project 1 findings
+        if (!p1Reports.isEmpty() && p1Ac.size() >= 2) {
+            finding(p1Reports.get(0), "DEFECT", "Capacitor 35/5 MFD", p1Ac.get(0),
+                    "Capacitor found bulging; refrigerant pressure below spec. Replaced capacitor and recharged system.");
+            finding(p1Reports.get(0), "GOOD",   null,                  p1Ac.get(1),
+                    "Unit operating within normal parameters. No issues found.");
+        }
+        if (p1Reports.size() >= 2 && p1Ac.size() >= 4) {
+            finding(p1Reports.get(1), "WORN",   "Compressor Mount",    p1Ac.get(2),
+                    "Mounting bolts loose; rubber isolators worn. Tightened bolts and lubricated moving parts.");
+            finding(p1Reports.get(1), "GOOD",   null,                  p1Ac.get(3),
+                    "No abnormalities detected during inspection.");
+        }
+        if (p1Reports.size() >= 3 && !p1Ac.isEmpty()) {
+            finding(p1Reports.get(2), "DIRTY",  "Air Filter",          p1Ac.get(0),
+                    "Drain line blocked by algae buildup; air filter heavily clogged. Cleared drain and cleaned filter.");
+        }
+
+        // Project 2 findings
+        if (!p2Reports.isEmpty() && !p2Ac.isEmpty()) {
+            finding(p2Reports.get(0), "DEFECT", "PCB Fuse 15A",        p2Ac.get(0),
+                    "Blown fuse on PCB after power surge. Circuit breaker tripped. Replaced fuse and reset breaker.");
+        }
+        if (p2Reports.size() >= 2 && p2Ac.size() >= 2) {
+            finding(p2Reports.get(1), "DIRTY",  "Evaporator Coil",     p2Ac.get(1),
+                    "Evaporator coil fouled with mold and dust buildup. Deep cleaned and applied anti-fungal treatment.");
+        }
+        if (p2Reports.size() >= 3 && !p2Ac.isEmpty()) {
+            finding(p2Reports.get(2), "LEAK",   "Drain Pan",           p2Ac.get(0),
+                    "Drain pan cracked; condensate drain clogged causing indoor leak. Fixed drain and re-sealed pan.");
+        }
+
+        // Project 3 findings
+        if (!p3Reports.isEmpty() && !p3Ac.isEmpty()) {
+            finding(p3Reports.get(0), "DEFECT", "Circuit Breaker 20A", p3Ac.get(0),
+                    "Overloaded circuit causing breaker trips. Redistributed unit loads across available panels.");
+        }
+        if (p3Reports.size() >= 2 && p3Ac.size() >= 2) {
+            finding(p3Reports.get(1), "WORN",   "Air Filter",          p3Ac.get(1),
+                    "Evaporator coil frozen due to restricted airflow. Defrosted coil and replaced clogged air filter.");
+            finding(p3Reports.get(1), "GOOD",   null,                  p3Ac.get(0),
+                    "Refrigerant level within spec after defrost procedure. Unit fully operational.");
+        }
+        if (p3Reports.size() >= 3 && p3Ac.size() >= 2) {
+            finding(p3Reports.get(2), "WORN",   "Duct Hanger",         p3Ac.get(0),
+                    "Loose duct hangers causing loud rattling. Secured with sheet metal screws and sealed joints with tape.");
+            finding(p3Reports.get(2), "GOOD",   null,                  p3Ac.get(1),
+                    "Adjacent unit operating normally; no issues detected.");
+        }
+
+        log.info("Sample finding data seeded: 12 findings across service reports.");
+    }
+
+    /** Creates and saves a ServiceReportFinding. */
+    private void finding(ServiceReport report, String findingType, String partModel,
+                         AirConditioningUnit ac, String remarks) {
+        ServiceReportFinding f = new ServiceReportFinding();
+        f.setServiceReport(report);
+        f.setFindingType(findingType);
+        f.setPartModel(partModel);
+        f.setAirConditioningUnit(ac);
+        f.setRemarks(remarks);
+        f.setAddedOn(report.getAddedOn().plusHours(1));
+        findingRepository.save(f);
     }
 
 }
