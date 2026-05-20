@@ -54,7 +54,7 @@ public class SecurityConfig {
                                 "/v3/api-docs/**",
                                 "/v3/api-docs.yaml")
                         .permitAll()
-                        .requestMatchers("/api/users/forgot-password", "/api/users/reset-password").permitAll()
+                        .requestMatchers("/api/users/forgot-password", "/api/users/verify-otp", "/api/users/reset-password").permitAll()
                         .requestMatchers("/api/users/admin-reset-password").hasAnyRole("ADMIN", "HR")
                         .requestMatchers("/api/users/register").hasAnyRole("ADMIN", "HR")
                         .requestMatchers(HttpMethod.GET, "/api/employees/me").authenticated()

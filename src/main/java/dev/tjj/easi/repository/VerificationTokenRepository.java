@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import java.util.Optional;
 
 public interface VerificationTokenRepository extends JpaRepository<VerificationToken, Long> {
-    Optional<VerificationToken> findByTokenAndPurpose(String token, TokenPurpose purpose);
+    Optional<VerificationToken> findByUserAndTokenAndPurpose(User user, String token, TokenPurpose purpose);
 
     @Modifying
     void deleteByUserAndPurpose(User user, TokenPurpose purpose);

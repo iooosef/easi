@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth, LogoutPage } from './auth'
 import LoginPage from './LoginPage'
+import ForgotPasswordPage from './ForgotPasswordPage'
+import ResetOtpPage from './ResetOtpPage'
+import ResetPasswordPage from './ResetPasswordPage'
 import Home from './Home'
 import Projects from './Projects'
 import ServiceReports from './ServiceReports'
@@ -18,6 +21,9 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/logout" element={<LogoutPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-otp" element={<ResetOtpPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/" element={<Private element={<Home />} />} />
       <Route path="/home" element={<Private element={<Home />} />} />
       <Route path="/projects" element={<Private element={<Projects />} />} />

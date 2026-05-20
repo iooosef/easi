@@ -16,7 +16,7 @@ public class VerificationToken {
     @Setter
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 10)
+    @Column(nullable = false, length = 10)
     @Getter
     @Setter
     private String token;

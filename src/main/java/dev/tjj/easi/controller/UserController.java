@@ -5,6 +5,7 @@ import dev.tjj.easi.dto.ForgotPasswordRequest;
 import dev.tjj.easi.dto.RegisterUserRequest;
 import dev.tjj.easi.dto.RegisterUserResponse;
 import dev.tjj.easi.dto.ResetPasswordRequest;
+import dev.tjj.easi.dto.VerifyOtpRequest;
 import dev.tjj.easi.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,13 @@ public class UserController {
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         userService.sendPasswordResetOtp(request.email());
         return ResponseEntity.ok(Map.of("message", "If that email is registered, an OTP has been sent."));
+    }
+
+    /** Validates the OTP for the given email without consuming it. */
+    @PostMapping("/verify-otp")
+    public ResponseEntity<Map<String, String>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        userService.verifyOtp(request.email(), request.otp());
+        return ResponseEntity.ok(Map.of("message", "OTP is valid."));
     }
 
     /** Resets the user's password after verifying the OTP. */

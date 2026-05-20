@@ -72,6 +72,21 @@ public class UserService {
         });
     }
 
+    /** Checks that the OTP is valid and unexpired without consuming it. Throws if invalid. */
+    @Transactional(readOnly = true)
+    public void verifyOtp(String email, String otp) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
+
+        VerificationToken token = tokenRepository
+                .findByUserAndTokenAndPurpose(user, otp, TokenPurpose.PASSWORD_RESET)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
+
+        if (token.isUsed() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Invalid or expired OTP.");
+        }
+    }
+
     /** Verifies the OTP and updates the password if the token is valid and unused. */
     @Transactional
     public void resetPassword(String email, String otp, String newPassword) {
@@ -79,13 +94,8 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
 
         VerificationToken token = tokenRepository
-                .findByTokenAndPurpose(otp, TokenPurpose.PASSWORD_RESET)
+                .findByUserAndTokenAndPurpose(user, otp, TokenPurpose.PASSWORD_RESET)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
-
-        // Ensure the OTP belongs to the requesting user
-        if (!token.getUser().getUserId().equals(user.getUserId())) {
-            throw new IllegalArgumentException("Invalid or expired OTP.");
-        }
 
         if (token.isUsed() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Invalid or expired OTP.");
