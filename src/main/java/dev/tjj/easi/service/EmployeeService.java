@@ -6,6 +6,7 @@ import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.UserRepository;
+import java.util.Optional;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
 import org.springframework.security.core.Authentication;
@@ -93,6 +94,7 @@ public class EmployeeService {
     }
 
     private EmployeeResponse toResponse(Employee e) {
+        Optional<User> userOpt = userRepository.findByEmployeeId(e.getEmployeeId());
         return new EmployeeResponse(
                 e.getEmployeeId(),
                 e.getLastName(),
@@ -104,7 +106,13 @@ public class EmployeeService {
                 e.getContactNumber(),
                 e.getPosition(),
                 e.getStatus(),
-                e.getAddedOn()
+                e.getAddedOn(),
+                userOpt.isPresent(),
+                userOpt.map(User::getUserId).orElse(null),
+                userOpt.map(User::getEmail).orElse(null),
+                userOpt.map(User::getRole).orElse(null),
+                userOpt.map(User::getStatus).orElse(null),
+                userOpt.map(User::getAddedOn).orElse(null)
         );
     }
 }

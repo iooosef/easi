@@ -1,4 +1,4 @@
-package dev.tjj.easi.entity;
+1package dev.tjj.easi.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

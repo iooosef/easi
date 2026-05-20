@@ -2,6 +2,7 @@ package dev.tjj.easi.service;
 
 import dev.tjj.easi.dto.RegisterUserRequest;
 import dev.tjj.easi.dto.RegisterUserResponse;
+import dev.tjj.easi.dto.UpdateUserRequest;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
@@ -176,6 +177,58 @@ public class UserService {
                 saved.getEmail(),
                 saved.getRole(),
                 employee.getEmployeeId(),
+                saved.getAddedOn()
+        );
+    }
+
+    /**
+     * Updates a user account's email, role, and status.
+     * ADMIN can modify any account; HR cannot modify ADMIN accounts or assign the ADMIN role.
+     */
+    @Transactional
+    public RegisterUserResponse updateUser(Integer userId, UpdateUserRequest request, UserDetails currentUser) {
+        String callerRole = currentUser.getAuthorities().stream()
+                .findFirst()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .orElseThrow(() -> new IllegalArgumentException("Access denied."));
+
+        Role newRole;
+        try {
+            newRole = Role.valueOf(request.role().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid role: " + request.role());
+        }
+
+        User target = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found."));
+
+        if ("HR".equals(callerRole) && "ADMIN".equals(target.getRole())) {
+            throw new IllegalArgumentException("HR cannot modify an admin account.");
+        }
+        if ("HR".equals(callerRole) && newRole == Role.ADMIN) {
+            throw new IllegalArgumentException("HR cannot assign the ADMIN role.");
+        }
+
+        if (!target.getEmail().equalsIgnoreCase(request.email()) &&
+                userRepository.findByEmail(request.email()).isPresent()) {
+            throw new IllegalArgumentException("Email is already in use.");
+        }
+
+        target.setEmail(request.email());
+        target.setRole(newRole.name());
+        target.setStatus(request.status());
+        if (request.password() != null && !request.password().isBlank()) {
+            target.setPassword(passwordEncoder.encode(request.password()));
+        }
+        User saved = userRepository.save(target);
+        logService.logByEmail(currentUser.getUsername(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "User",
+                String.valueOf(userId), "Updated user #" + userId, null);
+
+        return new RegisterUserResponse(
+                saved.getUserId(),
+                saved.getEmail(),
+                saved.getRole(),
+                saved.getEmployee().getEmployeeId(),
                 saved.getAddedOn()
         );
     }

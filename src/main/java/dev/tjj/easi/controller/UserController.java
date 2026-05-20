@@ -5,6 +5,7 @@ import dev.tjj.easi.dto.ForgotPasswordRequest;
 import dev.tjj.easi.dto.RegisterUserRequest;
 import dev.tjj.easi.dto.RegisterUserResponse;
 import dev.tjj.easi.dto.ResetPasswordRequest;
+import dev.tjj.easi.dto.UpdateUserRequest;
 import dev.tjj.easi.dto.VerifyOtpRequest;
 import dev.tjj.easi.service.UserService;
 import jakarta.validation.Valid;
@@ -63,5 +64,14 @@ public class UserController {
             @AuthenticationPrincipal UserDetails currentUser) {
         RegisterUserResponse response = userService.registerUser(request, currentUser);
         return ResponseEntity.status(201).body(response);
+    }
+
+    /** Updates a user account's email, role, and status. Restricted to ADMIN and HR. */
+    @PutMapping("/{userId}")
+    public ResponseEntity<RegisterUserResponse> updateUser(
+            @PathVariable Integer userId,
+            @Valid @RequestBody UpdateUserRequest request,
+            @AuthenticationPrincipal UserDetails currentUser) {
+        return ResponseEntity.ok(userService.updateUser(userId, request, currentUser));
     }
 }

@@ -14,5 +14,12 @@ public record EmployeeResponse(
         String contactNumber,
         String position,
         String status,
-        LocalDateTime addedOn
+        LocalDateTime addedOn,
+        boolean hasUserAccount,
+        // User account fields — null when no account is linked
+        Integer userId,
+        String userEmail,
+        String userRole,
+        Integer userStatus,
+        LocalDateTime userAddedOn
 ) {}

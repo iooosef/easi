@@ -47,6 +47,7 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         createAdminUser();
         createJosephUser();
+        seedRoleAccounts();
         seedProjectData();
     }
 
@@ -110,6 +111,70 @@ public class DataInitializer implements CommandLineRunner {
         userRepository.save(admin);
 
         log.info("Default admin user created: josence22@gmail.com / 1488");
+    }
+
+    /** Seeds one employee+user per remaining role, plus one userless CREW employee. */
+    private void seedRoleAccounts() {
+        record RoleSeed(String firstName, String lastName, String position, String role) {}
+
+        RoleSeed[] seeds = {
+            new RoleSeed("Accounting",  "User",    "Accountant",      "ACCOUNTING"),
+            new RoleSeed("HR",          "User",    "HR Officer",      "HR"),
+            new RoleSeed("Staff",       "User",    "Field Staff",     "STAFF"),
+            new RoleSeed("Crew",        "User",    "Field Crew",      "CREW"),
+        };
+
+        for (RoleSeed seed : seeds) {
+            String email = "josene22+easi_" + seed.role().toLowerCase() + "@gmail.com";
+            if (userRepository.findByEmail(email).isPresent()) {
+                log.info("Seed user {} already exists, skipping.", email);
+                continue;
+            }
+
+            Employee emp = new Employee();
+            emp.setFirstName(seed.firstName());
+            emp.setLastName(seed.lastName());
+            emp.setMiddleName("");
+            emp.setSuffixName("");
+            emp.setGender("N/A");
+            emp.setBirthdate(LocalDate.of(2000, 1, 1));
+            emp.setContactNumber("N/A");
+            emp.setPosition(seed.position());
+            emp.setStatus("active");
+            emp.setAddedOn(LocalDateTime.now());
+            emp = employeeRepository.save(emp);
+
+            User user = new User();
+            user.setEmail(email);
+            user.setPassword(passwordEncoder.encode("148888"));
+            user.setRole(seed.role());
+            user.setEmployee(emp);
+            user.setStatus(1);
+            user.setAddedOn(LocalDateTime.now());
+            userRepository.save(user);
+
+            log.info("Seed user created: {} / 148888 ({})", email, seed.role());
+        }
+
+        // One CREW employee with no user account
+        String markerName = "Unregistered";
+        boolean exists = employeeRepository.findAll().stream()
+                .anyMatch(e -> markerName.equals(e.getFirstName()) && "Crew".equals(e.getPosition()));
+        if (!exists) {
+            Employee emp = new Employee();
+            emp.setFirstName("Unregistered");
+            emp.setLastName("Crew");
+            emp.setMiddleName("");
+            emp.setSuffixName("");
+            emp.setGender("N/A");
+            emp.setBirthdate(LocalDate.of(2000, 1, 1));
+            emp.setContactNumber("N/A");
+            emp.setPosition("Crew");
+            emp.setStatus("active");
+            emp.setAddedOn(LocalDateTime.now());
+            employeeRepository.save(emp);
+            log.info("Seed employee (no user) created: Unregistered Crew");
+        }
     }
 
     /** Seeds sample projects, service schedules, and service reports if none exist. */

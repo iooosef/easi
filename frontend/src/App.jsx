@@ -10,6 +10,7 @@ import ServiceReports from './ServiceReports'
 import ServiceReportFindings from './ServiceReportFindings'
 import AirConditioningUnits from './AirConditioningUnits'
 import AccountSettings from './AccountSettings'
+import Employees from './Employees'
 
 /** Auth guard — defined outside App so its reference is stable across re-renders */
 function Private({ element }) {
@@ -32,6 +33,7 @@ function App() {
       <Route path="/service-report/project/:projNum" element={<Private element={<ServiceReports />} />} />
       <Route path="/ac-units/project/:projNum" element={<Private element={<AirConditioningUnits />} />} />
       <Route path="/service-report/:srNumber/findings" element={<Private element={<ServiceReportFindings />} />} />
+      <Route path="/employees" element={<Private element={<Employees />} />} />
       <Route path="/account-settings" element={<Private element={<AccountSettings />} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
