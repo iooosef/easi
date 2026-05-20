@@ -8,12 +8,14 @@ import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import dev.tjj.easi.entity.AirConditioningUnit;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.Role;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.entity.ServiceSchedule;
 import dev.tjj.easi.entity.User;
+import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
@@ -35,6 +37,7 @@ public class DataInitializer implements CommandLineRunner {
     private final ProjectRepository projectRepository;
     private final ServiceScheduleRepository serviceScheduleRepository;
     private final ServiceReportRepository serviceReportRepository;
+    private final AirConditioningUnitRepository acUnitRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -109,7 +112,8 @@ public class DataInitializer implements CommandLineRunner {
     /** Seeds sample projects, service schedules, and service reports if none exist. */
     private void seedProjectData() {
         if (projectRepository.count() > 0) {
-            log.info("Project data already exists, skipping seed.");
+            log.info("Project data already exists, skipping project/schedule/report seed.");
+            seedAcUnits();
             return;
         }
 
@@ -206,7 +210,9 @@ public class DataInitializer implements CommandLineRunner {
         report(p3, ss15, "Routine preventive maintenance — all units",        "Full cleaning, belt inspection, coil washing, and refrigerant check",    "All Areas, Greenfield B",             "cash",  null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 31, 9, 0));
         report(p3, ss16, "Post-maintenance follow-up inspection",             "Verified all units operating within spec after March PM",                "All Areas, Greenfield B",             "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 15, 13, 0));
 
-        log.info("Sample project data seeded: 3 projects, 18 service schedules, 16 service reports.");
+        seedAcUnitsForProjects(p1, p2, p3);
+
+        log.info("Sample project data seeded: 3 projects, 18 service schedules, 16 service reports, 11 AC units.");
     }
 
     /** Creates and saves a ServiceSchedule. */
@@ -218,6 +224,60 @@ public class DataInitializer implements CommandLineRunner {
         s.setStatus(status);
         s.setAddedOn(date.minusDays(3).atTime(8, 0));
         return serviceScheduleRepository.save(s);
+    }
+
+    /**
+     * Seeds AC units when projects already exist (e.g. app restarted after initial seed).
+     * Looks up the first three projects by insertion order and seeds units for each.
+     */
+    private void seedAcUnits() {
+        if (acUnitRepository.count() > 0) {
+            log.info("AC unit data already exists, skipping AC seed.");
+            return;
+        }
+        var projects = projectRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 3,
+                        org.springframework.data.domain.Sort.by("projNum").ascending()))
+                .getContent();
+        if (projects.size() < 3) {
+            log.warn("Not enough projects found to seed AC units, skipping.");
+            return;
+        }
+        seedAcUnitsForProjects(projects.get(0), projects.get(1), projects.get(2));
+        log.info("AC unit seed completed: 11 units added.");
+    }
+
+    /** Seeds the 11 AC units across three projects. */
+    private void seedAcUnitsForProjects(Project p1, Project p2, Project p3) {
+        // Project 1 — ABC Corporation HVAC (establishment, 4 units)
+        acUnit(p1, "Daikin",      "VRV IV S",         "SN-DAI-2025-001", "active",            LocalDateTime.of(2025, 11, 10, 9, 30));
+        acUnit(p1, "Daikin",      "VRV IV S",         "SN-DAI-2025-002", "active",            LocalDateTime.of(2025, 11, 10, 9, 30));
+        acUnit(p1, "Carrier",     "42XQ018",          "SN-CAR-2025-003", "active",            LocalDateTime.of(2025, 11, 10, 10, 0));
+        acUnit(p1, "Carrier",     "42XQ018",          "SN-CAR-2025-004", "maintenance", LocalDateTime.of(2025, 11, 10, 10, 0));
+
+        // Project 2 — Santos Residence (household, 3 units)
+        acUnit(p2, "LG",          "S12EQ",            "SN-LG-2025-101",  "active",            LocalDateTime.of(2025, 12, 5, 11, 0));
+        acUnit(p2, "LG",          "S09EQ",            "SN-LG-2025-102",  "active",            LocalDateTime.of(2025, 12, 5, 11, 0));
+        acUnit(p2, "Panasonic",   "CS-S13SKUA",       "SN-PAN-2025-103", "inactive",          LocalDateTime.of(2025, 12, 5, 11, 30));
+
+        // Project 3 — Greenfield Mall Unit B (establishment, 4 units)
+        acUnit(p3, "Mitsubishi",  "PEFY-P200VMH-E",   "SN-MIT-2025-201", "active",            LocalDateTime.of(2025, 10, 20, 8, 30));
+        acUnit(p3, "Mitsubishi",  "PEFY-P200VMH-E",   "SN-MIT-2025-202", "active",            LocalDateTime.of(2025, 10, 20, 8, 30));
+        acUnit(p3, "Fujitsu",     "ART24LUAS",        "SN-FUJ-2025-203", "inactive",          LocalDateTime.of(2025, 10, 20, 9, 0));
+        acUnit(p3, "Toshiba",     "RAV-SM1104AT-E",   "SN-TOS-2025-204", "active",            LocalDateTime.of(2025, 10, 20, 9, 0));
+    }
+
+    /** Creates and saves an AirConditioningUnit. */
+    private void acUnit(Project project, String brand, String model, String serialNum,
+                        String status, LocalDateTime addedOn) {
+        AirConditioningUnit u = new AirConditioningUnit();
+        u.setProject(project);
+        u.setBrand(brand);
+        u.setModel(model);
+        u.setSerialNum(serialNum);
+        u.setStatus(status);
+        u.setAddedOn(addedOn);
+        acUnitRepository.save(u);
     }
 
     /** Creates and saves a ServiceReport. */

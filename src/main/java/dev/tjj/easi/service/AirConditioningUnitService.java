@@ -59,8 +59,11 @@ public class AirConditioningUnitService {
         return toResponse(saved);
     }
 
-    /** Returns a page of air conditioning unit records. */
-    public Page<AirConditioningUnitResponse> getAll(Pageable pageable) {
+    /** Returns a page of air conditioning unit records, optionally filtered by project. */
+    public Page<AirConditioningUnitResponse> getAll(Integer projNum, Pageable pageable) {
+        if (projNum != null) {
+            return acRepository.findByProjectProjNum(projNum, pageable).map(this::toResponse);
+        }
         return acRepository.findAll(pageable).map(this::toResponse);
     }
 

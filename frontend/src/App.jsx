@@ -4,6 +4,7 @@ import LoginPage from './LoginPage'
 import Home from './Home'
 import Projects from './Projects'
 import ServiceReports from './ServiceReports'
+import AirConditioningUnits from './AirConditioningUnits'
 
 /** Auth guard — defined outside App so its reference is stable across re-renders */
 function Private({ element }) {
@@ -21,6 +22,7 @@ function App() {
       <Route path="/projects" element={<Private element={<Projects />} />} />
       <Route path="/service-report" element={<Private element={<ServiceReports />} />} />
       <Route path="/service-report/project/:projNum" element={<Private element={<ServiceReports />} />} />
+      <Route path="/ac-units/project/:projNum" element={<Private element={<AirConditioningUnits />} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

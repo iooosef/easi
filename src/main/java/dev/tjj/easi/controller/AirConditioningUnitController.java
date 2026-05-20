@@ -39,10 +39,12 @@ public class AirConditioningUnitController {
         return ResponseEntity.ok(acService.update(acNum, request));
     }
 
-    /** Returns a page of air conditioning unit records. */
+    /** Returns a page of air conditioning unit records, optionally filtered by project. */
     @GetMapping
-    public ResponseEntity<Page<AirConditioningUnitResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(acService.getAll(pageable));
+    public ResponseEntity<Page<AirConditioningUnitResponse>> getAll(
+            @RequestParam(required = false) Integer projNum,
+            Pageable pageable) {
+        return ResponseEntity.ok(acService.getAll(projNum, pageable));
     }
 
     /** Returns a single air conditioning unit record by ID. */
