@@ -4,6 +4,10 @@ import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
 import ManageMenu from './ManageMenu'
+import PickerInput from './PickerInput'
+import ProjectPickerModal from './ProjectPickerModal'
+import SchedulePickerModal from './SchedulePickerModal'
+import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
@@ -18,11 +22,30 @@ const SR_MENU_ITEMS = [
 
 const EMPTY_FORM = {
   projNum: '',
+  _projectDisplay: '',
+  schedId: '',
+  _scheduleDisplay: '',
+  engineerEmployeeId: '',
+  _engineerDisplay: '',
   complaint: '',
   workDone: '',
-  engineerEmployeeId: '',
   location: '',
+  paymentMethod: 'unset',
+  receiptReceiveDate: '',
+  docuId: '',
+  status: 'unpaid',
+}
+
+const EMPTY_EDIT_FORM = {
+  projNum: '',
+  _projectDisplay: '',
   schedId: '',
+  _scheduleDisplay: '',
+  engineerEmployeeId: '',
+  _engineerDisplay: '',
+  complaint: '',
+  workDone: '',
+  location: '',
   paymentMethod: 'unset',
   receiptReceiveDate: '',
   docuId: '',
@@ -81,12 +104,90 @@ export default function ServiceReports() {
 
   const [selectedReport, setSelectedReport] = useState(null)
 
+  // Edit modal state
+  const [editModalOpen, setEditModalOpen]       = useState(false)
+  const [editingReport, setEditingReport]       = useState(null)
+  const [editForm, setEditForm]                 = useState(EMPTY_EDIT_FORM)
+  const [editFormError, setEditFormError]       = useState({})
+  const [editSubmitting, setEditSubmitting]     = useState(false)
+
   function openModal() { setModalOpen(true) }
 
   function closeModal() {
     setModalOpen(false)
     setForm(EMPTY_FORM)
     setFormError({})
+  }
+
+  /** Opens the edit modal pre-populated with the given report's data. */
+  function openEditModal(report) {
+    setEditForm({
+      projNum:            report.projNum,
+      _projectDisplay:    `${report.projectName} (#${report.projNum})`,
+      schedId:            report.schedId ?? '',
+      _scheduleDisplay:   report.schedId ? `Sched #${report.schedId}` : '',
+      engineerEmployeeId: report.engineerEmployeeId ?? '',
+      _engineerDisplay:   report.engineerEmployeeId ? `Employee #${report.engineerEmployeeId}` : '',
+      complaint:          report.complaint ?? '',
+      workDone:           report.workDone ?? '',
+      location:           report.location ?? '',
+      paymentMethod:      report.paymentMethod ?? 'unset',
+      receiptReceiveDate: report.receiptReceiveDate ? String(report.receiptReceiveDate).slice(0, 10) : '',
+      docuId:             report.docuId ?? '',
+      status:             report.status ?? 'unpaid',
+    })
+    setEditingReport(report)
+    setEditFormError({})
+    setEditModalOpen(true)
+  }
+
+  function closeEditModal() {
+    setEditModalOpen(false)
+    setEditingReport(null)
+    setEditForm(EMPTY_EDIT_FORM)
+    setEditFormError({})
+  }
+
+  function handleEditFormChange(e) {
+    const { name, value } = e.target
+    setEditForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the update service report form. */
+  async function handleUpdate(e) {
+    e.preventDefault()
+    setEditFormError({})
+    setEditSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/service-reports/${editingReport.srNumber}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projNum:            Number(editForm.projNum),
+          complaint:          editForm.complaint,
+          workDone:           editForm.workDone,
+          engineerEmployeeId: editForm.engineerEmployeeId ? Number(editForm.engineerEmployeeId) : null,
+          location:           editForm.location || null,
+          schedId:            editForm.schedId ? Number(editForm.schedId) : null,
+          paymentMethod:      editForm.paymentMethod || 'unset',
+          receiptReceiveDate: editForm.receiptReceiveDate || null,
+          docuId:             editForm.docuId ? Number(editForm.docuId) : null,
+          status:             editForm.status || 'unpaid',
+        }),
+      })
+      if (!res.ok) {
+        setEditFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeEditModal()
+      setTimeout(() => notyfSuccess(`Service Report #${editingReport.srNumber} updated successfully.`), 150)
+      setRefreshKey(k => k + 1)
+    } catch (err) {
+      setEditFormError({ _general: err.message })
+    } finally {
+      setEditSubmitting(false)
+    }
   }
 
   // Reset to page 0 whenever the project filter changes
@@ -335,14 +436,17 @@ export default function ServiceReports() {
         <form id="new-report-form" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Project # <span className="text-error">*</span></label>
-              <input type="number" name="projNum" min={1}
-                className={`input input-bordered w-full${formError.projNum ? ' is-invalid' : ''}`}
-                placeholder="e.g. 1" required
-                value={form.projNum} onChange={handleFormChange} />
-              {formError.projNum && <span className="helper-text">{formError.projNum}</span>}
-            </div>
+            <PickerInput
+              label="Project"
+              displayValue={form._projectDisplay}
+              placeholder="None selected"
+              buttonLabel="Select Project"
+              required
+              error={formError.projNum}
+              Picker={ProjectPickerModal}
+              onSelect={p => setForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))}
+              className="sm:col-span-2"
+            />
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Location <span className="text-error">*</span></label>
@@ -352,6 +456,17 @@ export default function ServiceReports() {
                 value={form.location} onChange={handleFormChange} />
               {formError.location && <span className="helper-text">{formError.location}</span>}
             </div>
+
+            <PickerInput
+              label="Schedule"
+              displayValue={form._scheduleDisplay}
+              placeholder="None selected"
+              buttonLabel="Select Schedule"
+              required
+              error={formError.schedId}
+              Picker={SchedulePickerModal}
+              onSelect={s => setForm(prev => ({ ...prev, schedId: s.schedId, _scheduleDisplay: `Sched #${s.schedId} — ${s.purpose ?? ''}` }))}
+            />
 
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Complaint <span className="text-error">*</span></label>
@@ -371,23 +486,16 @@ export default function ServiceReports() {
               {formError.workDone && <span className="helper-text">{formError.workDone}</span>}
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Schedule ID <span className="text-error">*</span></label>
-              <input type="number" name="schedId" min={1}
-                className={`input input-bordered w-full${formError.schedId ? ' is-invalid' : ''}`}
-                placeholder="e.g. 1" required
-                value={form.schedId} onChange={handleFormChange} />
-              {formError.schedId && <span className="helper-text">{formError.schedId}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Engineer Employee ID</label>
-              <input type="number" name="engineerEmployeeId" min={1}
-                className={`input input-bordered w-full${formError.engineerEmployeeId ? ' is-invalid' : ''}`}
-                placeholder="Optional"
-                value={form.engineerEmployeeId} onChange={handleFormChange} />
-              {formError.engineerEmployeeId && <span className="helper-text">{formError.engineerEmployeeId}</span>}
-            </div>
+            <PickerInput
+              label="Assigned Engineer"
+              displayValue={form._engineerDisplay}
+              placeholder="None assigned"
+              buttonLabel="Select Engineer"
+              error={formError.engineerEmployeeId}
+              Picker={EmployeePickerModal}
+              onSelect={e => setForm(prev => ({ ...prev, engineerEmployeeId: e.employeeId, _engineerDisplay: `${e.lastName}, ${e.firstName} (#${e.employeeId})` }))}
+              className="sm:col-span-2"
+            />
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Payment Method</label>
@@ -439,6 +547,132 @@ export default function ServiceReports() {
           </div>
         </form>
       </Modal>
+      {/* Edit Report Modal */}
+      <Modal
+        isOpen={editModalOpen}
+        onClose={closeEditModal}
+        title={`Update SR #${editingReport?.srNumber}`}
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
+              Cancel
+            </button>
+            <button type="submit" form="edit-report-form" className="btn btn-primary" disabled={editSubmitting}>
+              {editSubmitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--device-floppy] size-4"></span>
+              }
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <form id="edit-report-form" onSubmit={handleUpdate}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <PickerInput
+              label="Project"
+              displayValue={editForm._projectDisplay}
+              placeholder="None selected"
+              buttonLabel="Change Project"
+              required
+              error={editFormError.projNum}
+              Picker={ProjectPickerModal}
+              onSelect={p => setEditForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))}
+              className="sm:col-span-2"
+            />
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Location <span className="text-error">*</span></label>
+              <input type="text" name="location" maxLength={255}
+                className={`input input-bordered w-full${editFormError.location ? ' is-invalid' : ''}`}
+                placeholder="e.g. 3rd Floor East Wing, ABC Corp" required
+                value={editForm.location} onChange={handleEditFormChange} />
+              {editFormError.location && <span className="helper-text">{editFormError.location}</span>}
+            </div>
+
+            <PickerInput
+              label="Schedule"
+              displayValue={editForm._scheduleDisplay}
+              placeholder="None selected"
+              buttonLabel="Change Schedule"
+              required
+              error={editFormError.schedId}
+              Picker={SchedulePickerModal}
+              onSelect={s => setEditForm(prev => ({ ...prev, schedId: s.schedId, _scheduleDisplay: `Sched #${s.schedId} — ${s.purpose ?? ''}` }))}
+            />
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Complaint <span className="text-error">*</span></label>
+              <textarea name="complaint" rows={3} maxLength={900}
+                className={`textarea textarea-bordered w-full${editFormError.complaint ? ' is-invalid' : ''}`}
+                placeholder="Describe the complaint..." required
+                value={editForm.complaint} onChange={handleEditFormChange} />
+              {editFormError.complaint && <span className="helper-text">{editFormError.complaint}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Work Done <span className="text-error">*</span></label>
+              <textarea name="workDone" rows={3} maxLength={900}
+                className={`textarea textarea-bordered w-full${editFormError.workDone ? ' is-invalid' : ''}`}
+                placeholder="Describe the work performed..." required
+                value={editForm.workDone} onChange={handleEditFormChange} />
+              {editFormError.workDone && <span className="helper-text">{editFormError.workDone}</span>}
+            </div>
+
+            <PickerInput
+              label="Assigned Engineer"
+              displayValue={editForm._engineerDisplay}
+              placeholder="None assigned"
+              buttonLabel="Select Engineer"
+              error={editFormError.engineerEmployeeId}
+              Picker={EmployeePickerModal}
+              onSelect={e => setEditForm(prev => ({ ...prev, engineerEmployeeId: e.employeeId, _engineerDisplay: `${e.lastName}, ${e.firstName} (#${e.employeeId})` }))}
+              className="sm:col-span-2"
+            />
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Method</label>
+              <select name="paymentMethod"
+                className={`select select-bordered w-full${editFormError.paymentMethod ? ' is-invalid' : ''}`}
+                value={editForm.paymentMethod} onChange={handleEditFormChange}>
+                {PAYMENT_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
+                ))}
+              </select>
+              {editFormError.paymentMethod && <span className="helper-text">{editFormError.paymentMethod}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status"
+                className={`select select-bordered w-full${editFormError.status ? ' is-invalid' : ''}`}
+                value={editForm.status} onChange={handleEditFormChange}>
+                {STATUS_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
+                ))}
+              </select>
+              {editFormError.status && <span className="helper-text">{editFormError.status}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Receipt Receive Date</label>
+              <input type="date" name="receiptReceiveDate"
+                className={`input input-bordered w-full${editFormError.receiptReceiveDate ? ' is-invalid' : ''}`}
+                value={editForm.receiptReceiveDate} onChange={handleEditFormChange} />
+              {editFormError.receiptReceiveDate && <span className="helper-text">{editFormError.receiptReceiveDate}</span>}
+            </div>
+
+            {editFormError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{editFormError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
+
       {/* Service Report Manage Modal */}
       <ManageMenu
         title={selectedReport ? `SR #${selectedReport.srNumber}` : ''}
@@ -460,6 +694,7 @@ export default function ServiceReports() {
         menuItems={SR_MENU_ITEMS}
         onMenuSelect={(key, report) => {
           setSelectedReport(null)
+          if (key === 'update') openEditModal(report)
         }}
       />
     </Layout>
