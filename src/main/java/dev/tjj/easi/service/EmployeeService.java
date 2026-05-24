@@ -60,6 +60,12 @@ public class EmployeeService {
         return employeeRepository.findAll(pageable).map(this::toResponse);
     }
 
+    /** Returns a page of employees whose linked user has the given role. */
+    public Page<EmployeeResponse> getByRole(String role, Pageable pageable) {
+        return employeeRepository.findByUserRole(role, pageable)
+                .map(this::toResponse);
+    }
+
     /** Returns a single employee record by ID. */
     public EmployeeResponse getById(Integer id) {
         return employeeRepository.findById(id)

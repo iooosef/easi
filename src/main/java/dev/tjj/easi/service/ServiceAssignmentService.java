@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Handles service assignment business logic: creation, updates, and retrieval. */
 @Service
@@ -72,6 +73,23 @@ public class ServiceAssignmentService {
                 .orElseThrow(() -> new IllegalArgumentException("Service assignment not found."));
     }
 
+    /** Returns all assignments for a given schedule. */
+    public List<ServiceAssignmentResponse> getBySchedule(Integer schedId) {
+        return assignmentRepository.findByServiceScheduleSchedId(schedId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    /** Deletes a service assignment record by ID. */
+    @Transactional
+    public void delete(Integer servAssgnId) {
+        ServiceAssignment assignment = assignmentRepository.findById(servAssgnId)
+                .orElseThrow(() -> new IllegalArgumentException("Service assignment not found."));
+        assignmentRepository.delete(assignment);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "DELETE", "ServiceAssignment",
+                String.valueOf(servAssgnId), "Deleted service assignment #" + servAssgnId, null);
+    }
+
     private String getEmail() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null ? auth.getName() : null;
@@ -91,6 +109,9 @@ public class ServiceAssignmentService {
         return new ServiceAssignmentResponse(
                 a.getServAssgnId(),
                 a.getEmployee().getEmployeeId(),
+                a.getEmployee().getFirstName(),
+                a.getEmployee().getLastName(),
+                a.getEmployee().getPosition(),
                 a.getServiceSchedule().getSchedId(),
                 a.getAddedOn()
         );

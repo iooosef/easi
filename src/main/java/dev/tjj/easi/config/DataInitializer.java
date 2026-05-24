@@ -12,6 +12,7 @@ import dev.tjj.easi.entity.AirConditioningUnit;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.Role;
+import dev.tjj.easi.entity.ServiceAssignment;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.entity.ServiceReportFinding;
 import dev.tjj.easi.entity.ServiceSchedule;
@@ -19,6 +20,7 @@ import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
+import dev.tjj.easi.repository.ServiceAssignmentRepository;
 import dev.tjj.easi.repository.ServiceReportFindingRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import dev.tjj.easi.repository.ServiceScheduleRepository;
@@ -41,6 +43,7 @@ public class DataInitializer implements CommandLineRunner {
     private final ServiceReportRepository serviceReportRepository;
     private final AirConditioningUnitRepository acUnitRepository;
     private final ServiceReportFindingRepository findingRepository;
+    private final ServiceAssignmentRepository serviceAssignmentRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -48,7 +51,9 @@ public class DataInitializer implements CommandLineRunner {
         createAdminUser();
         createJosephUser();
         seedRoleAccounts();
+        seedCrewmateAccounts();
         seedProjectData();
+        seedServiceAssignments();
     }
 
     private void createAdminUser() {
@@ -174,6 +179,45 @@ public class DataInitializer implements CommandLineRunner {
             emp.setAddedOn(LocalDateTime.now());
             employeeRepository.save(emp);
             log.info("Seed employee (no user) created: Unregistered Crew");
+        }
+    }
+
+    /** Seeds five crew employees with user accounts (surname Crewmate) if none exist. */
+    private void seedCrewmateAccounts() {
+        boolean exists = employeeRepository.findAll().stream()
+                .anyMatch(e -> "Crewmate".equals(e.getLastName()));
+        if (exists) {
+            log.info("Crewmate employees already exist, skipping.");
+            return;
+        }
+
+        String[] firstNames = { "Alpha", "Bravo", "Charlie", "Delta", "Echo" };
+        for (int i = 0; i < firstNames.length; i++) {
+            int n = i + 1;
+            Employee emp = new Employee();
+            emp.setFirstName(firstNames[i]);
+            emp.setLastName("Crewmate");
+            emp.setMiddleName("");
+            emp.setSuffixName("");
+            emp.setGender("N/A");
+            emp.setBirthdate(LocalDate.of(2000, 1, 1));
+            emp.setContactNumber("N/A");
+            emp.setPosition("Field Crew");
+            emp.setStatus("active");
+            emp.setAddedOn(LocalDateTime.now());
+            emp = employeeRepository.save(emp);
+
+            String email = "watashiwajosephdesu+crew" + n + "@gmail.com";
+            User user = new User();
+            user.setEmail(email);
+            user.setPassword(passwordEncoder.encode("148888"));
+            user.setRole(Role.CREW.name());
+            user.setEmployee(emp);
+            user.setStatus(1);
+            user.setAddedOn(LocalDateTime.now());
+            userRepository.save(user);
+
+            log.info("Crewmate seed user created: {} / 148888 (CREW)", email);
         }
     }
 
@@ -445,6 +489,63 @@ public class DataInitializer implements CommandLineRunner {
         }
 
         log.info("Sample finding data seeded: 12 findings across service reports.");
+    }
+
+    /**
+     * Seeds service assignments for the first 3 projects, assigning at least 2 CREW
+     * employees to every schedule of each project. Skipped if assignments already exist.
+     */
+    private void seedServiceAssignments() {
+        if (serviceAssignmentRepository.count() > 0) {
+            log.info("Service assignment data already exists, skipping.");
+            return;
+        }
+
+        // Collect all employees linked to a CREW-role user
+        java.util.List<Employee> crewEmployees = userRepository.findAll().stream()
+                .filter(u -> Role.CREW.name().equals(u.getRole()))
+                .map(User::getEmployee)
+                .filter(e -> e != null)
+                .toList();
+
+        if (crewEmployees.size() < 2) {
+            log.warn("Not enough CREW employees to seed assignments, skipping.");
+            return;
+        }
+
+        var projects = projectRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 3,
+                        org.springframework.data.domain.Sort.by("projNum").ascending()))
+                .getContent();
+
+        var allSchedules = serviceScheduleRepository.findAll();
+
+        int assigned = 0;
+        for (int pi = 0; pi < projects.size(); pi++) {
+            Project project = projects.get(pi);
+
+            // Pick 2 distinct crew members for this project, cycling through the list
+            Employee crew1 = crewEmployees.get((pi * 2)     % crewEmployees.size());
+            Employee crew2 = crewEmployees.get((pi * 2 + 1) % crewEmployees.size());
+
+            for (ServiceSchedule schedule : allSchedules) {
+                if (!schedule.getProject().getProjNum().equals(project.getProjNum())) continue;
+                assign(crew1, schedule);
+                assign(crew2, schedule);
+                assigned += 2;
+            }
+        }
+
+        log.info("Service assignment seed completed: {} assignments created.", assigned);
+    }
+
+    /** Creates and saves a ServiceAssignment linking a crew employee to a schedule. */
+    private void assign(Employee employee, ServiceSchedule schedule) {
+        ServiceAssignment sa = new ServiceAssignment();
+        sa.setEmployee(employee);
+        sa.setServiceSchedule(schedule);
+        sa.setAddedOn(schedule.getAddedOn());
+        serviceAssignmentRepository.save(sa);
     }
 
     /** Creates and saves a ServiceReportFinding. */

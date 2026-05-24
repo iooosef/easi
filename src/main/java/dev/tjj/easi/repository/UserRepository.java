@@ -8,10 +8,15 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
     Optional<User> findByEmail(String email);
 
     @Query("SELECT u FROM User u WHERE u.employee.employeeId = :employeeId")
     Optional<User> findByEmployeeId(@Param("employeeId") Integer employeeId);
+
+    Page<User> findByRole(String role, Pageable pageable);
 }

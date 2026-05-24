@@ -97,8 +97,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/service-report-billing-items",
                                 "/api/service-report-billing-items/**")
                         .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                        .requestMatchers(HttpMethod.GET, "/api/crew-employees").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/service-assignments").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.PUT, "/api/service-assignments/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.DELETE, "/api/service-assignments/**").hasAnyRole("ADMIN", "STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/service-assignments", "/api/service-assignments/**")
                         .hasAnyRole("ADMIN", "STAFF", "HR", "CREW")
                         .requestMatchers(HttpMethod.POST, "/api/purchase-orders")

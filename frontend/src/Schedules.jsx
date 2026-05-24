@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
@@ -6,6 +6,7 @@ import Modal from './Modal'
 import ManageMenu from './ManageMenu'
 import PickerInput from './PickerInput'
 import ProjectPickerModal from './ProjectPickerModal'
+import CrewPickerModal from './CrewPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
 const SCHEDULE_MENU_ITEMS = [
@@ -109,6 +110,15 @@ export default function Schedules() {
 
   // Selected schedule for ManageMenu
   const [selectedSched, setSelectedSched] = useState(null)
+
+  // Crew assignment modal
+  const [crewOpen, setCrewOpen] = useState(false)
+  const [crewSched, setCrewSched] = useState(null)
+  const [crewList, setCrewList] = useState([])      // working copy
+  const [crewInitial, setCrewInitial] = useState([]) // snapshot from server
+  const [crewLoading, setCrewLoading] = useState(false)
+  const [crewSaving, setCrewSaving] = useState(false)
+  const [crewPickerOpen, setCrewPickerOpen] = useState(false)
 
   /** Fetches project names once for the lookup map */
   async function fetchProjects() {
@@ -299,6 +309,90 @@ export default function Schedules() {
 
   /** Opens the ManageMenu for a schedule */
   function openManage(sched) { setSelectedSched(sched) }
+
+  // Crew modal handlers
+  const fetchCrew = useCallback(async (schedId) => {
+    setCrewLoading(true)
+    try {
+      const res = await apiFetch(`/api/service-assignments/schedule/${schedId}`)
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setCrewList(data)
+      setCrewInitial(data)
+    } catch {
+      setCrewList([])
+      setCrewInitial([])
+    } finally {
+      setCrewLoading(false)
+    }
+  }, [apiFetch])
+
+  function openCrew(sched) {
+    setCrewSched(sched)
+    setCrewList([])
+    setCrewInitial([])
+    setCrewOpen(true)
+    fetchCrew(sched.schedId)
+  }
+
+  function closeCrew() {
+    setCrewOpen(false)
+    setCrewSched(null)
+    setCrewList([])
+    setCrewInitial([])
+  }
+
+  function removeCrew(employeeId) {
+    setCrewList(list => list.filter(c => c.employeeId !== employeeId))
+  }
+
+  function addCrewFromPicker(emp) {
+    if (crewList.some(c => c.employeeId === emp.employeeId)) {
+      setCrewPickerOpen(false)
+      return
+    }
+    setCrewList(list => [...list, {
+      servAssgnId: null,
+      employeeId: emp.employeeId,
+      firstName: emp.firstName,
+      lastName: emp.lastName,
+      position: emp.position,
+    }])
+    setCrewPickerOpen(false)
+  }
+
+  const crewDirty = useMemo(() => {
+    const currentIds = new Set(crewList.filter(c => c.servAssgnId).map(c => c.servAssgnId))
+    const hasRemovals = crewInitial.some(c => !currentIds.has(c.servAssgnId))
+    const hasAdditions = crewList.some(c => !c.servAssgnId)
+    return hasRemovals || hasAdditions
+  }, [crewInitial, crewList])
+
+  async function handleCrewUpdate() {
+    setCrewSaving(true)
+    try {
+      const currentIds = new Set(crewList.filter(c => c.servAssgnId).map(c => c.servAssgnId))
+      const toDelete = crewInitial.filter(c => !currentIds.has(c.servAssgnId))
+      const toAdd = crewList.filter(c => !c.servAssgnId)
+
+      for (const c of toDelete) {
+        await apiFetch(`/api/service-assignments/${c.servAssgnId}`, { method: 'DELETE' })
+      }
+      for (const c of toAdd) {
+        await apiFetch('/api/service-assignments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId: c.employeeId, schedId: crewSched.schedId }),
+        })
+      }
+      closeCrew()
+      setTimeout(() => notyfSuccess('Crew assignment updated.'), 150)
+    } catch {
+      notyfError('Update failed')
+    } finally {
+      setCrewSaving(false)
+    }
+  }
 
   const initialLoading = calLoading && listSchedules.length === 0
 
@@ -691,6 +785,101 @@ export default function Schedules() {
         </form>
       </Modal>
 
+      {/* Crew Assignment Modal */}
+      <Modal
+        isOpen={crewOpen}
+        onClose={closeCrew}
+        title={crewSched ? `Crew Assignment — Schedule #${crewSched.schedId}` : 'Crew Assignment'}
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeCrew}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!crewDirty || crewSaving}
+              onClick={handleCrewUpdate}
+            >
+              {crewSaving
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--users] size-4"></span>
+              }
+              Update Crew Assignment
+            </button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          {/* Loading */}
+          {crewLoading && (
+            <div className="flex justify-center py-8">
+              <span className="loading loading-spinner loading-md text-primary"></span>
+            </div>
+          )}
+
+          {/* Crew grid */}
+          {!crewLoading && (
+            <>
+              {crewList.length === 0 ? (
+                <div className="text-center py-8 text-base-content/40">
+                  <span className="icon-[tabler--users-minus] size-10 mx-auto mb-2 block"></span>
+                  <p className="text-sm">No crew assigned to this schedule.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {crewList.map(c => (
+                    <div key={c.employeeId} className="card bg-base-100 border border-base-300">
+                      <div className="card-body py-3 px-4 gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm line-clamp-1">
+                              {c.lastName}, {c.firstName}
+                            </p>
+                            <p className="text-xs text-base-content/50">
+                              Emp #{c.employeeId} · {c.position ?? '—'}
+                            </p>
+                            {!c.servAssgnId && (
+                              <span className="badge badge-soft badge-warning badge-xs mt-0.5">New</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-error btn-xs btn-square shrink-0"
+                            title="Remove crew"
+                            onClick={() => removeCrew(c.employeeId)}
+                          >
+                            <span className="icon-[tabler--x] size-3.5"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add crew button */}
+              <button
+                type="button"
+                className="btn btn-soft btn-primary btn-sm w-full"
+                onClick={() => setCrewPickerOpen(true)}
+              >
+                <span className="icon-[tabler--user-plus] size-4"></span>
+                Add Crew
+              </button>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* Employee picker for adding crew — excludes already-assigned members */}
+      <CrewPickerModal
+        isOpen={crewPickerOpen}
+        onClose={() => setCrewPickerOpen(false)}
+        onSelect={addCrewFromPicker}
+        excludeIds={new Set(crewList.map(c => c.employeeId))}
+      />
+
       {/* Manage Schedule — ManageMenu */}
       <ManageMenu
         title={selectedSched ? (projectMap[selectedSched.projNum] ?? `Project #${selectedSched.projNum}`) : ''}
@@ -704,6 +893,9 @@ export default function Schedules() {
           if (key === 'update') {
             setSelectedSched(null)
             openUpdate(sched)
+          } else if (key === 'crew') {
+            setSelectedSched(null)
+            openCrew(sched)
           }
         }}
         details={selectedSched ? [
