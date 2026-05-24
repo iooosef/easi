@@ -1,5 +1,6 @@
 package dev.tjj.easi.config;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -9,6 +10,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 import dev.tjj.easi.entity.AirConditioningUnit;
+import dev.tjj.easi.entity.Vehicle;
+import dev.tjj.easi.entity.VehicleGasLog;
+import dev.tjj.easi.entity.VehicleLog;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.Role;
@@ -18,6 +22,9 @@ import dev.tjj.easi.entity.ServiceReportFinding;
 import dev.tjj.easi.entity.ServiceSchedule;
 import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
+import dev.tjj.easi.repository.VehicleRepository;
+import dev.tjj.easi.repository.VehicleGasLogRepository;
+import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.ServiceAssignmentRepository;
@@ -44,6 +51,9 @@ public class DataInitializer implements CommandLineRunner {
     private final AirConditioningUnitRepository acUnitRepository;
     private final ServiceReportFindingRepository findingRepository;
     private final ServiceAssignmentRepository serviceAssignmentRepository;
+    private final VehicleRepository vehicleRepository;
+    private final VehicleLogRepository vehicleLogRepository;
+    private final VehicleGasLogRepository vehicleGasLogRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -54,6 +64,7 @@ public class DataInitializer implements CommandLineRunner {
         seedCrewmateAccounts();
         seedProjectData();
         seedServiceAssignments();
+        seedVehicles();
     }
 
     private void createAdminUser() {
@@ -546,6 +557,111 @@ public class DataInitializer implements CommandLineRunner {
         sa.setServiceSchedule(schedule);
         sa.setAddedOn(schedule.getAddedOn());
         serviceAssignmentRepository.save(sa);
+    }
+
+    /**
+     * Seeds two vehicles (van and flatbed truck) with vehicle logs and gas logs if none exist.
+     * Drivers are picked from CREW-role users; projects are the first three seeded projects.
+     */
+    private void seedVehicles() {
+        if (vehicleRepository.count() > 0) {
+            log.info("Vehicle data already exists, skipping vehicle seed.");
+            return;
+        }
+
+        var projects = projectRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 3,
+                        org.springframework.data.domain.Sort.by("projNum").ascending()))
+                .getContent();
+        if (projects.size() < 3) {
+            log.warn("Not enough projects to seed vehicle logs, skipping.");
+            return;
+        }
+
+        java.util.List<Employee> crew = userRepository.findAll().stream()
+                .filter(u -> Role.CREW.name().equals(u.getRole()))
+                .map(User::getEmployee)
+                .filter(e -> e != null)
+                .toList();
+        if (crew.size() < 2) {
+            log.warn("Not enough CREW employees to seed vehicle logs, skipping.");
+            return;
+        }
+
+        Project p1 = projects.get(0);
+        Project p2 = projects.get(1);
+        Project p3 = projects.get(2);
+        Employee d1 = crew.get(0);
+        Employee d2 = crew.get(1);
+        Employee d3 = crew.size() > 2 ? crew.get(2) : crew.get(0);
+        Employee d4 = crew.size() > 3 ? crew.get(3) : crew.get(1);
+
+        // --- Van ---
+        Vehicle van = vehicle("Toyota HiAce", "AAA 1234", LocalDateTime.of(2025, 11, 15, 8, 0));
+
+        VehicleLog vl1 = vehicleLog(van, "Material Delivery",    p1, "123 Ayala Ave, Makati City",           d1, 12500, 12563, "completed", LocalDateTime.of(2026, 1,  9, 7, 30));
+        VehicleLog vl2 = vehicleLog(van, "Personnel Transport",  p1, "ABC Corporation, Makati City",          d2, 12563, 12598, "completed", LocalDateTime.of(2026, 1, 22, 7, 0));
+        VehicleLog vl3 = vehicleLog(van, "Material Delivery",    p2, "45 Sampaguita St, Quezon City",         d1, 12598, 12671, "completed", LocalDateTime.of(2026, 2,  5, 8, 0));
+        VehicleLog vl4 = vehicleLog(van, "Personnel Transport",  p2, "Santos Residence, Quezon City",         d2, 12671, 12704, "completed", LocalDateTime.of(2026, 2, 25, 7, 30));
+        VehicleLog vl5 = vehicleLog(van, "Material Delivery",    p3, "Greenfield District, Mandaluyong City", d1, 12704, 12789, "completed", LocalDateTime.of(2026, 3, 11, 8, 0));
+        VehicleLog vl6 = vehicleLog(van, "Personnel Transport",  p1, "ABC Corporation, Makati City",          d2, 12789, null,  "driving",   LocalDateTime.of(2026, 5, 20, 7, 0));
+
+        vehicleGasLog(vl1, new BigDecimal("1500.00"), "INV-2026-VAN-001");
+        vehicleGasLog(vl3, new BigDecimal("1200.00"), "INV-2026-VAN-012");
+        vehicleGasLog(vl5, new BigDecimal("1800.00"), "INV-2026-VAN-023");
+
+        // --- Flatbed Truck ---
+        Vehicle truck = vehicle("Isuzu ELF Flatbed", "BBB 5678", LocalDateTime.of(2025, 11, 15, 8, 30));
+
+        VehicleLog vt1 = vehicleLog(truck, "Equipment Transport", p1, "123 Ayala Ave, Makati City",           d3, 45200, 45298, "completed", LocalDateTime.of(2026, 1, 10, 6, 0));
+        VehicleLog vt2 = vehicleLog(truck, "Material Delivery",   p3, "Greenfield District, Mandaluyong City", d4, 45298, 45421, "completed", LocalDateTime.of(2026, 1, 28, 6, 30));
+        VehicleLog vt3 = vehicleLog(truck, "Equipment Transport", p2, "45 Sampaguita St, Quezon City",         d3, 45421, 45489, "completed", LocalDateTime.of(2026, 2, 12, 6, 0));
+        VehicleLog vt4 = vehicleLog(truck, "Material Delivery",   p1, "ABC Corporation, Makati City",          d4, 45489, 45612, "completed", LocalDateTime.of(2026, 3,  5, 6, 30));
+        VehicleLog vt5 = vehicleLog(truck, "Equipment Transport", p3, "Greenfield District, Mandaluyong City", d3, 45612, 45778, "completed", LocalDateTime.of(2026, 4, 15, 6, 0));
+        VehicleLog vt6 = vehicleLog(truck, "Material Delivery",   p2, "Santos Residence, Quezon City",         d4, 45778, 45843, "completed", LocalDateTime.of(2026, 5, 18, 6, 30));
+
+        vehicleGasLog(vt1, new BigDecimal("3200.00"), "INV-2026-TRK-003");
+        vehicleGasLog(vt3, new BigDecimal("2800.00"), "INV-2026-TRK-015");
+        vehicleGasLog(vt5, new BigDecimal("3500.00"), "INV-2026-TRK-031");
+
+        log.info("Vehicle seed completed: 2 vehicles, 12 vehicle logs, 6 gas logs.");
+    }
+
+    /** Creates and saves a Vehicle. */
+    private Vehicle vehicle(String model, String plateNum, LocalDateTime addedOn) {
+        Vehicle v = new Vehicle();
+        v.setVehicleModel(model);
+        v.setVehiclePlateNum(plateNum);
+        v.setAddedOn(addedOn);
+        return vehicleRepository.save(v);
+    }
+
+    /** Creates and saves a VehicleLog. */
+    private VehicleLog vehicleLog(Vehicle vehicle, String purpose, Project project,
+                                  String destination, Employee driver,
+                                  Integer odoStart, Integer odoEnd,
+                                  String status, LocalDateTime addedOn) {
+        VehicleLog vl = new VehicleLog();
+        vl.setVehicle(vehicle);
+        vl.setPurpose(purpose);
+        vl.setProject(project);
+        vl.setDestination(destination);
+        vl.setDriverEmployee(driver);
+        vl.setOdometerStart(odoStart);
+        vl.setOdometerEnd(odoEnd);
+        vl.setStatus(status);
+        vl.setAddedOn(addedOn);
+        return vehicleLogRepository.save(vl);
+    }
+
+    /** Creates and saves a VehicleGasLog linked to a VehicleLog; document is null. */
+    private void vehicleGasLog(VehicleLog vehicleLog, BigDecimal amount, String invoiceId) {
+        VehicleGasLog gl = new VehicleGasLog();
+        gl.setVehicleLog(vehicleLog);
+        gl.setAmount(amount);
+        gl.setInvoiceId(invoiceId);
+        gl.setDocument(null);
+        vehicleGasLogRepository.save(gl);
     }
 
     /** Creates and saves a ServiceReportFinding. */

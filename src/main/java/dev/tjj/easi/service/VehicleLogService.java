@@ -65,8 +65,11 @@ public class VehicleLogService {
         return toResponse(saved);
     }
 
-    /** Returns a page of vehicle log records. */
-    public Page<VehicleLogResponse> getAll(Pageable pageable) {
+    /** Returns a page of vehicle log records, optionally filtered by vehicle ID. */
+    public Page<VehicleLogResponse> getAll(Integer vehiclesId, Pageable pageable) {
+        if (vehiclesId != null) {
+            return vehicleLogRepository.findByVehicleVehiclesId(vehiclesId, pageable).map(this::toResponse);
+        }
         return vehicleLogRepository.findAll(pageable).map(this::toResponse);
     }
 
@@ -105,13 +108,18 @@ public class VehicleLogService {
     }
 
     private VehicleLogResponse toResponse(VehicleLog l) {
+        String driverName = l.getDriverEmployee().getFirstName() + " " + l.getDriverEmployee().getLastName();
         return new VehicleLogResponse(
                 l.getVehicleLogId(),
                 l.getVehicle().getVehiclesId(),
+                l.getVehicle().getVehicleModel(),
+                l.getVehicle().getVehiclePlateNum(),
                 l.getPurpose(),
                 l.getProject().getProjNum(),
+                l.getProject().getName(),
                 l.getDestination(),
                 l.getDriverEmployee().getEmployeeId(),
+                driverName,
                 l.getOdometerStart(),
                 l.getOdometerEnd(),
                 l.getStatus(),

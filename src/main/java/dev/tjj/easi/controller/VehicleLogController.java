@@ -38,10 +38,12 @@ public class VehicleLogController {
         return ResponseEntity.ok(vehicleLogService.update(vehicleLogId, request));
     }
 
-    /** Returns a page of vehicle log records. Available to ADMIN, CREW, and STAFF. */
+    /** Returns a page of vehicle log records, optionally filtered by vehiclesId. Available to ADMIN, CREW, and STAFF. */
     @GetMapping
-    public ResponseEntity<Page<VehicleLogResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(vehicleLogService.getAll(pageable));
+    public ResponseEntity<Page<VehicleLogResponse>> getAll(
+            @RequestParam(required = false) Integer vehiclesId,
+            Pageable pageable) {
+        return ResponseEntity.ok(vehicleLogService.getAll(vehiclesId, pageable));
     }
 
     /** Returns a single vehicle log record by ID. Available to ADMIN, CREW, and STAFF. */
