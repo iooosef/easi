@@ -464,7 +464,7 @@ export default function Employees() {
 
           {filtered.length === 0 ? (
             <div className="text-center py-20 text-base-content/40">
-              <span className="icon-[tabler--users-off] size-12 mx-auto mb-3 block"></span>
+              <span className="icon-[tabler--user-off] size-12 mx-auto mb-3 block"></span>
               <p>No employees found.</p>
             </div>
           ) : (

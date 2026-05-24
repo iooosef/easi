@@ -15,7 +15,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Handles service schedule business logic: creation, updates, and retrieval. */
 @Service
@@ -59,9 +61,29 @@ public class ServiceScheduleService {
         return toResponse(saved);
     }
 
-    /** Returns a page of service schedule records. */
-    public Page<ServiceScheduleResponse> getAll(Pageable pageable) {
-        return serviceScheduleRepository.findAll(pageable).map(this::toResponse);
+    /**
+     * Returns a filtered, paginated page of service schedule records.
+     * Optionally excludes completed and cancelled schedules when hideFinished is true.
+     * Optionally filters by purpose or project name when search is provided.
+     */
+    /**
+     * Returns a filtered, paginated page of service schedule records.
+     * Optionally excludes completed and cancelled schedules when hideFinished is true.
+     * Optionally filters by purpose or project name when search is provided.
+     * Optionally restricts results to a single project when projNum is provided.
+     */
+    public Page<ServiceScheduleResponse> getAll(Pageable pageable, boolean hideFinished, String search, Integer projNum) {
+        String q = (search != null && !search.isBlank()) ? search : "";
+        if (hideFinished) {
+            return serviceScheduleRepository.findFilteredHideFinished(q, projNum, pageable).map(this::toResponse);
+        }
+        return serviceScheduleRepository.findFiltered(q, projNum, pageable).map(this::toResponse);
+    }
+
+    /** Returns all schedules within the given date range for calendar display, optionally scoped to a project. */
+    public List<ServiceScheduleResponse> getForCalendar(LocalDate dateFrom, LocalDate dateTo, Integer projNum) {
+        return serviceScheduleRepository.findForCalendar(dateFrom, dateTo, projNum)
+                .stream().map(this::toResponse).toList();
     }
 
     /** Returns a single service schedule record by ID. */

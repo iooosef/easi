@@ -54,10 +54,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else {
+                    // Token present but invalid (e.g. logged-out token) — respond with 401
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
                 }
             }
-        } catch (Exception ignored) {
-            // Invalid or expired token — do not set authentication
+        } catch (Exception e) {
+            // Token is malformed or expired — respond with 401 so the client can refresh
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
 
         filterChain.doFilter(request, response);

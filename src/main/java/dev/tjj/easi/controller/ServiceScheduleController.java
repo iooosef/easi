@@ -8,7 +8,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
 
 /**
  * REST endpoints for service schedule management.
@@ -39,10 +43,23 @@ public class ServiceScheduleController {
         return ResponseEntity.ok(serviceScheduleService.update(schedId, request));
     }
 
-    /** Returns a page of service schedule records. */
+    /** Returns a filtered, paginated page of service schedule records. */
     @GetMapping
-    public ResponseEntity<Page<ServiceScheduleResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(serviceScheduleService.getAll(pageable));
+    public ResponseEntity<Page<ServiceScheduleResponse>> getAll(
+            Pageable pageable,
+            @RequestParam(defaultValue = "false") boolean hideFinished,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) Integer projNum) {
+        return ResponseEntity.ok(serviceScheduleService.getAll(pageable, hideFinished, search, projNum));
+    }
+
+    /** Returns all schedules within the given date range for calendar display, optionally scoped to a project. */
+    @GetMapping("/calendar")
+    public ResponseEntity<List<ServiceScheduleResponse>> getForCalendar(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false) Integer projNum) {
+        return ResponseEntity.ok(serviceScheduleService.getForCalendar(dateFrom, dateTo, projNum));
     }
 
     /** Returns a single service schedule record by ID. */

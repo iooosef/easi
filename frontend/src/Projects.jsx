@@ -390,6 +390,9 @@ export default function Projects() {
           } else if (key === 'service-reports') {
             setSelectedProject(null)
             navigate(`/service-report/project/${project.projNum}`, { state: { projectName: project.name } })
+          } else if (key === 'schedule') {
+            setSelectedProject(null)
+            navigate(`/schedules/project/${project.projNum}`, { state: { projectName: project.name } })
           } else if (key === 'ac') {
             setSelectedProject(null)
             navigate(`/ac-units/project/${project.projNum}`, { state: { projectName: project.name } })
