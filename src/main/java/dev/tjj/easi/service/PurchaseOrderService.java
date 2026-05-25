@@ -5,6 +5,7 @@ import dev.tjj.easi.dto.PurchaseOrderResponse;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.ServiceReport;
+import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
@@ -17,6 +18,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** Handles purchase order business logic: creation, updates, and retrieval. */
@@ -26,15 +28,18 @@ public class PurchaseOrderService {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final ProjectRepository projectRepository;
     private final ServiceReportRepository serviceReportRepository;
+    private final PartRepository partRepository;
     private final LogService logService;
 
     public PurchaseOrderService(PurchaseOrderRepository purchaseOrderRepository,
                                 ProjectRepository projectRepository,
                                 ServiceReportRepository serviceReportRepository,
+                                PartRepository partRepository,
                                 LogService logService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.projectRepository = projectRepository;
         this.serviceReportRepository = serviceReportRepository;
+        this.partRepository = partRepository;
         this.logService = logService;
     }
 
@@ -64,8 +69,11 @@ public class PurchaseOrderService {
         return toResponse(saved);
     }
 
-    /** Returns a page of purchase order records. */
-    public Page<PurchaseOrderResponse> getAll(Pageable pageable) {
+    /** Returns a page of purchase order records, optionally filtered by service report number. */
+    public Page<PurchaseOrderResponse> getAll(Integer srNum, Pageable pageable) {
+        if (srNum != null) {
+            return purchaseOrderRepository.findByServiceReport_SrNumber(srNum, pageable).map(this::toResponse);
+        }
         return purchaseOrderRepository.findAll(pageable).map(this::toResponse);
     }
 
@@ -107,6 +115,7 @@ public class PurchaseOrderService {
     }
 
     private PurchaseOrderResponse toResponse(PurchaseOrder po) {
+        BigDecimal totalCost = partRepository.sumTotalCostByPoNum(po.getPoNum());
         return new PurchaseOrderResponse(
                 po.getPoNum(),
                 po.getProject().getProjNum(),
@@ -117,7 +126,8 @@ public class PurchaseOrderService {
                 po.getRemarks(),
                 po.getPaymentMethod(),
                 po.getPaymentDetails(),
-                po.getAddedOn()
+                po.getAddedOn(),
+                totalCost
         );
     }
 }

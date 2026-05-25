@@ -24,6 +24,14 @@ import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.VehicleRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
+import dev.tjj.easi.entity.Part;
+import dev.tjj.easi.entity.PurchaseOrder;
+import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
+import dev.tjj.easi.entity.Supplier;
+import dev.tjj.easi.repository.PartRepository;
+import dev.tjj.easi.repository.PurchaseOrderDeliveryContactRepository;
+import dev.tjj.easi.repository.PurchaseOrderRepository;
+import dev.tjj.easi.repository.SupplierRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
@@ -54,6 +62,10 @@ public class DataInitializer implements CommandLineRunner {
     private final VehicleRepository vehicleRepository;
     private final VehicleLogRepository vehicleLogRepository;
     private final VehicleGasLogRepository vehicleGasLogRepository;
+    private final SupplierRepository supplierRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PartRepository partRepository;
+    private final PurchaseOrderDeliveryContactRepository poDeliveryContactRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -65,6 +77,8 @@ public class DataInitializer implements CommandLineRunner {
         seedProjectData();
         seedServiceAssignments();
         seedVehicles();
+        seedSuppliers();
+        seedPurchaseOrders();
     }
 
     private void createAdminUser() {
@@ -675,6 +689,217 @@ public class DataInitializer implements CommandLineRunner {
         f.setRemarks(remarks);
         f.setAddedOn(report.getAddedOn().plusHours(1));
         findingRepository.save(f);
+    }
+
+    /** Seeds four HVAC suppliers if none exist. */
+    private void seedSuppliers() {
+        if (supplierRepository.count() > 0) {
+            log.info("Supplier data already exists, skipping supplier seed.");
+            return;
+        }
+
+        record SupplierSeed(String name, String address) {}
+        SupplierSeed[] seeds = {
+            new SupplierSeed("CoolParts Philippines Inc.",
+                    "Unit 4B, Northgate Cyberzone, Filinvest City, Alabang, Muntinlupa, Metro Manila"),
+            new SupplierSeed("Refrigerant Supply Corp.",
+                    "188 Kalayaan Avenue, Diliman, Quezon City, Metro Manila"),
+            new SupplierSeed("HVAC Masters Depot",
+                    "Block 7, Lot 12, Mandaue Industrial Estate, Mandaue City, Cebu"),
+            new SupplierSeed("AirTech Components PH",
+                    "2F Suntech iPark, Canlubang, Calamba City, Laguna"),
+        };
+
+        for (SupplierSeed s : seeds) {
+            Supplier supplier = new Supplier();
+            supplier.setName(s.name());
+            supplier.setAddress(s.address());
+            supplier.setAddedOn(LocalDate.of(2025, 10, 1));
+            supplierRepository.save(supplier);
+        }
+
+        log.info("Supplier seed completed: 4 suppliers created.");
+    }
+
+    /**
+     * Seeds purchase orders tied to existing service reports (at most one PO per report),
+     * then seeds parts and delivery contacts for each PO.
+     */
+    private void seedPurchaseOrders() {
+        if (purchaseOrderRepository.count() > 0) {
+            log.info("Purchase order data already exists, skipping PO seed.");
+            return;
+        }
+
+        var suppliers = supplierRepository.findAll(
+                org.springframework.data.domain.Sort.by("supplierId").ascending());
+        if (suppliers.size() < 4) {
+            log.warn("Not enough suppliers to seed purchase orders, skipping.");
+            return;
+        }
+
+        var projects = projectRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 3,
+                        org.springframework.data.domain.Sort.by("projNum").ascending()))
+                .getContent();
+        if (projects.size() < 3) {
+            log.warn("Not enough projects to seed purchase orders, skipping.");
+            return;
+        }
+
+        var srSort = org.springframework.data.domain.PageRequest.of(0, 6,
+                org.springframework.data.domain.Sort.by("srNumber").ascending());
+
+        var p1Reports = serviceReportRepository
+                .findAllByProject_ProjNum(projects.get(0).getProjNum(), srSort).getContent();
+        var p2Reports = serviceReportRepository
+                .findAllByProject_ProjNum(projects.get(1).getProjNum(), srSort).getContent();
+        var p3Reports = serviceReportRepository
+                .findAllByProject_ProjNum(projects.get(2).getProjNum(), srSort).getContent();
+
+        Supplier s1 = suppliers.get(0);
+        Supplier s2 = suppliers.get(1);
+        Supplier s3 = suppliers.get(2);
+        Supplier s4 = suppliers.get(3);
+
+        // One PO per service report — pick distinct reports from each project
+        PurchaseOrder po1 = null, po2 = null, po3 = null, po4 = null, po5 = null, po6 = null;
+
+        if (!p1Reports.isEmpty()) {
+            po1 = po("PO-2026-001", projects.get(0), p1Reports.get(0),
+                    "Repair Parts", "net30",
+                    "123 Ayala Avenue, Makati City, Metro Manila",
+                    "Urgently needed for capacitor and refrigerant replacement.", "cash", null,
+                    LocalDateTime.of(2026, 1, 6, 9, 0));
+        }
+        if (p1Reports.size() >= 3) {
+            po2 = po("PO-2026-002", projects.get(0), p1Reports.get(2),
+                    "Maintenance Supplies", "net60",
+                    "123 Ayala Avenue, Makati City, Metro Manila",
+                    "Drain line cleaner and air filter stock.", "check", null,
+                    LocalDateTime.of(2026, 2, 10, 9, 0));
+        }
+        if (!p2Reports.isEmpty()) {
+            po3 = po("PO-2026-003", projects.get(1), p2Reports.get(0),
+                    "Replacement Parts", "cod",
+                    "45 Sampaguita St., Quezon City, Metro Manila",
+                    "PCB fuse and circuit breaker replacement.", "cash", null,
+                    LocalDateTime.of(2026, 1, 12, 10, 0));
+        }
+        if (p2Reports.size() >= 3) {
+            po4 = po("PO-2026-004", projects.get(1), p2Reports.get(2),
+                    "Cleaning Supplies", "net15",
+                    "45 Sampaguita St., Quezon City, Metro Manila",
+                    null, "gcash", "Paid via GCash business wallet.",
+                    LocalDateTime.of(2026, 2, 23, 11, 0));
+        }
+        if (!p3Reports.isEmpty()) {
+            po5 = po("PO-2026-005", projects.get(2), p3Reports.get(0),
+                    "Equipment Parts", "net30",
+                    "Greenfield District, Mandaluyong City, Metro Manila",
+                    "Circuit breakers and panel load redistribution parts.", "check", null,
+                    LocalDateTime.of(2026, 1, 5, 8, 0));
+        }
+        if (p3Reports.size() >= 4) {
+            po6 = po("PO-2026-006", projects.get(2), p3Reports.get(3),
+                    "AC Components", "net60",
+                    "Greenfield District, Mandaluyong City, Metro Manila",
+                    "AHU fan motor and capacitor for basement unit.", "cash", null,
+                    LocalDateTime.of(2026, 3, 9, 8, 0));
+        }
+
+        // Parts — 2-3 per PO
+        if (po1 != null) {
+            part("Capacitor 35/5 MFD",        2, "pcs",  new BigDecimal("650.00"),  s1, LocalDate.of(2026, 1, 6),  po1, "delivered");
+            part("R-410A Refrigerant (10 kg)", 1, "tank", new BigDecimal("3200.00"), s2, LocalDate.of(2026, 1, 6),  po1, "delivered");
+        }
+        if (po2 != null) {
+            part("Air Filter 24-inch",         4, "pcs",  new BigDecimal("420.00"),  s1, LocalDate.of(2026, 2, 10), po2, "delivered");
+            part("Drain Line Cleaner (1L)",    2, "btl",  new BigDecimal("280.00"),  s3, LocalDate.of(2026, 2, 10), po2, "delivered");
+            part("Anti-fungal Coil Spray",     2, "btl",  new BigDecimal("350.00"),  s3, LocalDate.of(2026, 2, 10), po2, "delivered");
+        }
+        if (po3 != null) {
+            part("PCB Fuse 15A",               5, "pcs",  new BigDecimal("85.00"),   s4, LocalDate.of(2026, 1, 12), po3, "delivered");
+            part("Circuit Breaker 20A",        2, "pcs",  new BigDecimal("750.00"),  s4, LocalDate.of(2026, 1, 12), po3, "delivered");
+        }
+        if (po4 != null) {
+            part("Evaporator Coil Cleaner (1L)", 3, "btl", new BigDecimal("310.00"), s3, LocalDate.of(2026, 2, 23), po4, "delivered");
+            part("Condensate Drain Pan Sealant", 1, "set", new BigDecimal("540.00"), s1, LocalDate.of(2026, 2, 23), po4, "ordered");
+        }
+        if (po5 != null) {
+            part("Circuit Breaker 20A",        4, "pcs",  new BigDecimal("750.00"),  s4, LocalDate.of(2026, 1, 5),  po5, "delivered");
+            part("Panel Busbar 100A",          1, "pcs",  new BigDecimal("1850.00"), s4, LocalDate.of(2026, 1, 5),  po5, "delivered");
+            part("Cable Lug 35mm²",            10, "pcs", new BigDecimal("45.00"),   s4, LocalDate.of(2026, 1, 5),  po5, "delivered");
+        }
+        if (po6 != null) {
+            part("AHU Fan Motor 1.5HP",        1, "pcs",  new BigDecimal("8500.00"), s2, LocalDate.of(2026, 3, 9),  po6, "ordered");
+            part("Motor Run Capacitor 40MFD",  1, "pcs",  new BigDecimal("920.00"),  s1, LocalDate.of(2026, 3, 9),  po6, "ordered");
+        }
+
+        // Delivery contacts — 0 to 2 per PO
+        if (po1 != null) {
+            poContact(po1, "Maria Santos",   "+639171234567");
+            poContact(po1, "Juan dela Cruz", "+639271234567");
+        }
+        if (po2 != null) {
+            poContact(po2, "Maria Santos", "+639171234567");
+        }
+        if (po3 != null) {
+            poContact(po3, "Roberto Santos",  "+639281234567");
+            poContact(po3, "Ana Reyes",       "+639381234567");
+        }
+        // po4 — 0 contacts (intentionally omitted)
+        if (po5 != null) {
+            poContact(po5, "Liza Reyes", "+639391234567");
+        }
+        // po6 — 0 contacts (intentionally omitted)
+
+        log.info("Purchase order seed completed: POs, parts, and delivery contacts created.");
+    }
+
+    /** Creates and saves a PurchaseOrder. */
+    private PurchaseOrder po(String poNum, Project project, ServiceReport serviceReport,
+                             String purpose, String terms, String deliveryAddress,
+                             String remarks, String paymentMethod, String paymentDetails,
+                             LocalDateTime addedOn) {
+        PurchaseOrder po = new PurchaseOrder();
+        po.setPoNum(poNum);
+        po.setProject(project);
+        po.setServiceReport(serviceReport);
+        po.setPurpose(purpose);
+        po.setTerms(terms);
+        po.setDeliveryAddress(deliveryAddress);
+        po.setRemarks(remarks);
+        po.setPaymentMethod(paymentMethod);
+        po.setPaymentDetails(paymentDetails);
+        po.setAddedOn(addedOn);
+        return purchaseOrderRepository.save(po);
+    }
+
+    /** Creates and saves a Part linked to a PurchaseOrder and Supplier. */
+    private void part(String name, int quantity, String quantityType, BigDecimal unitPrice,
+                      Supplier supplier, LocalDate orderDate, PurchaseOrder purchaseOrder,
+                      String status) {
+        Part p = new Part();
+        p.setName(name);
+        p.setQuantity(quantity);
+        p.setQuantityType(quantityType);
+        p.setUnitPrice(unitPrice);
+        p.setSupplier(supplier);
+        p.setOrderDate(orderDate);
+        p.setPurchaseOrder(purchaseOrder);
+        p.setStatus(status);
+        p.setAddedOn(purchaseOrder.getAddedOn());
+        partRepository.save(p);
+    }
+
+    /** Creates and saves a PurchaseOrderDeliveryContact. */
+    private void poContact(PurchaseOrder purchaseOrder, String contactName, String contactNumber) {
+        PurchaseOrderDeliveryContact c = new PurchaseOrderDeliveryContact();
+        c.setPurchaseOrder(purchaseOrder);
+        c.setContactName(contactName);
+        c.setContactNumber(contactNumber);
+        poDeliveryContactRepository.save(c);
     }
 
 }

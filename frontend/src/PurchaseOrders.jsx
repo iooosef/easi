@@ -1,0 +1,577 @@
+import { useState, useEffect } from 'react'
+import { useLocation, useParams } from 'react-router-dom'
+import { useAuth } from './auth'
+import Layout from './Layout'
+import ManageMenu from './ManageMenu'
+
+const PO_MENU_ITEMS = []
+
+/** Returns badge class for part status */
+function partStatusBadge(status) {
+  if (status === 'received')  return 'badge-success'
+  if (status === 'cancelled') return 'badge-error'
+  return 'badge-neutral'
+}
+
+/** Formats a datetime string to YYYY-MM-DD */
+function formatDate(dt) {
+  if (!dt) return '—'
+  return String(dt).slice(0, 10)
+}
+
+const PAGE_SIZE = 12
+const PARTS_PAGE_SIZE = 7
+
+/** Formats a number as currency (PHP) */
+function formatCurrency(value) {
+  if (value == null) return '—'
+  return Number(value).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })
+}
+
+/** Parts table rendered inside the ManageMenu details component */
+function PartsTable({ parts, loading, onSelectPart }) {
+  const [partsPage, setPartsPage] = useState(0)
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-6">
+        <span className="loading loading-spinner loading-sm text-primary"></span>
+      </div>
+    )
+  }
+  if (parts.length === 0) {
+    return (
+      <div className="text-center py-6 text-base-content/40 text-sm">
+        No parts linked to this purchase order.
+      </div>
+    )
+  }
+
+  const totalPages = Math.ceil(parts.length / PARTS_PAGE_SIZE)
+  const pageParts = parts.slice(partsPage * PARTS_PAGE_SIZE, (partsPage + 1) * PARTS_PAGE_SIZE)
+  const totalCost = parts.reduce((sum, p) => sum + (Number(p.quantity) * Number(p.unitPrice ?? 0)), 0)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="overflow-x-auto rounded-box border border-base-300">
+        <table className="table table-zebra table-sm w-full">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Quantity</th>
+              <th>Unit Price</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageParts.map(p => (
+              <tr key={p.partId}>
+                <td className="font-mono text-xs">{p.partId}</td>
+                <td className="text-sm max-w-40">
+                  <span className="line-clamp-1" title={p.name}>{p.name}</span>
+                </td>
+                <td className="text-sm">{p.quantity} {p.quantityType}</td>
+                <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
+                <td>
+                  <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>
+                    {p.status}
+                  </span>
+                </td>
+                <td>
+                  <button
+                    className="btn btn-soft btn-primary btn-xs"
+                    onClick={() => onSelectPart(p)}
+                  >
+                    <span className="icon-[tabler--info-circle] size-3"></span>
+                    Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-base-content/50">
+            Page {partsPage + 1} of {totalPages} · {parts.length} part{parts.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex gap-1">
+            <button className="btn btn-xs btn-ghost" disabled={partsPage === 0} onClick={() => setPartsPage(p => p - 1)}>
+              <span className="icon-[tabler--chevron-left] size-3"></span>
+            </button>
+            <button className="btn btn-xs btn-ghost" disabled={partsPage >= totalPages - 1} onClick={() => setPartsPage(p => p + 1)}>
+              <span className="icon-[tabler--chevron-right] size-3"></span>
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="flex justify-end">
+        <div className="bg-base-200 rounded-box px-4 py-2 text-sm font-semibold">
+          Total Cost: <span className="text-primary">{formatCurrency(totalCost)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Delivery contacts table rendered inside the ManageMenu details component */
+function DeliveryContactsTable({ contacts, loading, onSelectContact }) {
+  const [contactsPage, setContactsPage] = useState(0)
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-6">
+        <span className="loading loading-spinner loading-sm text-primary"></span>
+      </div>
+    )
+  }
+  if (contacts.length === 0) {
+    return (
+      <div className="text-center py-6 text-base-content/40 text-sm">
+        No delivery contacts linked to this purchase order.
+      </div>
+    )
+  }
+
+  const totalPages = Math.ceil(contacts.length / PARTS_PAGE_SIZE)
+  const pageContacts = contacts.slice(contactsPage * PARTS_PAGE_SIZE, (contactsPage + 1) * PARTS_PAGE_SIZE)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="overflow-x-auto rounded-box border border-base-300">
+        <table className="table table-zebra table-sm w-full">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Contact Name</th>
+              <th>Contact Number</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageContacts.map(c => (
+              <tr key={c.poContactNum}>
+                <td className="font-mono text-xs">{c.poContactNum}</td>
+                <td className="text-sm">{c.contactName}</td>
+                <td className="text-sm">{c.contactNumber}</td>
+                <td>
+                  <button
+                    className="btn btn-soft btn-primary btn-xs"
+                    onClick={() => onSelectContact(c)}
+                  >
+                    <span className="icon-[tabler--info-circle] size-3"></span>
+                    Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-base-content/50">
+            Page {contactsPage + 1} of {totalPages} · {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex gap-1">
+            <button className="btn btn-xs btn-ghost" disabled={contactsPage === 0} onClick={() => setContactsPage(p => p - 1)}>
+              <span className="icon-[tabler--chevron-left] size-3"></span>
+            </button>
+            <button className="btn btn-xs btn-ghost" disabled={contactsPage >= totalPages - 1} onClick={() => setContactsPage(p => p + 1)}>
+              <span className="icon-[tabler--chevron-right] size-3"></span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Small modal showing all details of a single delivery contact */
+function ContactDetailsModal({ contact, onClose }) {
+  if (!contact) return null
+  return (
+    <>
+      <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={onClose} />
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="modal-content w-full max-w-sm">
+          <div className="modal-header">
+            <div>
+              <h3 className="modal-title">Contact #{contact.poContactNum}</h3>
+              <span className="text-sm text-base-content/50">{contact.contactName}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <span className="icon-[tabler--x] size-4"></span>
+            </button>
+          </div>
+          <div className="modal-body">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact ID</span>
+                <span className="text-sm font-medium font-mono">{contact.poContactNum}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
+                <span className="text-sm font-medium font-mono">{contact.poNum}</span>
+              </div>
+              <div className="col-span-2 flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact Name</span>
+                <span className="text-sm font-medium">{contact.contactName}</span>
+              </div>
+              <div className="col-span-2 flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact Number</span>
+                <span className="text-sm font-medium">{contact.contactNumber}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+/** Small modal showing all details of a single part */
+function PartDetailsModal({ part, onClose }) {
+  if (!part) return null
+  return (
+    <>
+      {/* Backdrop — higher z than ManageMenu so it doesn't close that modal */}
+      <div
+        className="fixed inset-0 bg-base-300/40 z-[55]"
+        onClick={onClose}
+      />
+      {/* Modal panel */}
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="modal-content w-full max-w-sm">
+          <div className="modal-header">
+            <div>
+              <h3 className="modal-title">Part #{part.partId}</h3>
+              <span className="text-sm text-base-content/50">{part.name}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <span className="icon-[tabler--x] size-4"></span>
+            </button>
+          </div>
+          <div className="modal-body">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Part ID</span>
+                <span className="text-sm font-medium font-mono">{part.partId}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Status</span>
+                <span className={`badge badge-soft ${partStatusBadge(part.status)} text-xs w-fit`}>{part.status}</span>
+              </div>
+              <div className="col-span-2 flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
+                <span className="text-sm font-medium">{part.name}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Quantity</span>
+                <span className="text-sm font-medium">{part.quantity} {part.quantityType}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Unit Price</span>
+                <span className="text-sm font-medium">{formatCurrency(part.unitPrice)}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Subtotal</span>
+                <span className="text-sm font-medium text-primary">{formatCurrency(Number(part.quantity) * Number(part.unitPrice ?? 0))}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Supplier ID</span>
+                <span className="text-sm font-medium">{part.supplierId ?? '—'}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Order Date</span>
+                <span className="text-sm font-medium">{formatDate(part.orderDate)}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
+                <span className="text-sm font-medium font-mono">{part.poNum}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Added On</span>
+                <span className="text-sm font-medium">{formatDate(part.addedOn)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default function PurchaseOrders() {
+  const { apiFetch, hasRole } = useAuth()
+  const { srNumber } = useParams()
+  const location = useLocation()
+  const srNumberInt = Number(srNumber)
+  const projectName = location.state?.projectName ?? '...'
+
+  const [orders, setOrders]               = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState(null)
+  const [search, setSearch]               = useState('')
+  const [page, setPage]                   = useState(0)
+  const [totalPages, setTotalPages]       = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [refreshKey, setRefreshKey]       = useState(0)
+
+  const [selectedOrder, setSelectedOrder]     = useState(null)
+  const [parts, setParts]                     = useState([])
+  const [partsLoading, setPartsLoading]       = useState(false)
+  const [selectedPart, setSelectedPart]       = useState(null)
+  const [contacts, setContacts]               = useState([])
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [selectedContact, setSelectedContact] = useState(null)
+
+  /** Fetches purchase orders for the current service report. */
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(PAGE_SIZE),
+      sort: 'poNum,asc',
+      srNum: String(srNumberInt),
+    })
+    apiFetch(`/api/purchase-orders?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to load purchase orders (${res.status})`)
+        return res.json()
+      })
+      .then(data => {
+        if (!active) return
+        setOrders(data.content ?? [])
+        setTotalPages(data.totalPages ?? 0)
+        setTotalElements(data.totalElements ?? 0)
+      })
+      .catch(err => { if (active) setError(err.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, page, srNumberInt, refreshKey])
+
+  /** Fetches parts whenever a PO is selected. */
+  useEffect(() => {
+    if (!selectedOrder) {
+      setParts([])
+      return
+    }
+    let active = true
+    setPartsLoading(true)
+    const params = new URLSearchParams({
+      poNum: selectedOrder.poNum,
+      size: '100',
+      sort: 'partId,asc',
+    })
+    apiFetch(`/api/parts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setParts(data.content ?? []) })
+      .catch(() => { if (active) setParts([]) })
+      .finally(() => { if (active) setPartsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, selectedOrder])
+
+  /** Fetches delivery contacts whenever a PO is selected. */
+  useEffect(() => {
+    if (!selectedOrder) {
+      setContacts([])
+      return
+    }
+    let active = true
+    setContactsLoading(true)
+    const params = new URLSearchParams({
+      poNum: selectedOrder.poNum,
+      size: '100',
+      sort: 'poContactNum,asc',
+    })
+    apiFetch(`/api/purchase-order-delivery-contacts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setContacts(data.content ?? []) })
+      .catch(() => { if (active) setContacts([]) })
+      .finally(() => { if (active) setContactsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, selectedOrder])
+
+  const filtered = orders.filter(o => {
+    if (search === '') return true
+    const q = search.toLowerCase()
+    return (
+      (o.poNum ?? '').toLowerCase().includes(q) ||
+      (o.purpose ?? '').toLowerCase().includes(q) ||
+      (o.terms ?? '').toLowerCase().includes(q)
+    )
+  })
+
+  return (
+    <Layout activePage="service-report">
+      {/* Header row */}
+      <div className="flex items-stretch justify-between h-16 mb-6">
+        <div>
+          <h1 className="text-3xl font-semibold">
+            Purchase Orders of SR #{srNumberInt}
+          </h1>
+          <p className="text-base-content/60 mt-1">
+            {projectName} — View and manage purchase orders for this service report
+          </p>
+        </div>
+      </div>
+
+      {/* Search bar */}
+      <div className="flex gap-3 mb-6">
+        <div className="relative flex-1">
+          <span className="icon-[tabler--search] size-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></span>
+          <input
+            type="text"
+            className="input input-bordered w-full pl-9"
+            placeholder="Search by PO number or purpose..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-20">
+          <span className="loading loading-spinner loading-lg text-primary"></span>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="alert alert-error">
+          <span className="icon-[tabler--alert-circle] size-5"></span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Cards */}
+      {!loading && !error && (
+        <>
+          <p className="text-sm text-base-content/50 mb-3">
+            {totalElements} purchase order{totalElements !== 1 ? 's' : ''} total
+            {search && ` · ${filtered.length} shown`}
+          </p>
+
+          {filtered.length === 0 ? (
+            <div className="text-center py-20 text-base-content/40">
+              <span className="icon-[tabler--file-invoice-off] size-12 mx-auto mb-3 block"></span>
+              <p>No purchase orders found.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map(o => (
+                <div key={o.poNum} className="group">
+                  <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
+                    <div className="card-body gap-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h2 className="card-title text-base font-mono">{o.poNum}</h2>
+                        <span className="badge badge-soft badge-primary shrink-0 text-xs">
+                          SR #{o.srNum ?? '—'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-primary line-clamp-2">{o.purpose}</p>
+                      <div className="text-sm text-base-content/70 space-y-0.5">
+                        <p>Terms: {o.terms}</p>
+                        <p>Payment: {o.paymentMethod}</p>
+                        <p>Added: {formatDate(o.addedOn)}</p>
+                      </div>
+                      <div className="card-actions mt-2">
+                        <button
+                          className="btn btn-soft btn-primary btn-sm flex-1"
+                          onClick={() => setSelectedOrder(o)}
+                        >
+                          <span className="icon-[tabler--settings] size-4"></span>
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-8">
+              <button className="btn btn-sm btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                <span className="icon-[tabler--chevron-left] size-4"></span>
+                Prev
+              </button>
+              <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
+              <button className="btn btn-sm btn-ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                Next
+                <span className="icon-[tabler--chevron-right] size-4"></span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Purchase Order Manage Modal */}
+      <ManageMenu
+        title={selectedOrder ? `PO ${selectedOrder.poNum}` : ''}
+        subtitle={selectedOrder ? `SR #${selectedOrder.srNum} · ${selectedOrder.purpose}` : ''}
+        item={selectedOrder}
+        details={selectedOrder ? [
+          { label: 'PO Number',       value: selectedOrder.poNum },
+          { label: 'SR #',            value: selectedOrder.srNum ?? '—' },
+          { label: 'Terms',           value: selectedOrder.terms },
+          { label: 'Payment Method',  value: selectedOrder.paymentMethod },
+          { label: 'Payment Details', value: selectedOrder.paymentDetails ?? '—' },
+          { label: 'Added On',        value: formatDate(selectedOrder.addedOn) },
+          { label: 'Total Cost',       value: selectedOrder.totalCost != null ? Number(selectedOrder.totalCost).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' }) : '₱0.00' },
+          { label: 'Delivery Address', value: selectedOrder.deliveryAddress ?? '—', fullWidth: true },
+          { label: 'Remarks',          value: selectedOrder.remarks ?? '—', fullWidth: true },
+          {
+            fullWidth: true,
+            component: (
+              <div className="flex flex-col gap-3">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Ordered Parts</span>
+                <PartsTable parts={parts} loading={partsLoading} onSelectPart={setSelectedPart} />
+              </div>
+            ),
+          },
+          {
+            fullWidth: true,
+            component: (
+              <div className="flex flex-col gap-3">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Delivery Contacts</span>
+                <DeliveryContactsTable contacts={contacts} loading={contactsLoading} onSelectContact={setSelectedContact} />
+              </div>
+            ),
+          },
+        ] : []}
+        isOpen={!!selectedOrder}
+        onClose={() => { setSelectedOrder(null); setSelectedPart(null); setSelectedContact(null) }}
+        hasRole={hasRole}
+        menuItems={PO_MENU_ITEMS}
+        onMenuSelect={(key, order) => {
+          setSelectedOrder(null)
+        }}
+      />
+
+      {/* Part Details Modal — sits above ManageMenu via higher z-index */}
+      <PartDetailsModal part={selectedPart} onClose={() => setSelectedPart(null)} />
+
+      {/* Contact Details Modal — sits above ManageMenu via higher z-index */}
+      <ContactDetailsModal contact={selectedContact} onClose={() => setSelectedContact(null)} />
+    </Layout>
+  )
+}

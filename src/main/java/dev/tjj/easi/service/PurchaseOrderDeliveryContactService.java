@@ -52,8 +52,11 @@ public class PurchaseOrderDeliveryContactService {
         return toResponse(saved);
     }
 
-    /** Returns a page of purchase order delivery contact records. */
-    public Page<PurchaseOrderDeliveryContactResponse> getAll(Pageable pageable) {
+    /** Returns a page of purchase order delivery contact records, optionally filtered by PO number. */
+    public Page<PurchaseOrderDeliveryContactResponse> getAll(String poNum, Pageable pageable) {
+        if (poNum != null && !poNum.isBlank()) {
+            return contactRepository.findByPurchaseOrder_PoNum(poNum, pageable).map(this::toResponse);
+        }
         return contactRepository.findAll(pageable).map(this::toResponse);
     }
 

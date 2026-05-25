@@ -14,10 +14,11 @@ const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS  = ['unpaid', 'paid', 'partial']
 
 const SR_MENU_ITEMS = [
-  { key: 'update',    label: 'Update Details',       icon: 'icon-[tabler--pencil]',    roles: ['ADMIN', 'STAFF'] },
-  { key: 'findings',  label: 'Manage Findings',      icon: 'icon-[tabler--checklist]', roles: null },
-  { key: 'billing',   label: 'Manage Billing Items', icon: 'icon-[tabler--receipt]',   roles: null },
-  { key: 'documents', label: 'Manage Documents',     icon: 'icon-[tabler--files]',     roles: null },
+  { key: 'update',         label: 'Update Details',        icon: 'icon-[tabler--pencil]',       roles: ['ADMIN', 'STAFF'] },
+  { key: 'findings',       label: 'Manage Findings',       icon: 'icon-[tabler--checklist]',    roles: null },
+  { key: 'billing',        label: 'Manage Billing Items',  icon: 'icon-[tabler--receipt]',      roles: null },
+  { key: 'documents',      label: 'Manage Documents',      icon: 'icon-[tabler--files]',        roles: null },
+  { key: 'purchase-order', label: 'Manage Purchase Order', icon: 'icon-[tabler--file-invoice]', roles: null },
 ]
 
 const EMPTY_FORM = {
@@ -697,6 +698,9 @@ export default function ServiceReports() {
           if (key === 'update') openEditModal(report)
           if (key === 'findings') navigate(`/service-report/${report.srNumber}/findings`, {
             state: { projectName: report.projectName, projNum: report.projNum },
+          })
+          if (key === 'purchase-order') navigate(`/service-report/${report.srNumber}/purchase-orders`, {
+            state: { projectName: report.projectName, srNumber: report.srNumber },
           })
         }}
       />

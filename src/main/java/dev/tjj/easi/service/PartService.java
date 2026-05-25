@@ -60,8 +60,11 @@ public class PartService {
         return toResponse(saved);
     }
 
-    /** Returns a page of part records. */
-    public Page<PartResponse> getAll(Pageable pageable) {
+    /** Returns a page of part records, optionally filtered by purchase order number. */
+    public Page<PartResponse> getAll(String poNum, Pageable pageable) {
+        if (poNum != null && !poNum.isBlank()) {
+            return partRepository.findByPurchaseOrder_PoNum(poNum, pageable).map(this::toResponse);
+        }
         return partRepository.findAll(pageable).map(this::toResponse);
     }
 

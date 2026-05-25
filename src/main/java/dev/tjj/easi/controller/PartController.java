@@ -38,10 +38,12 @@ public class PartController {
         return ResponseEntity.ok(partService.update(partId, request));
     }
 
-    /** Returns a page of part records. Available to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of part records, optionally filtered by poNum. Available to ADMIN, ACCOUNTING, and STAFF. */
     @GetMapping
-    public ResponseEntity<Page<PartResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(partService.getAll(pageable));
+    public ResponseEntity<Page<PartResponse>> getAll(
+            @RequestParam(required = false) String poNum,
+            Pageable pageable) {
+        return ResponseEntity.ok(partService.getAll(poNum, pageable));
     }
 
     /** Returns a single part record by ID. Available to ADMIN, ACCOUNTING, and STAFF. */

@@ -15,6 +15,7 @@ import Schedules from './Schedules'
 import Vehicles from './Vehicles'
 import VehicleLogs from './VehicleLogs'
 import MaintenancePage from './MaintenancePage'
+import PurchaseOrders from './PurchaseOrders'
 
 /** Auth guard — defined outside App so its reference is stable across re-renders */
 function Private({ element }) {
@@ -45,6 +46,7 @@ function App() {
       <Route path="/service-report/project/:projNum" element={<Private element={<ServiceReports />} />} />
       <Route path="/ac-units/project/:projNum" element={<Private element={<AirConditioningUnits />} />} />
       <Route path="/service-report/:srNumber/findings" element={<Private element={<ServiceReportFindings />} />} />
+      <Route path="/service-report/:srNumber/purchase-orders" element={<Private element={<PurchaseOrders />} />} />
       <Route path="/schedules" element={<Private element={<Schedules />} />} />
       <Route path="/schedules/project/:projNum" element={<Private element={<Schedules />} />} />
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />

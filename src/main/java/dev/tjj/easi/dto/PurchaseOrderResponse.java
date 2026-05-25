@@ -1,5 +1,6 @@
 package dev.tjj.easi.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record PurchaseOrderResponse(
@@ -12,5 +13,6 @@ public record PurchaseOrderResponse(
         String remarks,
         String paymentMethod,
         String paymentDetails,
-        LocalDateTime addedOn
+        LocalDateTime addedOn,
+        BigDecimal totalCost
 ) {}
