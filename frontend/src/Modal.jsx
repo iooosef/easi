@@ -10,7 +10,7 @@
  *   footer  {React.ReactNode}- Action buttons rendered in the modal footer
  *   children{React.ReactNode}- Form fields or body content
  */
-export default function Modal({ isOpen, onClose, title, size = 'max-w-2xl', footer, children }) {
+export default function Modal({ isOpen, onClose, title, size = 'max-w-2xl', footer, hideClose = false, children }) {
   if (!isOpen) return null
 
   return (
@@ -23,19 +23,21 @@ export default function Modal({ isOpen, onClose, title, size = 'max-w-2xl', foot
 
       {/* Centered container */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-        <div className={`modal-content w-full ${size} my-auto`}>
+        <div className={`modal-content w-full ${size} my-auto shadow-xl`}>
 
           {/* Header */}
           <div className="modal-header">
             <h3 className="modal-title">{title}</h3>
-            <button
-              type="button"
-              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-              aria-label="Close"
-              onClick={onClose}
-            >
-              <span className="icon-[tabler--x] size-4"></span>
-            </button>
+            {!hideClose && (
+              <button
+                type="button"
+                className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                aria-label="Close"
+                onClick={onClose}
+              >
+                <span className="icon-[tabler--x] size-4"></span>
+              </button>
+            )}
           </div>
 
           {/* Body */}

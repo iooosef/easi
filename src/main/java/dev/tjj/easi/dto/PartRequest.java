@@ -30,7 +30,6 @@ public record PartRequest(
         @NotNull(message = "Supplier ID is required")
         Integer supplierId,
 
-        @NotNull(message = "Order date is required")
         LocalDate orderDate,
 
         @NotNull(message = "PO number is required")

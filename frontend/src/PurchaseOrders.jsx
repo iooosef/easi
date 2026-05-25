@@ -5,6 +5,7 @@ import Layout from './Layout'
 import ManageMenu from './ManageMenu'
 import Modal from './Modal'
 import { notyfSuccess, notyfError } from './notyf'
+import SupplierPickerModal from './SupplierPickerModal'
 
 /** Parses a failed API response into field-level or general errors. */
 async function parseApiError(res) {
@@ -300,8 +301,8 @@ function PartDetailsModal({ part, onClose }) {
                 <span className="text-sm font-medium text-primary">{formatCurrency(Number(part.quantity) * Number(part.unitPrice ?? 0))}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Supplier ID</span>
-                <span className="text-sm font-medium">{part.supplierId ?? '—'}</span>
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Supplier</span>
+                <span className="text-sm font-medium">({part.supplierId}) {part.supplierName ?? '—'}</span>
               </div>
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-base-content/50 uppercase tracking-wide">Order Date</span>
@@ -408,6 +409,161 @@ export default function PurchaseOrders() {
       setEditFormError({ _general: err.message })
     } finally {
       setEditSubmitting(false)
+    }
+  }
+
+  // Manage Parts modal
+  const EMPTY_PART_FORM = { name: '', quantity: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
+  const [managePartsOpen, setManagePartsOpen]         = useState(false)
+  const [managePartsOrder, setManagePartsOrder]       = useState(null)
+  const [manageParts, setManageParts]                 = useState([])
+  const [managePartsLoading, setManagePartsLoading]   = useState(false)
+  const [managePartsRefresh, setManagePartsRefresh]   = useState(0)
+  const [addPartOpen, setAddPartOpen]                 = useState(false)
+  const [partForm, setPartForm]                       = useState(EMPTY_PART_FORM)
+  const [partFormError, setPartFormError]             = useState({})
+  const [partFormSubmitting, setPartFormSubmitting]   = useState(false)
+  const [deletingPartId, setDeletingPartId]           = useState(null)
+  const [supplierPickerFor, setSupplierPickerFor]     = useState(null) // 'add' | 'update'
+  const [addSupplierDisplay, setAddSupplierDisplay]   = useState('')
+  const [updateSupplierDisplay, setUpdateSupplierDisplay] = useState('')
+
+  useEffect(() => {
+    if (!managePartsOpen || !managePartsOrder) { setManageParts([]); return }
+    let active = true
+    setManagePartsLoading(true)
+    const params = new URLSearchParams({ poNum: managePartsOrder.poNum, size: '100', sort: 'partId,asc' })
+    apiFetch(`/api/parts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setManageParts(data.content ?? []) })
+      .catch(() => { if (active) setManageParts([]) })
+      .finally(() => { if (active) setManagePartsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, managePartsOpen, managePartsOrder, managePartsRefresh])
+
+  function openManageParts(o) { setManagePartsOrder(o); setManagePartsOpen(true); setAddPartOpen(false) }
+  function closeManageParts() { setManagePartsOpen(false); setManagePartsOrder(null); setManageParts([]); setAddPartOpen(false); setPartForm(EMPTY_PART_FORM); setPartFormError({}); setAddSupplierDisplay('') }
+
+  function handlePartFormChange(e) {
+    const { name, value } = e.target
+    setPartForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleAddPartSubmit(e) {
+    e.preventDefault()
+    setPartFormError({})
+    setPartFormSubmitting(true)
+    try {
+      const res = await apiFetch('/api/parts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...partForm,
+          quantity: Number(partForm.quantity),
+          unitPrice: Number(partForm.unitPrice),
+          supplierId: Number(partForm.supplierId),
+          poNum: managePartsOrder.poNum,
+        }),
+      })
+      if (!res.ok) {
+        setPartFormError(await parseApiError(res))
+        notyfError('Add part failed')
+        return
+      }
+      setAddPartOpen(false)
+      setPartForm(EMPTY_PART_FORM)
+      setPartFormError({})
+      notyfSuccess('Part added successfully.')
+      setManagePartsRefresh(k => k + 1)
+    } catch (err) {
+      setPartFormError({ _general: err.message })
+    } finally {
+      setPartFormSubmitting(false)
+    }
+  }
+
+  // Update Part sub-modal
+  const [updatePartOpen, setUpdatePartOpen]         = useState(false)
+  const [updatingPart, setUpdatingPart]             = useState(null)
+  const [updatePartForm, setUpdatePartForm]         = useState({})
+  const [updatePartFormError, setUpdatePartFormError] = useState({})
+  const [updatePartSubmitting, setUpdatePartSubmitting] = useState(false)
+
+  function openUpdatePart(p) {
+    setUpdatePartForm({
+      name:          p.name,
+      quantity:      p.quantity,
+      quantityType:  p.quantityType,
+      unitPrice:     p.unitPrice,
+      supplierId:    p.supplierId,
+      status:        p.status,
+    })
+    setUpdateSupplierDisplay(`${p.supplierName ?? 'Supplier'} (#${p.supplierId})`)
+    setUpdatingPart(p)
+    setUpdatePartFormError({})
+    setUpdatePartOpen(true)
+  }
+
+  function closeUpdatePart() {
+    setUpdatePartOpen(false)
+    setUpdatingPart(null)
+    setUpdatePartForm({})
+    setUpdatePartFormError({})
+    setUpdateSupplierDisplay('')
+  }
+
+  function handleUpdatePartFormChange(e) {
+    const { name, value } = e.target
+    setUpdatePartForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleUpdatePartSubmit(e) {
+    e.preventDefault()
+    setUpdatePartFormError({})
+    setUpdatePartSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/parts/${updatingPart.partId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...updatePartForm,
+          quantity:   Number(updatePartForm.quantity),
+          unitPrice:  Number(updatePartForm.unitPrice),
+          supplierId: Number(updatePartForm.supplierId),
+          poNum:      updatingPart.poNum,
+          orderDate:  updatingPart.orderDate,
+        }),
+      })
+      if (!res.ok) {
+        setUpdatePartFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeUpdatePart()
+      notyfSuccess(`Part #${updatingPart.partId} updated successfully.`)
+      setManagePartsRefresh(k => k + 1)
+    } catch (err) {
+      setUpdatePartFormError({ _general: err.message })
+    } finally {
+      setUpdatePartSubmitting(false)
+    }
+  }
+
+  async function handleDeletePart(partId) {
+    setDeletingPartId(partId)
+    try {
+      const res = await apiFetch(`/api/parts/${partId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        notyfError(data.error ?? data.message ?? 'Delete failed')
+        return
+      }
+      notyfSuccess(`Part #${partId} deleted.`)
+      setManagePartsRefresh(k => k + 1)
+    } catch {
+      notyfError('Delete failed — server error')
+    } finally {
+      setDeletingPartId(null)
     }
   }
 
@@ -637,7 +793,7 @@ export default function PurchaseOrders() {
                         </button>
                         <button
                           className="btn btn-soft btn-secondary btn-sm w-full"
-                          onClick={() => {}}
+                          onClick={() => openManageParts(o)}
                         >
                           <span className="icon-[tabler--package] size-4"></span>
                           Manage Parts
@@ -808,6 +964,314 @@ export default function PurchaseOrders() {
           </div>
         </form>
       </Modal>
+
+      {/* Manage Parts Modal */}
+      <Modal
+        isOpen={managePartsOpen}
+        onClose={addPartOpen ? undefined : closeManageParts}
+        hideClose={addPartOpen}
+        title={`Parts — ${managePartsOrder?.poNum ?? ''}`}
+        size="max-w-3xl"
+        footer={!addPartOpen && (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageParts}>
+            Close
+          </button>
+        )}
+      >
+        {/* Add Part form (inline toggle) */}
+        {addPartOpen ? (
+          <form onSubmit={handleAddPartSubmit}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+              <div className="sm:col-span-2 flex flex-col gap-1">
+                <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+                <input type="text" name="name"
+                  className={`input input-bordered w-full${partFormError.name ? ' is-invalid' : ''}`}
+                  placeholder="e.g. Compressor Unit" maxLength={255} required
+                  value={partForm.name} onChange={handlePartFormChange} />
+                {partFormError.name && <span className="helper-text">{partFormError.name}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+                <input type="number" name="quantity" min={0}
+                  className={`input input-bordered w-full${partFormError.quantity ? ' is-invalid' : ''}`}
+                  placeholder="e.g. 2" required
+                  value={partForm.quantity} onChange={handlePartFormChange} />
+                {partFormError.quantity && <span className="helper-text">{partFormError.quantity}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+                <input type="text" name="quantityType" maxLength={30}
+                  className={`input input-bordered w-full${partFormError.quantityType ? ' is-invalid' : ''}`}
+                  placeholder="e.g. pcs" required
+                  value={partForm.quantityType} onChange={handlePartFormChange} />
+                {partFormError.quantityType && <span className="helper-text">{partFormError.quantityType}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+                <input type="number" name="unitPrice" min={0} step="0.01"
+                  className={`input input-bordered w-full${partFormError.unitPrice ? ' is-invalid' : ''}`}
+                  placeholder="e.g. 1500.00" required
+                  value={partForm.unitPrice} onChange={handlePartFormChange} />
+                {partFormError.unitPrice && <span className="helper-text">{partFormError.unitPrice}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+                <div className="flex gap-2">
+                  <input type="text" readOnly
+                    className={`input input-bordered flex-1${partFormError.supplierId ? ' is-invalid' : ''}`}
+                    placeholder="No supplier selected"
+                    value={addSupplierDisplay} />
+                  <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                    onClick={() => setSupplierPickerFor('add')}>
+                    Pick
+                  </button>
+                </div>
+                {partFormError.supplierId && <span className="helper-text">{partFormError.supplierId}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Status</label>
+                <select name="status"
+                  className={`select select-bordered w-full${partFormError.status ? ' is-invalid' : ''}`}
+                  value={partForm.status} onChange={handlePartFormChange}>
+                  <option value="ordered">ordered</option>
+                  <option value="received">received</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+                {partFormError.status && <span className="helper-text">{partFormError.status}</span>}
+              </div>
+
+              {partFormError._general && (
+                <div className="sm:col-span-2 alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{partFormError._general}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-soft btn-secondary btn-sm"
+                onClick={() => { setAddPartOpen(false); setPartForm(EMPTY_PART_FORM); setPartFormError({}) }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={partFormSubmitting}>
+                {partFormSubmitting
+                  ? <span className="loading loading-spinner loading-xs"></span>
+                  : <span className="icon-[tabler--plus] size-4"></span>
+                }
+                Add Part
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="flex justify-end mb-3">
+              <button type="button" className="btn btn-primary btn-sm"
+                onClick={() => { setPartForm(EMPTY_PART_FORM); setPartFormError({}); setAddPartOpen(true) }}>
+                <span className="icon-[tabler--plus] size-4"></span>
+                Add Part
+              </button>
+            </div>
+
+            {managePartsLoading ? (
+              <div className="flex justify-center py-6">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+              </div>
+            ) : manageParts.length === 0 ? (
+              <div className="text-center py-6 text-base-content/40 text-sm">
+                No parts linked to this purchase order.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-box border border-base-300">
+                <table className="table table-zebra table-sm w-full">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Name</th>
+                      <th>Quantity</th>
+                      <th>Unit Price</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manageParts.map(p => (
+                      <tr key={p.partId}>
+                        <td className="font-mono text-xs">{p.partId}</td>
+                        <td className="text-sm max-w-40">
+                          <span className="line-clamp-1" title={p.name}>{p.name}</span>
+                        </td>
+                        <td className="text-sm">{p.quantity} {p.quantityType}</td>
+                        <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
+                        <td>
+                          <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="flex gap-1">
+                            <button
+                              className="btn btn-soft btn-primary btn-xs"
+                              onClick={() => setSelectedPart(p)}
+                            >
+                              <span className="icon-[tabler--info-circle] size-3"></span>
+                              Details
+                            </button>
+                            <button
+                              className="btn btn-soft btn-secondary btn-xs"
+                              onClick={() => openUpdatePart(p)}
+                            >
+                              <span className="icon-[tabler--pencil] size-3"></span>
+                              Update
+                            </button>
+                            <button
+                              className="btn btn-soft btn-error btn-xs"
+                              disabled={deletingPartId === p.partId}
+                              onClick={() => handleDeletePart(p.partId)}
+                            >
+                              {deletingPartId === p.partId
+                                ? <span className="loading loading-spinner loading-xs"></span>
+                                : <span className="icon-[tabler--trash] size-3"></span>
+                              }
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* Update Part Sub-modal — sits above Manage Parts via higher z-index */}
+      {updatePartOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdatePart} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-lg shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Update Part #{updatingPart?.partId}</h3>
+                  <span className="text-sm text-base-content/50">{updatingPart?.name}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdatePart}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="update-part-form" onSubmit={handleUpdatePartSubmit}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                    <div className="sm:col-span-2 flex flex-col gap-1">
+                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+                      <input type="text" name="name"
+                        className={`input input-bordered w-full${updatePartFormError.name ? ' is-invalid' : ''}`}
+                        maxLength={255} required
+                        value={updatePartForm.name} onChange={handleUpdatePartFormChange} />
+                      {updatePartFormError.name && <span className="helper-text">{updatePartFormError.name}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+                      <input type="number" name="quantity" min={0}
+                        className={`input input-bordered w-full${updatePartFormError.quantity ? ' is-invalid' : ''}`}
+                        required value={updatePartForm.quantity} onChange={handleUpdatePartFormChange} />
+                      {updatePartFormError.quantity && <span className="helper-text">{updatePartFormError.quantity}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+                      <input type="text" name="quantityType" maxLength={30}
+                        className={`input input-bordered w-full${updatePartFormError.quantityType ? ' is-invalid' : ''}`}
+                        required value={updatePartForm.quantityType} onChange={handleUpdatePartFormChange} />
+                      {updatePartFormError.quantityType && <span className="helper-text">{updatePartFormError.quantityType}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+                      <input type="number" name="unitPrice" min={0} step="0.01"
+                        className={`input input-bordered w-full${updatePartFormError.unitPrice ? ' is-invalid' : ''}`}
+                        required value={updatePartForm.unitPrice} onChange={handleUpdatePartFormChange} />
+                      {updatePartFormError.unitPrice && <span className="helper-text">{updatePartFormError.unitPrice}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+                      <div className="flex gap-2">
+                        <input type="text" readOnly
+                          className={`input input-bordered flex-1${updatePartFormError.supplierId ? ' is-invalid' : ''}`}
+                          placeholder="No supplier selected"
+                          value={updateSupplierDisplay} />
+                        <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                          onClick={() => setSupplierPickerFor('update')}>
+                          Pick
+                        </button>
+                      </div>
+                      {updatePartFormError.supplierId && <span className="helper-text">{updatePartFormError.supplierId}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Status</label>
+                      <select name="status"
+                        className={`select select-bordered w-full${updatePartFormError.status ? ' is-invalid' : ''}`}
+                        value={updatePartForm.status} onChange={handleUpdatePartFormChange}>
+                        <option value="ordered">ordered</option>
+                        <option value="received">received</option>
+                        <option value="cancelled">cancelled</option>
+                      </select>
+                      {updatePartFormError.status && <span className="helper-text">{updatePartFormError.status}</span>}
+                    </div>
+
+                    {updatePartFormError._general && (
+                      <div className="sm:col-span-2 alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{updatePartFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdatePart}>
+                  Cancel
+                </button>
+                <button type="submit" form="update-part-form" className="btn btn-primary" disabled={updatePartSubmitting}>
+                  {updatePartSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--device-floppy] size-4"></span>
+                  }
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Supplier Picker — used by Add Part and Update Part forms */}
+      <SupplierPickerModal
+        isOpen={!!supplierPickerFor}
+        onClose={() => setSupplierPickerFor(null)}
+        onSelect={s => {
+          if (supplierPickerFor === 'add') {
+            setPartForm(prev => ({ ...prev, supplierId: s.supplierId }))
+            setAddSupplierDisplay(`${s.name} (#${s.supplierId})`)
+          } else if (supplierPickerFor === 'update') {
+            setUpdatePartForm(prev => ({ ...prev, supplierId: s.supplierId }))
+            setUpdateSupplierDisplay(`${s.name} (#${s.supplierId})`)
+          }
+          setSupplierPickerFor(null)
+        }}
+      />
 
       {/* Update Purchase Order Modal */}
       <Modal

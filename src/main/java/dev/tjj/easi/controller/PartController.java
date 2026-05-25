@@ -51,4 +51,11 @@ public class PartController {
     public ResponseEntity<PartResponse> getById(@PathVariable Integer partId) {
         return ResponseEntity.ok(partService.getById(partId));
     }
+
+    /** Deletes a part by ID. Restricted to ADMIN, ACCOUNTING, and STAFF. */
+    @DeleteMapping("/{partId}")
+    public ResponseEntity<Void> delete(@PathVariable Integer partId) {
+        partService.delete(partId);
+        return ResponseEntity.noContent().build();
+    }
 }

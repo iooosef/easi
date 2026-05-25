@@ -11,6 +11,7 @@ public record PartResponse(
         String quantityType,
         BigDecimal unitPrice,
         Integer supplierId,
+        String supplierName,
         LocalDate orderDate,
         String poNum,
         String status,

@@ -43,6 +43,7 @@ public class PartService {
     public PartResponse add(PartRequest request) {
         Part part = new Part();
         applyRequest(part, request);
+        part.setOrderDate(java.time.LocalDate.now());
         part.setAddedOn(LocalDateTime.now());
         Part saved = partRepository.save(part);
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Part", String.valueOf(saved.getPartId()), "Created part #" + saved.getPartId(), null);
@@ -66,6 +67,15 @@ public class PartService {
             return partRepository.findByPurchaseOrder_PoNum(poNum, pageable).map(this::toResponse);
         }
         return partRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    /** Deletes a part record by ID. */
+    @Transactional
+    public void delete(Integer partId) {
+        Part part = partRepository.findById(partId)
+                .orElseThrow(() -> new IllegalArgumentException("Part not found."));
+        partRepository.delete(part);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "DELETE", "Part", String.valueOf(partId), "Deleted part #" + partId, null);
     }
 
     /** Returns a single part record by ID. */
@@ -108,6 +118,7 @@ public class PartService {
                 p.getQuantityType(),
                 p.getUnitPrice(),
                 p.getSupplier().getSupplierId(),
+                p.getSupplier().getName(),
                 p.getOrderDate(),
                 p.getPurchaseOrder().getPoNum(),
                 p.getStatus(),
