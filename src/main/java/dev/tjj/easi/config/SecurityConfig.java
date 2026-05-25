@@ -136,6 +136,8 @@ public class SecurityConfig {
                         .hasAnyRole("ADMIN", "CREW", "STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/vehicle-gas-logs", "/api/vehicle-gas-logs/**")
                         .hasAnyRole("ADMIN", "CREW", "STAFF")
+                        .requestMatchers("/api/maintenance/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/logs").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -14,11 +14,20 @@ import Employees from './Employees'
 import Schedules from './Schedules'
 import Vehicles from './Vehicles'
 import VehicleLogs from './VehicleLogs'
+import MaintenancePage from './MaintenancePage'
 
 /** Auth guard — defined outside App so its reference is stable across re-renders */
 function Private({ element }) {
   const { user } = useAuth()
   return user ? element : <Navigate to="/login" replace />
+}
+
+/** Auth + role guard — redirects to home if the user lacks the required role */
+function PrivateRole({ element, role }) {
+  const { user, hasRole } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  if (!hasRole(role)) return <Navigate to="/" replace />
+  return element
 }
 
 function App() {
@@ -41,6 +50,7 @@ function App() {
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />
       <Route path="/vehicles/:vehiclesId/logs" element={<Private element={<VehicleLogs />} />} />
       <Route path="/employees" element={<Private element={<Employees />} />} />
+      <Route path="/maintenance" element={<PrivateRole element={<MaintenancePage />} role="ADMIN" />} />
       <Route path="/account-settings" element={<Private element={<AccountSettings />} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
