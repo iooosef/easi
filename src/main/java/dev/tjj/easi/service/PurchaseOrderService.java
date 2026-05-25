@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import org.springframework.data.domain.PageRequest;
 
 /** Handles purchase order business logic: creation, updates, and retrieval. */
 @Service
@@ -43,14 +45,24 @@ public class PurchaseOrderService {
         this.logService = logService;
     }
 
+    /** Generates the next PO number for the current year in the format PO-YYYY-NNN. */
+    private String generatePoNum() {
+        int year = LocalDateTime.now().getYear();
+        String prefix = "PO-" + year + "-";
+        List<String> latest = purchaseOrderRepository.findLatestPoNumsByPrefix(prefix, PageRequest.of(0, 1));
+        int next = 1;
+        if (!latest.isEmpty()) {
+            String numPart = latest.get(0).substring(prefix.length());
+            try { next = Integer.parseInt(numPart) + 1; } catch (NumberFormatException ignored) {}
+        }
+        return prefix + String.format("%03d", next);
+    }
+
     /** Creates and persists a new purchase order record. */
     @Transactional
     public PurchaseOrderResponse add(PurchaseOrderRequest request) {
-        if (purchaseOrderRepository.existsById(request.poNum())) {
-            throw new IllegalArgumentException("Purchase order with this PO number already exists.");
-        }
         PurchaseOrder po = new PurchaseOrder();
-        po.setPoNum(request.poNum());
+        po.setPoNum(generatePoNum());
         applyRequest(po, request);
         po.setAddedOn(LocalDateTime.now());
         PurchaseOrder saved = purchaseOrderRepository.save(po);

@@ -6,8 +6,6 @@ import jakarta.validation.constraints.Size;
 
 public record PurchaseOrderRequest(
 
-        @NotBlank(message = "PO number is required")
-        @Size(max = 30, message = "PO number must not exceed 30 characters")
         String poNum,
 
         @NotNull(message = "Project number is required")

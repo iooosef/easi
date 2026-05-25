@@ -700,7 +700,7 @@ export default function ServiceReports() {
             state: { projectName: report.projectName, projNum: report.projNum },
           })
           if (key === 'purchase-order') navigate(`/service-report/${report.srNumber}/purchase-orders`, {
-            state: { projectName: report.projectName, srNumber: report.srNumber },
+            state: { projectName: report.projectName, srNumber: report.srNumber, projNum: report.projNum },
           })
         }}
       />

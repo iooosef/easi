@@ -3,7 +3,15 @@ import { useLocation, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
+import Modal from './Modal'
+import { notyfSuccess, notyfError } from './notyf'
 
+/** Parses a failed API response into field-level or general errors. */
+async function parseApiError(res) {
+  const data = await res.json().catch(() => ({}))
+  if (data.errors) return data.errors
+  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
+}
 const PO_MENU_ITEMS = []
 
 /** Returns badge class for part status */
@@ -321,6 +329,114 @@ export default function PurchaseOrders() {
   const location = useLocation()
   const srNumberInt = Number(srNumber)
   const projectName = location.state?.projectName ?? '...'
+  const projNum = location.state?.projNum ?? null
+
+  const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+
+  // Add PO modal
+  const EMPTY_FORM = { purpose: '', terms: '', paymentMethod: '', paymentDetails: '', deliveryAddress: '', remarks: '' }
+  const [addModalOpen, setAddModalOpen]   = useState(false)
+  const [form, setForm]                   = useState(EMPTY_FORM)
+  const [formError, setFormError]         = useState({})
+  const [submitting, setSubmitting]       = useState(false)
+
+  function openAddModal() { setForm(EMPTY_FORM); setFormError({}); setAddModalOpen(true) }
+  function closeAddModal() { setAddModalOpen(false); setForm(EMPTY_FORM); setFormError({}) }
+
+  function handleFormChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Update PO modal
+  const [editModalOpen, setEditModalOpen]   = useState(false)
+  const [editingPO, setEditingPO]           = useState(null)
+  const [editForm, setEditForm]             = useState(EMPTY_FORM)
+  const [editFormError, setEditFormError]   = useState({})
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
+  function openEditModal(o) {
+    setEditForm({
+      purpose:        o.purpose ?? '',
+      terms:          o.terms ?? '',
+      paymentMethod:  o.paymentMethod ?? '',
+      paymentDetails: o.paymentDetails ?? '',
+      deliveryAddress: o.deliveryAddress ?? '',
+      remarks:        o.remarks ?? '',
+    })
+    setEditingPO(o)
+    setEditFormError({})
+    setEditModalOpen(true)
+  }
+
+  function closeEditModal() {
+    setEditModalOpen(false)
+    setEditingPO(null)
+    setEditForm(EMPTY_FORM)
+    setEditFormError({})
+  }
+
+  function handleEditFormChange(e) {
+    const { name, value } = e.target
+    setEditForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleUpdateSubmit(e) {
+    e.preventDefault()
+    setEditFormError({})
+    setEditSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/purchase-orders/${editingPO.poNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...editForm,
+          poNum:   editingPO.poNum,
+          projNum: editingPO.projNum,
+          srNum:   editingPO.srNum,
+        }),
+      })
+      if (!res.ok) {
+        setEditFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeEditModal()
+      setTimeout(() => notyfSuccess(`Purchase Order "${editingPO.poNum}" updated successfully.`), 150)
+      setRefreshKey(k => k + 1)
+    } catch (err) {
+      setEditFormError({ _general: err.message })
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  async function handleAddSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/purchase-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, srNum: srNumberInt, projNum }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      closeAddModal()
+      setTimeout(() => notyfSuccess(`Purchase Order "${data.poNum}" created successfully.`), 150)
+      setPage(0)
+      setRefreshKey(k => k + 1)
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const [orders, setOrders]               = useState([])
   const [loading, setLoading]             = useState(true)
@@ -430,6 +546,18 @@ export default function PurchaseOrders() {
             {projectName} — View and manage purchase orders for this service report
           </p>
         </div>
+        <div className="flex gap-2 items-center h-full">
+          {canEdit && (
+            <button
+              type="button"
+              className="btn btn-primary h-full min-h-0"
+              onClick={openAddModal}
+            >
+              <span className="icon-[tabler--plus] size-4"></span>
+              New Purchase Order
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search bar */}
@@ -492,13 +620,34 @@ export default function PurchaseOrders() {
                         <p>Payment: {o.paymentMethod}</p>
                         <p>Added: {formatDate(o.addedOn)}</p>
                       </div>
-                      <div className="card-actions mt-2">
+                      <div className="card-actions mt-2 flex-col gap-2">
                         <button
-                          className="btn btn-soft btn-primary btn-sm flex-1"
+                          className="btn btn-soft btn-primary btn-sm w-full"
                           onClick={() => setSelectedOrder(o)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           View Details
+                        </button>
+                        <button
+                          className="btn btn-soft btn-secondary btn-sm w-full"
+                          onClick={() => openEditModal(o)}
+                        >
+                          <span className="icon-[tabler--pencil] size-4"></span>
+                          Update Purchase Order
+                        </button>
+                        <button
+                          className="btn btn-soft btn-secondary btn-sm w-full"
+                          onClick={() => {}}
+                        >
+                          <span className="icon-[tabler--package] size-4"></span>
+                          Manage Parts
+                        </button>
+                        <button
+                          className="btn btn-soft btn-secondary btn-sm w-full"
+                          onClick={() => {}}
+                        >
+                          <span className="icon-[tabler--address-book] size-4"></span>
+                          Manage Delivery Contacts
                         </button>
                       </div>
                     </div>
@@ -572,6 +721,180 @@ export default function PurchaseOrders() {
 
       {/* Contact Details Modal — sits above ManageMenu via higher z-index */}
       <ContactDetailsModal contact={selectedContact} onClose={() => setSelectedContact(null)} />
+
+      {/* Add Purchase Order Modal */}
+      <Modal
+        isOpen={addModalOpen}
+        onClose={closeAddModal}
+        title="New Purchase Order"
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAddModal}>
+              Cancel
+            </button>
+            <button type="submit" form="add-po-form" className="btn btn-primary" disabled={submitting}>
+              {submitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--plus] size-4"></span>
+              }
+              Add Purchase Order
+            </button>
+          </>
+        }
+      >
+        <form id="add-po-form" onSubmit={handleAddSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
+              <input type="text" name="purpose"
+                className={`input input-bordered w-full${formError.purpose ? ' is-invalid' : ''}`}
+                placeholder="e.g. Repair Parts" maxLength={30} required
+                value={form.purpose} onChange={handleFormChange} />
+              {formError.purpose && <span className="helper-text">{formError.purpose}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Terms <span className="text-error">*</span></label>
+              <input type="text" name="terms"
+                className={`input input-bordered w-full${formError.terms ? ' is-invalid' : ''}`}
+                placeholder="e.g. net30" maxLength={16} required
+                value={form.terms} onChange={handleFormChange} />
+              {formError.terms && <span className="helper-text">{formError.terms}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Method</label>
+              <input type="text" name="paymentMethod"
+                className={`input input-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
+                placeholder="e.g. cash" maxLength={16}
+                value={form.paymentMethod} onChange={handleFormChange} />
+              {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Details</label>
+              <input type="text" name="paymentDetails"
+                className={`input input-bordered w-full${formError.paymentDetails ? ' is-invalid' : ''}`}
+                placeholder="e.g. BDO #1234567890" maxLength={60}
+                value={form.paymentDetails} onChange={handleFormChange} />
+              {formError.paymentDetails && <span className="helper-text">{formError.paymentDetails}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Delivery Address</label>
+              <textarea name="deliveryAddress"
+                className={`textarea textarea-bordered w-full${formError.deliveryAddress ? ' is-invalid' : ''}`}
+                placeholder="Full delivery address" maxLength={600} rows={2}
+                value={form.deliveryAddress} onChange={handleFormChange} />
+              {formError.deliveryAddress && <span className="helper-text">{formError.deliveryAddress}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Remarks</label>
+              <textarea name="remarks"
+                className={`textarea textarea-bordered w-full${formError.remarks ? ' is-invalid' : ''}`}
+                placeholder="Optional notes" maxLength={255} rows={2}
+                value={form.remarks} onChange={handleFormChange} />
+              {formError.remarks && <span className="helper-text">{formError.remarks}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
+
+      {/* Update Purchase Order Modal */}
+      <Modal
+        isOpen={editModalOpen}
+        onClose={closeEditModal}
+        title={`Update ${editingPO?.poNum ?? 'Purchase Order'}`}
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
+              Cancel
+            </button>
+            <button type="submit" form="update-po-form" className="btn btn-primary" disabled={editSubmitting}>
+              {editSubmitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--device-floppy] size-4"></span>
+              }
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <form id="update-po-form" onSubmit={handleUpdateSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
+              <input type="text" name="purpose"
+                className={`input input-bordered w-full${editFormError.purpose ? ' is-invalid' : ''}`}
+                placeholder="e.g. Repair Parts" maxLength={30} required
+                value={editForm.purpose} onChange={handleEditFormChange} />
+              {editFormError.purpose && <span className="helper-text">{editFormError.purpose}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Terms <span className="text-error">*</span></label>
+              <input type="text" name="terms"
+                className={`input input-bordered w-full${editFormError.terms ? ' is-invalid' : ''}`}
+                placeholder="e.g. net30" maxLength={16} required
+                value={editForm.terms} onChange={handleEditFormChange} />
+              {editFormError.terms && <span className="helper-text">{editFormError.terms}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Method</label>
+              <input type="text" name="paymentMethod"
+                className={`input input-bordered w-full${editFormError.paymentMethod ? ' is-invalid' : ''}`}
+                placeholder="e.g. cash" maxLength={16}
+                value={editForm.paymentMethod} onChange={handleEditFormChange} />
+              {editFormError.paymentMethod && <span className="helper-text">{editFormError.paymentMethod}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Details</label>
+              <input type="text" name="paymentDetails"
+                className={`input input-bordered w-full${editFormError.paymentDetails ? ' is-invalid' : ''}`}
+                placeholder="e.g. BDO #1234567890" maxLength={60}
+                value={editForm.paymentDetails} onChange={handleEditFormChange} />
+              {editFormError.paymentDetails && <span className="helper-text">{editFormError.paymentDetails}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Delivery Address</label>
+              <textarea name="deliveryAddress"
+                className={`textarea textarea-bordered w-full${editFormError.deliveryAddress ? ' is-invalid' : ''}`}
+                placeholder="Full delivery address" maxLength={600} rows={2}
+                value={editForm.deliveryAddress} onChange={handleEditFormChange} />
+              {editFormError.deliveryAddress && <span className="helper-text">{editFormError.deliveryAddress}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Remarks</label>
+              <textarea name="remarks"
+                className={`textarea textarea-bordered w-full${editFormError.remarks ? ' is-invalid' : ''}`}
+                placeholder="Optional notes" maxLength={255} rows={2}
+                value={editForm.remarks} onChange={handleEditFormChange} />
+              {editFormError.remarks && <span className="helper-text">{editFormError.remarks}</span>}
+            </div>
+
+            {editFormError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{editFormError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
     </Layout>
   )
 }
