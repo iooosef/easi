@@ -1,0 +1,1032 @@
+import { useState, useEffect } from 'react'
+import { useAuth } from './auth'
+import Layout from './Layout'
+import Modal from './Modal'
+import SupplierPickerModal from './SupplierPickerModal'
+import PurchaseOrderPickerModal from './PurchaseOrderPickerModal'
+import { notyfSuccess, notyfError } from './notyf'
+
+/** Parses a failed API response into field-level or general errors. */
+async function parseApiError(res) {
+  const data = await res.json().catch(() => ({}))
+  if (data.errors) return data.errors
+  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
+}
+
+/** Returns badge class for part status */
+function partStatusBadge(status) {
+  if (status === 'received')  return 'badge-success'
+  if (status === 'cancelled') return 'badge-error'
+  if (status === 'used')      return 'badge-warning'
+  return 'badge-neutral'
+}
+
+/** Formats a datetime string to YYYY-MM-DD */
+function formatDate(dt) {
+  if (!dt) return '—'
+  return String(dt).slice(0, 10)
+}
+
+/** Formats a number as currency (PHP) */
+function formatCurrency(value) {
+  if (value == null) return '—'
+  return Number(value).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })
+}
+
+const PAGE_SIZE = 10
+const SUPPLIERS_PAGE_SIZE = 7
+
+const EMPTY_ADD_FORM      = { name: '', quantity: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
+const EMPTY_UPDATE_FORM   = { name: '', quantity: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
+const EMPTY_SUPPLIER_FORM = { name: '', address: '' }
+
+export default function Inventory() {
+  const { apiFetch, hasRole } = useAuth()
+  const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+
+  const [parts, setParts]               = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [error, setError]               = useState(null)
+  const [inputValue, setInputValue]     = useState('')  // live text in the box
+  const [search, setSearch]             = useState('')  // committed — sent to API
+  const [statusFilter, setStatusFilter] = useState('')  // applied immediately on change
+  const [page, setPage]                 = useState(0)
+  const [totalPages, setTotalPages]     = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [refreshKey, setRefreshKey]     = useState(0)
+
+  // Add Part modal
+  const [addOpen, setAddOpen]                   = useState(false)
+  const [addForm, setAddForm]                   = useState(EMPTY_ADD_FORM)
+  const [addFormError, setAddFormError]         = useState({})
+  const [addSubmitting, setAddSubmitting]       = useState(false)
+  const [addPoNum, setAddPoNum]                 = useState('')
+  const [addPoDisplay, setAddPoDisplay]         = useState('')
+  const [poPickerOpen, setPoPickerOpen]         = useState(false)
+  const [addSupplierDisplay, setAddSupplierDisplay]   = useState('')
+  const [addSupplierPickerOpen, setAddSupplierPickerOpen] = useState(false)
+
+  // Details modal
+  const [selectedPart, setSelectedPart] = useState(null)
+
+  // Update modal
+  const [updateOpen, setUpdateOpen]           = useState(false)
+  const [updatingPart, setUpdatingPart]       = useState(null)
+  const [updateForm, setUpdateForm]           = useState(EMPTY_UPDATE_FORM)
+  const [updateFormError, setUpdateFormError] = useState({})
+  const [updateSubmitting, setUpdateSubmitting] = useState(false)
+  const [supplierDisplay, setSupplierDisplay] = useState('')
+  const [supplierPickerOpen, setSupplierPickerOpen] = useState(false)
+
+  // Delete
+  const [deletingId, setDeletingId] = useState(null)
+
+  // Manage Suppliers modal
+  const [manageSuppliersOpen, setManageSuppliersOpen]           = useState(false)
+  const [manageSuppliers, setManageSuppliers]                   = useState([])
+  const [manageSuppliersLoading, setManageSuppliersLoading]     = useState(false)
+  const [manageSuppliersRefresh, setManageSuppliersRefresh]     = useState(0)
+  const [manageSuppliersPage, setManageSuppliersPage]           = useState(0)
+  const [addSupplierOpen, setAddSupplierOpen]                   = useState(false)
+  const [supplierForm, setSupplierForm]                         = useState(EMPTY_SUPPLIER_FORM)
+  const [supplierFormError, setSupplierFormError]               = useState({})
+  const [supplierFormSubmitting, setSupplierFormSubmitting]     = useState(false)
+
+  // Update Supplier sub-modal
+  const [updateSupplierOpen, setUpdateSupplierOpen]               = useState(false)
+  const [updatingSupplier, setUpdatingSupplier]                   = useState(null)
+  const [updateSupplierForm, setUpdateSupplierForm]               = useState({})
+  const [updateSupplierFormError, setUpdateSupplierFormError]     = useState({})
+  const [updateSupplierSubmitting, setUpdateSupplierSubmitting]   = useState(false)
+
+  /** Fetches all parts sorted by most recently added. */
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(PAGE_SIZE),
+      sort: 'addedOn,desc',
+    })
+    if (search) params.set('search', search)
+    if (statusFilter) params.set('status', statusFilter)
+    apiFetch(`/api/parts?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to load parts (${res.status})`)
+        return res.json()
+      })
+      .then(data => {
+        if (!active) return
+        setParts(data.content ?? [])
+        setTotalPages(data.totalPages ?? 0)
+        setTotalElements(data.totalElements ?? 0)
+      })
+      .catch(err => { if (active) setError(err.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, page, refreshKey, search, statusFilter])
+
+  /** Fetches suppliers whenever the Manage Suppliers modal is open. */
+  useEffect(() => {
+    if (!manageSuppliersOpen) { setManageSuppliers([]); return }
+    let active = true
+    setManageSuppliersLoading(true)
+    const params = new URLSearchParams({ page: '0', size: '100', sort: 'name,asc' })
+    apiFetch(`/api/suppliers?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setManageSuppliers(data.content ?? []) })
+      .catch(() => { if (active) setManageSuppliers([]) })
+      .finally(() => { if (active) setManageSuppliersLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, manageSuppliersOpen, manageSuppliersRefresh])
+
+  function openManageSuppliers() { setManageSuppliersOpen(true); setAddSupplierOpen(false); setManageSuppliersPage(0) }
+  function closeManageSuppliers() {
+    setManageSuppliersOpen(false)
+    setManageSuppliers([])
+    setAddSupplierOpen(false)
+    setSupplierForm(EMPTY_SUPPLIER_FORM)
+    setSupplierFormError({})
+  }
+
+  function handleSupplierFormChange(e) {
+    const { name, value } = e.target
+    setSupplierForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleAddSupplierSubmit(e) {
+    e.preventDefault()
+    setSupplierFormError({})
+    setSupplierFormSubmitting(true)
+    try {
+      const res = await apiFetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(supplierForm),
+      })
+      if (!res.ok) {
+        setSupplierFormError(await parseApiError(res))
+        notyfError('Add supplier failed')
+        return
+      }
+      setAddSupplierOpen(false)
+      setSupplierForm(EMPTY_SUPPLIER_FORM)
+      setSupplierFormError({})
+      notyfSuccess('Supplier added successfully.')
+      setManageSuppliersPage(0)
+      setManageSuppliersRefresh(k => k + 1)
+    } catch (err) {
+      setSupplierFormError({ _general: err.message })
+    } finally {
+      setSupplierFormSubmitting(false)
+    }
+  }
+
+  function openUpdateSupplier(s) {
+    setUpdateSupplierForm({ name: s.name, address: s.address })
+    setUpdatingSupplier(s)
+    setUpdateSupplierFormError({})
+    setUpdateSupplierOpen(true)
+  }
+
+  function closeUpdateSupplier() {
+    setUpdateSupplierOpen(false)
+    setUpdatingSupplier(null)
+    setUpdateSupplierForm({})
+    setUpdateSupplierFormError({})
+  }
+
+  function handleUpdateSupplierFormChange(e) {
+    const { name, value } = e.target
+    setUpdateSupplierForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleUpdateSupplierSubmit(e) {
+    e.preventDefault()
+    setUpdateSupplierFormError({})
+    setUpdateSupplierSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/suppliers/${updatingSupplier.supplierId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateSupplierForm),
+      })
+      if (!res.ok) {
+        setUpdateSupplierFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeUpdateSupplier()
+      notyfSuccess(`Supplier #${updatingSupplier.supplierId} updated successfully.`)
+      setManageSuppliersRefresh(k => k + 1)
+    } catch (err) {
+      setUpdateSupplierFormError({ _general: err.message })
+    } finally {
+      setUpdateSupplierSubmitting(false)
+    }
+  }
+
+  /** Opens the add modal with a blank form. */
+  function openAdd() {
+    setAddForm(EMPTY_ADD_FORM)
+    setAddFormError({})
+    setAddPoNum('')
+    setAddPoDisplay('')
+    setAddSupplierDisplay('')
+    setAddOpen(true)
+  }
+
+  function closeAdd() {
+    setAddOpen(false)
+    setAddForm(EMPTY_ADD_FORM)
+    setAddFormError({})
+    setAddPoNum('')
+    setAddPoDisplay('')
+    setAddSupplierDisplay('')
+  }
+
+  function handleAddFormChange(e) {
+    const { name, value } = e.target
+    setAddForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleAddSubmit(e) {
+    e.preventDefault()
+    setAddFormError({})
+    setAddSubmitting(true)
+    try {
+      const res = await apiFetch('/api/parts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...addForm,
+          quantity:   Number(addForm.quantity),
+          unitPrice:  Number(addForm.unitPrice),
+          supplierId: Number(addForm.supplierId),
+          poNum:      addPoNum,
+        }),
+      })
+      if (!res.ok) {
+        setAddFormError(await parseApiError(res))
+        notyfError('Add part failed')
+        return
+      }
+      closeAdd()
+      notyfSuccess('Part added successfully.')
+      setRefreshKey(k => k + 1)
+    } catch (err) {
+      setAddFormError({ _general: err.message })
+    } finally {
+      setAddSubmitting(false)
+    }
+  }
+
+  /** Commits the search input and resets to page 0. */
+  function commitSearch() {
+    setPage(0)
+    setSearch(inputValue)
+  }
+
+  /** Applies status filter immediately and resets to page 0. */
+  function applyStatusFilter(value) {
+    setPage(0)
+    setStatusFilter(value)
+  }
+
+  /** Opens the update modal pre-filled with the part's current values. */
+  function openUpdate(p) {
+    setUpdateForm({
+      name:         p.name,
+      quantity:     p.quantity,
+      quantityType: p.quantityType,
+      unitPrice:    p.unitPrice,
+      supplierId:   p.supplierId,
+      status:       p.status,
+    })
+    setSupplierDisplay(`${p.supplierName ?? 'Supplier'} (#${p.supplierId})`)
+    setUpdatingPart(p)
+    setUpdateFormError({})
+    setUpdateOpen(true)
+  }
+
+  function closeUpdate() {
+    setUpdateOpen(false)
+    setUpdatingPart(null)
+    setUpdateForm(EMPTY_UPDATE_FORM)
+    setUpdateFormError({})
+    setSupplierDisplay('')
+  }
+
+  function handleUpdateFormChange(e) {
+    const { name, value } = e.target
+    setUpdateForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleUpdateSubmit(e) {
+    e.preventDefault()
+    setUpdateFormError({})
+    setUpdateSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/parts/${updatingPart.partId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...updateForm,
+          quantity:   Number(updateForm.quantity),
+          unitPrice:  Number(updateForm.unitPrice),
+          supplierId: Number(updateForm.supplierId),
+          poNum:      updatingPart.poNum,
+          orderDate:  updatingPart.orderDate,
+        }),
+      })
+      if (!res.ok) {
+        setUpdateFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeUpdate()
+      notyfSuccess(`Part #${updatingPart.partId} updated successfully.`)
+      setRefreshKey(k => k + 1)
+    } catch (err) {
+      setUpdateFormError({ _general: err.message })
+    } finally {
+      setUpdateSubmitting(false)
+    }
+  }
+
+  return (
+    <Layout activePage="inventory">
+      {/* Header */}
+      <div className="flex items-stretch justify-between h-16 mb-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Inventory</h1>
+          <p className="text-base-content/60 mt-1">All parts across purchase orders, sorted by most recently added</p>
+        </div>
+        <div className="flex gap-2 items-center h-full">
+          {canEdit && (
+            <button
+              type="button"
+              className="btn btn-secondary h-full min-h-0"
+              onClick={openManageSuppliers}
+            >
+              <span className="icon-[tabler--building-store] size-4"></span>
+              Manage Suppliers
+            </button>
+          )}
+          {canEdit && (
+            <button
+              type="button"
+              className="btn btn-primary h-full min-h-0"
+              onClick={openAdd}
+            >
+              <span className="icon-[tabler--plus] size-4"></span>
+              Add Part
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Search + Filter */}
+      <div className="flex gap-2 mb-6">
+        <div className="relative flex-1">
+          <span className="icon-[tabler--search] size-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></span>
+          <input
+            type="text"
+            className="input input-bordered w-full pl-9"
+            placeholder="Search by name or PO number..."
+            value={inputValue}
+            onChange={e => setInputValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') commitSearch() }}
+          />
+        </div>
+        <button type="button" className="btn btn-secondary shrink-0" onClick={commitSearch}>
+          <span className="icon-[tabler--search] size-4"></span>
+          Search
+        </button>
+        <div className="dropdown relative inline-flex shrink-0">
+          <button id="status-filter-dropdown" type="button" className="dropdown-toggle btn btn-secondary" aria-haspopup="menu" aria-expanded="false" aria-label="Filter by status">
+            <span className="icon-[tabler--filter] size-4"></span>
+            {statusFilter || 'All Status'}
+            <span className="icon-[tabler--chevron-down] dropdown-open:rotate-180 size-4"></span>
+          </button>
+          <ul className="dropdown-menu dropdown-open:opacity-100 hidden min-w-40" role="menu" aria-orientation="vertical" aria-labelledby="status-filter-dropdown">
+            <li><a className={`dropdown-item${statusFilter === '' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('') }}>All Status</a></li>
+            <li><a className={`dropdown-item${statusFilter === 'ordered' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('ordered') }}>ordered</a></li>
+            <li><a className={`dropdown-item${statusFilter === 'received' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('received') }}>received</a></li>
+            <li><a className={`dropdown-item${statusFilter === 'cancelled' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('cancelled') }}>cancelled</a></li>
+            <li><a className={`dropdown-item${statusFilter === 'used' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('used') }}>used</a></li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-20">
+          <span className="loading loading-spinner loading-lg text-primary"></span>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="alert alert-error">
+          <span className="icon-[tabler--alert-circle] size-5"></span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && !error && (
+        <>
+          <p className="text-sm text-base-content/50 mb-3">
+            {totalElements} part{totalElements !== 1 ? 's' : ''} total
+            {search && ` · "${search}"`}
+            {statusFilter && ` · ${statusFilter}`}
+          </p>
+
+          {parts.length === 0 ? (
+            <div className="text-center py-20 text-base-content/40">
+              <span className="icon-[tabler--package-off] size-12 mx-auto mb-3 block"></span>
+              <p>No parts found.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+              <table className="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>PO Number</th>
+                    <th>Name</th>
+                    <th>Quantity</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parts.map(p => (
+                    <tr key={p.partId}>
+                      <td className="font-mono font-semibold">{p.partId}</td>
+                      <td className="font-mono text-sm">{p.poNum}</td>
+                      <td className="max-w-56">
+                        <span className="line-clamp-1 text-sm" title={p.name}>{p.name}</span>
+                      </td>
+                      <td className="text-sm">{p.quantity} {p.quantityType}</td>
+                      <td>
+                        <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>
+                          {p.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex gap-1">
+                          <button
+                            className="btn btn-soft btn-primary btn-sm"
+                            onClick={() => setSelectedPart(p)}
+                          >
+                            <span className="icon-[tabler--info-circle] size-4"></span>
+                            Details
+                          </button>
+                          {canEdit && (
+                            <>
+                              <button
+                                className="btn btn-soft btn-secondary btn-sm"
+                                onClick={() => openUpdate(p)}
+                              >
+                                <span className="icon-[tabler--pencil] size-4"></span>
+                                Update
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-8">
+              <button className="btn btn-sm btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+                <span className="icon-[tabler--chevron-left] size-4"></span>
+                Prev
+              </button>
+              <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
+              <button className="btn btn-sm btn-ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+                Next
+                <span className="icon-[tabler--chevron-right] size-4"></span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Part Details Modal */}
+      {selectedPart && (
+        <>
+          <div className="fixed inset-0 bg-base-300/60 z-40" onClick={() => setSelectedPart(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Part #{selectedPart.partId}</h3>
+                  <span className="text-sm text-base-content/50">{selectedPart.name}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={() => setSelectedPart(null)}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Part ID</span>
+                    <span className="text-sm font-medium font-mono">{selectedPart.partId}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Status</span>
+                    <span className={`badge badge-soft ${partStatusBadge(selectedPart.status)} text-xs w-fit`}>{selectedPart.status}</span>
+                  </div>
+                  <div className="col-span-2 flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
+                    <span className="text-sm font-medium">{selectedPart.name}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Quantity</span>
+                    <span className="text-sm font-medium">{selectedPart.quantity} {selectedPart.quantityType}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Unit Price</span>
+                    <span className="text-sm font-medium">{formatCurrency(selectedPart.unitPrice)}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Subtotal</span>
+                    <span className="text-sm font-medium text-primary">{formatCurrency(Number(selectedPart.quantity) * Number(selectedPart.unitPrice ?? 0))}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Supplier</span>
+                    <span className="text-sm font-medium">({selectedPart.supplierId}) {selectedPart.supplierName ?? '—'}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Order Date</span>
+                    <span className="text-sm font-medium">{formatDate(selectedPart.orderDate)}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
+                    <span className="text-sm font-medium font-mono">{selectedPart.poNum}</span>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Added On</span>
+                    <span className="text-sm font-medium">{formatDate(selectedPart.addedOn)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Update Part Modal */}
+      <Modal
+        isOpen={updateOpen}
+        onClose={closeUpdate}
+        title={`Update Part #${updatingPart?.partId ?? ''}`}
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdate}>
+              Cancel
+            </button>
+            <button type="submit" form="inventory-update-form" className="btn btn-primary" disabled={updateSubmitting}>
+              {updateSubmitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--device-floppy] size-4"></span>
+              }
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <form id="inventory-update-form" onSubmit={handleUpdateSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" name="name"
+                className={`input input-bordered w-full${updateFormError.name ? ' is-invalid' : ''}`}
+                maxLength={255} required
+                value={updateForm.name} onChange={handleUpdateFormChange} />
+              {updateFormError.name && <span className="helper-text">{updateFormError.name}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" name="quantity" min={0}
+                className={`input input-bordered w-full${updateFormError.quantity ? ' is-invalid' : ''}`}
+                required value={updateForm.quantity} onChange={handleUpdateFormChange} />
+              {updateFormError.quantity && <span className="helper-text">{updateFormError.quantity}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+              <input type="text" name="quantityType" maxLength={30}
+                className={`input input-bordered w-full${updateFormError.quantityType ? ' is-invalid' : ''}`}
+                required value={updateForm.quantityType} onChange={handleUpdateFormChange} />
+              {updateFormError.quantityType && <span className="helper-text">{updateFormError.quantityType}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" name="unitPrice" min={0} step="0.01"
+                className={`input input-bordered w-full${updateFormError.unitPrice ? ' is-invalid' : ''}`}
+                required value={updateForm.unitPrice} onChange={handleUpdateFormChange} />
+              {updateFormError.unitPrice && <span className="helper-text">{updateFormError.unitPrice}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${updateFormError.supplierId ? ' is-invalid' : ''}`}
+                  placeholder="No supplier selected"
+                  value={supplierDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => setSupplierPickerOpen(true)}>
+                  Pick
+                </button>
+              </div>
+              {updateFormError.supplierId && <span className="helper-text">{updateFormError.supplierId}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status"
+                className={`select select-bordered w-full${updateFormError.status ? ' is-invalid' : ''}`}
+                value={updateForm.status} onChange={handleUpdateFormChange}>
+                <option value="ordered">ordered</option>
+                <option value="received">received</option>
+                <option value="cancelled">cancelled</option>
+                <option value="used">used</option>
+              </select>
+              {updateFormError.status && <span className="helper-text">{updateFormError.status}</span>}
+            </div>
+
+            {updateFormError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{updateFormError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
+
+      {/* Supplier Picker — for Update form */}
+      <SupplierPickerModal
+        isOpen={supplierPickerOpen}
+        onClose={() => setSupplierPickerOpen(false)}
+        onSelect={s => {
+          setUpdateForm(prev => ({ ...prev, supplierId: s.supplierId }))
+          setSupplierDisplay(`${s.name} (#${s.supplierId})`)
+          setSupplierPickerOpen(false)
+        }}
+      />
+
+      {/* Add Part Modal */}
+      <Modal
+        isOpen={addOpen}
+        onClose={closeAdd}
+        title="Add Part"
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAdd}>
+              Cancel
+            </button>
+            <button type="submit" form="inventory-add-form" className="btn btn-primary" disabled={addSubmitting}>
+              {addSubmitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--plus] size-4"></span>
+              }
+              Add Part
+            </button>
+          </>
+        }
+      >
+        <form id="inventory-add-form" onSubmit={handleAddSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Purchase Order <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${addFormError.poNum ? ' is-invalid' : ''}`}
+                  placeholder="No purchase order selected"
+                  value={addPoDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => setPoPickerOpen(true)}>
+                  Pick
+                </button>
+              </div>
+              {addFormError.poNum && <span className="helper-text">{addFormError.poNum}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" name="name"
+                className={`input input-bordered w-full${addFormError.name ? ' is-invalid' : ''}`}
+                placeholder="e.g. Compressor Unit" maxLength={255} required
+                value={addForm.name} onChange={handleAddFormChange} />
+              {addFormError.name && <span className="helper-text">{addFormError.name}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" name="quantity" min={0}
+                className={`input input-bordered w-full${addFormError.quantity ? ' is-invalid' : ''}`}
+                placeholder="e.g. 2" required
+                value={addForm.quantity} onChange={handleAddFormChange} />
+              {addFormError.quantity && <span className="helper-text">{addFormError.quantity}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+              <input type="text" name="quantityType" maxLength={30}
+                className={`input input-bordered w-full${addFormError.quantityType ? ' is-invalid' : ''}`}
+                placeholder="e.g. pcs" required
+                value={addForm.quantityType} onChange={handleAddFormChange} />
+              {addFormError.quantityType && <span className="helper-text">{addFormError.quantityType}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" name="unitPrice" min={0} step="0.01"
+                className={`input input-bordered w-full${addFormError.unitPrice ? ' is-invalid' : ''}`}
+                placeholder="e.g. 1500.00" required
+                value={addForm.unitPrice} onChange={handleAddFormChange} />
+              {addFormError.unitPrice && <span className="helper-text">{addFormError.unitPrice}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${addFormError.supplierId ? ' is-invalid' : ''}`}
+                  placeholder="No supplier selected"
+                  value={addSupplierDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => setAddSupplierPickerOpen(true)}>
+                  Pick
+                </button>
+              </div>
+              {addFormError.supplierId && <span className="helper-text">{addFormError.supplierId}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status"
+                className={`select select-bordered w-full${addFormError.status ? ' is-invalid' : ''}`}
+                value={addForm.status} onChange={handleAddFormChange}>
+                <option value="ordered">ordered</option>
+                <option value="received">received</option>
+                <option value="cancelled">cancelled</option>
+                <option value="used">used</option>
+              </select>
+              {addFormError.status && <span className="helper-text">{addFormError.status}</span>}
+            </div>
+
+            {addFormError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{addFormError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
+
+      {/* Purchase Order Picker — for Add Part form */}
+      <PurchaseOrderPickerModal
+        isOpen={poPickerOpen}
+        onClose={() => setPoPickerOpen(false)}
+        onSelect={o => {
+          setAddPoNum(o.poNum)
+          setAddPoDisplay(`${o.poNum} — ${o.purpose ?? ''}`)
+          setPoPickerOpen(false)
+        }}
+      />
+
+      {/* Supplier Picker — for Add Part form */}
+      <SupplierPickerModal
+        isOpen={addSupplierPickerOpen}
+        onClose={() => setAddSupplierPickerOpen(false)}
+        onSelect={s => {
+          setAddForm(prev => ({ ...prev, supplierId: s.supplierId }))
+          setAddSupplierDisplay(`${s.name} (#${s.supplierId})`)
+          setAddSupplierPickerOpen(false)
+        }}
+      />
+
+      {/* Manage Suppliers Modal */}
+      <Modal
+        isOpen={manageSuppliersOpen}
+        onClose={addSupplierOpen ? undefined : closeManageSuppliers}
+        hideClose={addSupplierOpen}
+        title="Manage Suppliers"
+        size="max-w-3xl"
+        footer={!addSupplierOpen && (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageSuppliers}>
+            Close
+          </button>
+        )}
+      >
+        {addSupplierOpen ? (
+          <form onSubmit={handleAddSupplierSubmit}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+              <div className="sm:col-span-2 flex flex-col gap-1">
+                <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+                <input type="text" name="name"
+                  className={`input input-bordered w-full${supplierFormError.name ? ' is-invalid' : ''}`}
+                  placeholder="e.g. ABC Industrial Supply" maxLength={120} required
+                  value={supplierForm.name} onChange={handleSupplierFormChange} />
+                {supplierFormError.name && <span className="helper-text">{supplierFormError.name}</span>}
+              </div>
+
+              <div className="sm:col-span-2 flex flex-col gap-1">
+                <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+                <textarea name="address"
+                  className={`textarea textarea-bordered w-full${supplierFormError.address ? ' is-invalid' : ''}`}
+                  placeholder="Full address" maxLength={600} rows={3} required
+                  value={supplierForm.address} onChange={handleSupplierFormChange} />
+                {supplierFormError.address && <span className="helper-text">{supplierFormError.address}</span>}
+              </div>
+
+              {supplierFormError._general && (
+                <div className="sm:col-span-2 alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{supplierFormError._general}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-soft btn-secondary btn-sm"
+                onClick={() => { setAddSupplierOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={supplierFormSubmitting}>
+                {supplierFormSubmitting
+                  ? <span className="loading loading-spinner loading-xs"></span>
+                  : <span className="icon-[tabler--plus] size-4"></span>
+                }
+                Add Supplier
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="flex justify-end mb-3">
+              <button type="button" className="btn btn-primary btn-sm"
+                onClick={() => { setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}); setAddSupplierOpen(true) }}>
+                <span className="icon-[tabler--plus] size-4"></span>
+                Add Supplier
+              </button>
+            </div>
+
+            {manageSuppliersLoading ? (
+              <div className="flex justify-center py-6">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+              </div>
+            ) : manageSuppliers.length === 0 ? (
+              <div className="text-center py-6 text-base-content/40 text-sm">
+                No suppliers found.
+              </div>
+            ) : (() => {
+              const totalSupplierPages = Math.ceil(manageSuppliers.length / SUPPLIERS_PAGE_SIZE)
+              const pageSuppliers = manageSuppliers.slice(
+                manageSuppliersPage * SUPPLIERS_PAGE_SIZE,
+                (manageSuppliersPage + 1) * SUPPLIERS_PAGE_SIZE
+              )
+              return (
+                <div className="flex flex-col gap-2">
+                  <div className="overflow-x-auto rounded-box border border-base-300">
+                    <table className="table table-zebra table-sm w-full">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Name</th>
+                          <th>Address</th>
+                          <th>Added On</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pageSuppliers.map(s => (
+                          <tr key={s.supplierId}>
+                            <td className="font-mono text-xs">{s.supplierId}</td>
+                            <td className="text-sm font-medium max-w-40">
+                              <span className="line-clamp-1" title={s.name}>{s.name}</span>
+                            </td>
+                            <td className="text-sm max-w-56">
+                              <span className="line-clamp-1 text-base-content/70" title={s.address}>{s.address}</span>
+                            </td>
+                            <td className="text-sm">{formatDate(s.addedOn)}</td>
+                            <td>
+                              <button
+                                className="btn btn-soft btn-secondary btn-xs"
+                                onClick={() => openUpdateSupplier(s)}
+                              >
+                                <span className="icon-[tabler--pencil] size-3"></span>
+                                Update
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {totalSupplierPages > 1 && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-base-content/50">
+                        Page {manageSuppliersPage + 1} of {totalSupplierPages} · {manageSuppliers.length} supplier{manageSuppliers.length !== 1 ? 's' : ''}
+                      </span>
+                      <div className="flex gap-1">
+                        <button className="btn btn-xs btn-ghost" disabled={manageSuppliersPage === 0} onClick={() => setManageSuppliersPage(p => p - 1)}>
+                          <span className="icon-[tabler--chevron-left] size-3"></span>
+                        </button>
+                        <button className="btn btn-xs btn-ghost" disabled={manageSuppliersPage >= totalSupplierPages - 1} onClick={() => setManageSuppliersPage(p => p + 1)}>
+                          <span className="icon-[tabler--chevron-right] size-3"></span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </>
+        )}
+      </Modal>
+
+      {/* Update Supplier Sub-modal — sits above Manage Suppliers via higher z-index */}
+      {updateSupplierOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdateSupplier} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-md shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Update Supplier #{updatingSupplier?.supplierId}</h3>
+                  <span className="text-sm text-base-content/50">{updatingSupplier?.name}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdateSupplier}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="update-supplier-form" onSubmit={handleUpdateSupplierSubmit}>
+                  <div className="flex flex-col gap-4">
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+                      <input type="text" name="name"
+                        className={`input input-bordered w-full${updateSupplierFormError.name ? ' is-invalid' : ''}`}
+                        maxLength={120} required
+                        value={updateSupplierForm.name} onChange={handleUpdateSupplierFormChange} />
+                      {updateSupplierFormError.name && <span className="helper-text">{updateSupplierFormError.name}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+                      <textarea name="address"
+                        className={`textarea textarea-bordered w-full${updateSupplierFormError.address ? ' is-invalid' : ''}`}
+                        maxLength={600} rows={3} required
+                        value={updateSupplierForm.address} onChange={handleUpdateSupplierFormChange} />
+                      {updateSupplierFormError.address && <span className="helper-text">{updateSupplierFormError.address}</span>}
+                    </div>
+
+                    {updateSupplierFormError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{updateSupplierFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdateSupplier}>
+                  Cancel
+                </button>
+                <button type="submit" form="update-supplier-form" className="btn btn-primary" disabled={updateSupplierSubmitting}>
+                  {updateSupplierSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--device-floppy] size-4"></span>
+                  }
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </Layout>
+  )
+}

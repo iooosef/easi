@@ -61,12 +61,14 @@ public class PartService {
         return toResponse(saved);
     }
 
-    /** Returns a page of part records, optionally filtered by purchase order number. */
-    public Page<PartResponse> getAll(String poNum, Pageable pageable) {
+    /** Returns a page of part records, optionally filtered by PO number, search term, or status. */
+    public Page<PartResponse> getAll(String poNum, String search, String status, Pageable pageable) {
         if (poNum != null && !poNum.isBlank()) {
             return partRepository.findByPurchaseOrder_PoNum(poNum, pageable).map(this::toResponse);
         }
-        return partRepository.findAll(pageable).map(this::toResponse);
+        String searchVal = (search != null && !search.isBlank()) ? search : null;
+        String statusVal = (status != null && !status.isBlank()) ? status : null;
+        return partRepository.search(searchVal, statusVal, pageable).map(this::toResponse);
     }
 
     /** Deletes a part record by ID. */

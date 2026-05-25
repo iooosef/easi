@@ -19,6 +19,7 @@ const PO_MENU_ITEMS = []
 function partStatusBadge(status) {
   if (status === 'received')  return 'badge-success'
   if (status === 'cancelled') return 'badge-error'
+  if (status === 'used')      return 'badge-warning'
   return 'badge-neutral'
 }
 
@@ -1172,6 +1173,7 @@ export default function PurchaseOrders() {
                   <option value="ordered">ordered</option>
                   <option value="received">received</option>
                   <option value="cancelled">cancelled</option>
+                  <option value="used">used</option>
                 </select>
                 {partFormError.status && <span className="helper-text">{partFormError.status}</span>}
               </div>
