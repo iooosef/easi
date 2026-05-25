@@ -60,6 +60,15 @@ public class PurchaseOrderDeliveryContactService {
         return contactRepository.findAll(pageable).map(this::toResponse);
     }
 
+    /** Deletes a purchase order delivery contact record by ID. */
+    @Transactional
+    public void delete(Integer poContactNum) {
+        PurchaseOrderDeliveryContact contact = contactRepository.findById(poContactNum)
+                .orElseThrow(() -> new IllegalArgumentException("Purchase order delivery contact not found."));
+        contactRepository.delete(contact);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "DELETE", "PurchaseOrderDeliveryContact", String.valueOf(poContactNum), "Deleted PO delivery contact #" + poContactNum, null);
+    }
+
     /** Returns a single purchase order delivery contact record by ID. */
     public PurchaseOrderDeliveryContactResponse getById(Integer poContactNum) {
         return contactRepository.findById(poContactNum)

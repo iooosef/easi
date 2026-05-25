@@ -567,6 +567,136 @@ export default function PurchaseOrders() {
     }
   }
 
+  // Manage Delivery Contacts modal
+  const EMPTY_CONTACT_FORM = { contactName: '', contactNumber: '' }
+  const [manageContactsOpen, setManageContactsOpen]       = useState(false)
+  const [manageContactsOrder, setManageContactsOrder]     = useState(null)
+  const [manageContacts, setManageContacts]               = useState([])
+  const [manageContactsLoading, setManageContactsLoading] = useState(false)
+  const [manageContactsRefresh, setManageContactsRefresh] = useState(0)
+  const [addContactOpen, setAddContactOpen]               = useState(false)
+  const [contactForm, setContactForm]                     = useState(EMPTY_CONTACT_FORM)
+  const [contactFormError, setContactFormError]           = useState({})
+  const [contactFormSubmitting, setContactFormSubmitting] = useState(false)
+  const [deletingContactId, setDeletingContactId]         = useState(null)
+
+  // Update Contact sub-modal
+  const [updateContactOpen, setUpdateContactOpen]           = useState(false)
+  const [updatingContact, setUpdatingContact]               = useState(null)
+  const [updateContactForm, setUpdateContactForm]           = useState({})
+  const [updateContactFormError, setUpdateContactFormError] = useState({})
+  const [updateContactSubmitting, setUpdateContactSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (!manageContactsOpen || !manageContactsOrder) { setManageContacts([]); return }
+    let active = true
+    setManageContactsLoading(true)
+    const params = new URLSearchParams({ poNum: manageContactsOrder.poNum, size: '100', sort: 'poContactNum,asc' })
+    apiFetch(`/api/purchase-order-delivery-contacts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setManageContacts(data.content ?? []) })
+      .catch(() => { if (active) setManageContacts([]) })
+      .finally(() => { if (active) setManageContactsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, manageContactsOpen, manageContactsOrder, manageContactsRefresh])
+
+  function openManageContacts(o) { setManageContactsOrder(o); setManageContactsOpen(true); setAddContactOpen(false) }
+  function closeManageContacts() { setManageContactsOpen(false); setManageContactsOrder(null); setManageContacts([]); setAddContactOpen(false); setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}) }
+
+  function handleContactFormChange(e) {
+    const { name, value } = e.target
+    setContactForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleAddContactSubmit(e) {
+    e.preventDefault()
+    setContactFormError({})
+    setContactFormSubmitting(true)
+    try {
+      const res = await apiFetch('/api/purchase-order-delivery-contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...contactForm, poNum: manageContactsOrder.poNum }),
+      })
+      if (!res.ok) {
+        setContactFormError(await parseApiError(res))
+        notyfError('Add contact failed')
+        return
+      }
+      setAddContactOpen(false)
+      setContactForm(EMPTY_CONTACT_FORM)
+      setContactFormError({})
+      notyfSuccess('Delivery contact added successfully.')
+      setManageContactsRefresh(k => k + 1)
+    } catch (err) {
+      setContactFormError({ _general: err.message })
+    } finally {
+      setContactFormSubmitting(false)
+    }
+  }
+
+  function openUpdateContact(c) {
+    setUpdateContactForm({ contactName: c.contactName, contactNumber: c.contactNumber })
+    setUpdatingContact(c)
+    setUpdateContactFormError({})
+    setUpdateContactOpen(true)
+  }
+
+  function closeUpdateContact() {
+    setUpdateContactOpen(false)
+    setUpdatingContact(null)
+    setUpdateContactForm({})
+    setUpdateContactFormError({})
+  }
+
+  function handleUpdateContactFormChange(e) {
+    const { name, value } = e.target
+    setUpdateContactForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleUpdateContactSubmit(e) {
+    e.preventDefault()
+    setUpdateContactFormError({})
+    setUpdateContactSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/purchase-order-delivery-contacts/${updatingContact.poContactNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updateContactForm, poNum: updatingContact.poNum }),
+      })
+      if (!res.ok) {
+        setUpdateContactFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeUpdateContact()
+      notyfSuccess(`Contact #${updatingContact.poContactNum} updated successfully.`)
+      setManageContactsRefresh(k => k + 1)
+    } catch (err) {
+      setUpdateContactFormError({ _general: err.message })
+    } finally {
+      setUpdateContactSubmitting(false)
+    }
+  }
+
+  async function handleDeleteContact(poContactNum) {
+    setDeletingContactId(poContactNum)
+    try {
+      const res = await apiFetch(`/api/purchase-order-delivery-contacts/${poContactNum}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        notyfError(data.error ?? data.message ?? 'Delete failed')
+        return
+      }
+      notyfSuccess(`Contact #${poContactNum} deleted.`)
+      setManageContactsRefresh(k => k + 1)
+    } catch {
+      notyfError('Delete failed — server error')
+    } finally {
+      setDeletingContactId(null)
+    }
+  }
+
   async function handleAddSubmit(e) {
     e.preventDefault()
     setFormError({})
@@ -800,7 +930,7 @@ export default function PurchaseOrders() {
                         </button>
                         <button
                           className="btn btn-soft btn-secondary btn-sm w-full"
-                          onClick={() => {}}
+                          onClick={() => openManageContacts(o)}
                         >
                           <span className="icon-[tabler--address-book] size-4"></span>
                           Manage Delivery Contacts
@@ -1246,6 +1376,200 @@ export default function PurchaseOrders() {
                 </button>
                 <button type="submit" form="update-part-form" className="btn btn-primary" disabled={updatePartSubmitting}>
                   {updatePartSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--device-floppy] size-4"></span>
+                  }
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Manage Delivery Contacts Modal */}
+      <Modal
+        isOpen={manageContactsOpen}
+        onClose={addContactOpen ? undefined : closeManageContacts}
+        hideClose={addContactOpen}
+        title={`Delivery Contacts — ${manageContactsOrder?.poNum ?? ''}`}
+        size="max-w-2xl"
+        footer={!addContactOpen && (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageContacts}>
+            Close
+          </button>
+        )}
+      >
+        {addContactOpen ? (
+          <form onSubmit={handleAddContactSubmit}>
+            <div className="flex flex-col gap-4 mb-4">
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+                <input type="text" name="contactName"
+                  className={`input input-bordered w-full${contactFormError.contactName ? ' is-invalid' : ''}`}
+                  placeholder="e.g. Juan Dela Cruz" maxLength={300} required
+                  value={contactForm.contactName} onChange={handleContactFormChange} />
+                {contactFormError.contactName && <span className="helper-text">{contactFormError.contactName}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+                <input type="text" name="contactNumber"
+                  className={`input input-bordered w-full${contactFormError.contactNumber ? ' is-invalid' : ''}`}
+                  placeholder="e.g. 09171234567" maxLength={16} required
+                  value={contactForm.contactNumber} onChange={handleContactFormChange} />
+                {contactFormError.contactNumber && <span className="helper-text">{contactFormError.contactNumber}</span>}
+              </div>
+
+              {contactFormError._general && (
+                <div className="alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{contactFormError._general}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-soft btn-secondary btn-sm"
+                onClick={() => { setAddContactOpen(false); setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}) }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={contactFormSubmitting}>
+                {contactFormSubmitting
+                  ? <span className="loading loading-spinner loading-xs"></span>
+                  : <span className="icon-[tabler--plus] size-4"></span>
+                }
+                Add Contact
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="flex justify-end mb-3">
+              <button type="button" className="btn btn-primary btn-sm"
+                onClick={() => { setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}); setAddContactOpen(true) }}>
+                <span className="icon-[tabler--plus] size-4"></span>
+                Add Contact
+              </button>
+            </div>
+
+            {manageContactsLoading ? (
+              <div className="flex justify-center py-6">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+              </div>
+            ) : manageContacts.length === 0 ? (
+              <div className="text-center py-6 text-base-content/40 text-sm">
+                No delivery contacts linked to this purchase order.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-box border border-base-300">
+                <table className="table table-zebra table-sm w-full">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Contact Name</th>
+                      <th>Contact Number</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {manageContacts.map(c => (
+                      <tr key={c.poContactNum}>
+                        <td className="font-mono text-xs">{c.poContactNum}</td>
+                        <td className="text-sm">{c.contactName}</td>
+                        <td className="text-sm">{c.contactNumber}</td>
+                        <td>
+                          <div className="flex gap-1">
+                            <button
+                              className="btn btn-soft btn-primary btn-xs"
+                              onClick={() => setSelectedContact(c)}
+                            >
+                              <span className="icon-[tabler--info-circle] size-3"></span>
+                              Details
+                            </button>
+                            <button
+                              className="btn btn-soft btn-secondary btn-xs"
+                              onClick={() => openUpdateContact(c)}
+                            >
+                              <span className="icon-[tabler--pencil] size-3"></span>
+                              Update
+                            </button>
+                            <button
+                              className="btn btn-soft btn-error btn-xs"
+                              disabled={deletingContactId === c.poContactNum}
+                              onClick={() => handleDeleteContact(c.poContactNum)}
+                            >
+                              {deletingContactId === c.poContactNum
+                                ? <span className="loading loading-spinner loading-xs"></span>
+                                : <span className="icon-[tabler--trash] size-3"></span>
+                              }
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* Update Contact Sub-modal — sits above Manage Contacts via higher z-index */}
+      {updateContactOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdateContact} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Update Contact #{updatingContact?.poContactNum}</h3>
+                  <span className="text-sm text-base-content/50">{updatingContact?.contactName}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdateContact}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="update-contact-form" onSubmit={handleUpdateContactSubmit}>
+                  <div className="flex flex-col gap-4">
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+                      <input type="text" name="contactName"
+                        className={`input input-bordered w-full${updateContactFormError.contactName ? ' is-invalid' : ''}`}
+                        maxLength={300} required
+                        value={updateContactForm.contactName} onChange={handleUpdateContactFormChange} />
+                      {updateContactFormError.contactName && <span className="helper-text">{updateContactFormError.contactName}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+                      <input type="text" name="contactNumber"
+                        className={`input input-bordered w-full${updateContactFormError.contactNumber ? ' is-invalid' : ''}`}
+                        maxLength={16} required
+                        value={updateContactForm.contactNumber} onChange={handleUpdateContactFormChange} />
+                      {updateContactFormError.contactNumber && <span className="helper-text">{updateContactFormError.contactNumber}</span>}
+                    </div>
+
+                    {updateContactFormError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{updateContactFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdateContact}>
+                  Cancel
+                </button>
+                <button type="submit" form="update-contact-form" className="btn btn-primary" disabled={updateContactSubmitting}>
+                  {updateContactSubmitting
                     ? <span className="loading loading-spinner loading-sm"></span>
                     : <span className="icon-[tabler--device-floppy] size-4"></span>
                   }

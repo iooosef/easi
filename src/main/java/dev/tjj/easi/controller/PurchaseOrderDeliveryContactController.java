@@ -51,4 +51,11 @@ public class PurchaseOrderDeliveryContactController {
     public ResponseEntity<PurchaseOrderDeliveryContactResponse> getById(@PathVariable Integer poContactNum) {
         return ResponseEntity.ok(contactService.getById(poContactNum));
     }
+
+    /** Deletes a purchase order delivery contact by ID. Restricted to ADMIN, ACCOUNTING, and STAFF. */
+    @DeleteMapping("/{poContactNum}")
+    public ResponseEntity<Void> delete(@PathVariable Integer poContactNum) {
+        contactService.delete(poContactNum);
+        return ResponseEntity.noContent().build();
+    }
 }
