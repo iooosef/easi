@@ -62,6 +62,11 @@ public class VehicleGasLogService {
         return gasLogRepository.findAll(pageable).map(this::toResponse);
     }
 
+    /** Returns a page of gas log records filtered by vehicle log ID. */
+    public Page<VehicleGasLogResponse> getByVehicleLogId(Integer vehicleLogId, Pageable pageable) {
+        return gasLogRepository.findByVehicleLogVehicleLogId(vehicleLogId, pageable).map(this::toResponse);
+    }
+
     /** Returns a single vehicle gas log record by ID. */
     public VehicleGasLogResponse getById(Integer gasLogId) {
         return gasLogRepository.findById(gasLogId)

@@ -2,15 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import ManageMenu from './ManageMenu'
 import Modal from './Modal'
 import { notyfSuccess, notyfError } from './notyf'
-
-const VEHICLE_MENU_ITEMS = [
-  { key: 'update',     label: 'Update Vehicle',       icon: 'icon-[tabler--pencil]',      roles: ['ADMIN', 'STAFF'] },
-  { key: 'logs',       label: 'Manage Vehicle Logs',  icon: 'icon-[tabler--road]',         roles: null },
-  { key: 'gas-logs',   label: 'Manage Gas Logs',      icon: 'icon-[tabler--gas-station]',  roles: null },
-]
 
 const EMPTY_FORM = {
   vehicleModel: '',
@@ -47,8 +40,6 @@ export default function Vehicles() {
   const [page, setPage]                   = useState(0)
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
-
-  const [selectedVehicle, setSelectedVehicle] = useState(null)
 
   // Add modal
   const [modalOpen, setModalOpen]   = useState(false)
@@ -256,14 +247,30 @@ export default function Vehicles() {
                         </span>
                       </div>
                       <p className="text-sm text-base-content/50">Added {formatDate(vehicle.addedOn)}</p>
-                      <div className="card-actions mt-2">
+                      <p className="text-sm text-base-content/60">
+                        <span className="icon-[tabler--road] size-3.5 inline-block mr-1 align-middle"></span>
+                        {vehicle.latestOdometer != null
+                          ? <>{vehicle.latestOdometer.toLocaleString()} km</>
+                          : <span className="italic text-base-content/40">No odometer recorded</span>
+                        }
+                      </p>
+                      <div className="card-actions mt-2 flex-col gap-2">
                         <button
-                          className="btn btn-soft btn-primary btn-sm flex-1"
-                          onClick={() => setSelectedVehicle(vehicle)}
+                          className="btn btn-soft btn-primary btn-sm w-full"
+                          onClick={() => navigate(`/vehicles/${vehicle.vehiclesId}/logs`, { state: { vehicleModel: vehicle.vehicleModel } })}
                         >
-                          <span className="icon-[tabler--settings] size-4"></span>
-                          Manage
+                          <span className="icon-[tabler--road] size-4"></span>
+                          Manage Vehicle Logs
                         </button>
+                        {canEdit && (
+                          <button
+                            className="btn btn-soft btn-secondary btn-sm w-full"
+                            onClick={() => openEditModal(vehicle)}
+                          >
+                            <span className="icon-[tabler--pencil] size-4"></span>
+                            Update Vehicle Info
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -287,34 +294,6 @@ export default function Vehicles() {
           )}
         </>
       )}
-
-      {/* Manage Vehicle Menu */}
-      <ManageMenu
-        title={selectedVehicle?.vehicleModel}
-        subtitle={selectedVehicle?.vehiclePlateNum}
-        item={selectedVehicle}
-        details={selectedVehicle ? [
-          { label: 'Model',        value: selectedVehicle.vehicleModel },
-          { label: 'Plate Number', value: selectedVehicle.vehiclePlateNum },
-          { label: 'Added On',     value: formatDate(selectedVehicle.addedOn) },
-        ] : []}
-        isOpen={!!selectedVehicle}
-        onClose={() => setSelectedVehicle(null)}
-        hasRole={hasRole}
-        menuItems={VEHICLE_MENU_ITEMS}
-        onMenuSelect={(key, vehicle) => {
-          if (key === 'update') {
-            setSelectedVehicle(null)
-            openEditModal(vehicle)
-          } else if (key === 'logs') {
-            setSelectedVehicle(null)
-            navigate(`/vehicles/${vehicle.vehiclesId}/logs`, { state: { vehicleModel: vehicle.vehicleModel } })
-          } else if (key === 'gas-logs') {
-            setSelectedVehicle(null)
-            navigate(`/vehicles/${vehicle.vehiclesId}/gas-logs`, { state: { vehicleModel: vehicle.vehicleModel } })
-          }
-        }}
-      />
 
       {/* Edit Vehicle Modal */}
       <Modal

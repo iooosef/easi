@@ -705,6 +705,15 @@ export default function ServiceReports() {
             state: { projectName: report.projectName, srNumber: report.srNumber, projNum: report.projNum },
           })
           if (key === 'billing') setBillingReport(report)
+          if (key === 'documents') navigate(`/service-report/${report.srNumber}/documents`, {
+            state: {
+              entityType: 'service-report',
+              entityId:   report.srNumber,
+              entityLabel: `SR #${report.srNumber}`,
+              parentLabel: report.projectName,
+              docuId:     report.docuId ?? null,
+            },
+          })
         }}
       />
 

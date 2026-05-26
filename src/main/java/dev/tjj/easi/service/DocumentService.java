@@ -5,8 +5,17 @@ import dev.tjj.easi.dto.DocumentCreateRequest;
 import dev.tjj.easi.dto.DocumentResponse;
 import dev.tjj.easi.dto.DocumentUpdateRequest;
 import dev.tjj.easi.entity.Document;
+import dev.tjj.easi.entity.LogSeverity;
+import dev.tjj.easi.entity.LogType;
 import dev.tjj.easi.repository.DocumentRepository;
 import jakarta.annotation.PostConstruct;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,12 +38,14 @@ public class DocumentService {
 
     private final DocumentRepository documentRepository;
     private final StorageProperties storageProperties;
+    private final LogService logService;
 
     private Path uploadRoot;
 
-    public DocumentService(DocumentRepository documentRepository, StorageProperties storageProperties) {
+    public DocumentService(DocumentRepository documentRepository, StorageProperties storageProperties, LogService logService) {
         this.documentRepository = documentRepository;
         this.storageProperties = storageProperties;
+        this.logService = logService;
     }
 
     /** Initializes and creates the upload directory on application startup. */
@@ -71,7 +82,10 @@ public class DocumentService {
         document.setFilePath(storedName);
         document.setAddedOn(LocalDateTime.now());
 
-        return toResponse(documentRepository.save(document));
+        DocumentResponse response = toResponse(documentRepository.save(document));
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "Document",
+                String.valueOf(response.docuId()), "Uploaded document '" + originalName + "'", null);
+        return response;
     }
 
     /**
@@ -102,7 +116,56 @@ public class DocumentService {
             document.setDescription(request.description());
         }
 
-        return toResponse(documentRepository.save(document));
+        DocumentResponse response = toResponse(documentRepository.save(document));
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Document",
+                String.valueOf(docuId), "Updated document #" + docuId, null);
+        return response;
+    }
+
+    /**
+     * Streams the document file from disk with the appropriate Content-Type header.
+     * Returns inline disposition so browsers render images and PDFs directly.
+     */
+    public ResponseEntity<Resource> serveFile(Integer docuId) {
+        Document document = documentRepository.findById(docuId)
+                .orElseThrow(() -> new IllegalArgumentException("Document not found."));
+
+        Path filePath = uploadRoot.resolve(document.getFilePath());
+        Resource resource;
+        try {
+            resource = new UrlResource(filePath.toUri());
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not resolve file path.", e);
+        }
+
+        if (!resource.exists() || !resource.isReadable()) {
+            throw new IllegalStateException("File not found on disk: " + document.getFilePath());
+        }
+
+        String contentType = resolveContentType(document.getFileType());
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + document.getFileName() + "\"")
+                .body(resource);
+    }
+
+    /** Maps a file extension to its MIME type; defaults to application/octet-stream. */
+    private String resolveContentType(String fileType) {
+        if (fileType == null) return "application/octet-stream";
+        return switch (fileType.toLowerCase()) {
+            case "pdf"       -> "application/pdf";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png"       -> "image/png";
+            case "gif"       -> "image/gif";
+            case "webp"      -> "image/webp";
+            default          -> "application/octet-stream";
+        };
+    }
+
+    private String getEmail() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     /** Returns all document records. */

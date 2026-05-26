@@ -38,9 +38,14 @@ public class VehicleGasLogController {
         return ResponseEntity.ok(gasLogService.update(gasLogId, request));
     }
 
-    /** Returns a page of vehicle gas log records. Available to ADMIN, CREW, and STAFF. */
+    /** Returns a page of vehicle gas log records, optionally filtered by vehicle log ID. Available to ADMIN, CREW, and STAFF. */
     @GetMapping
-    public ResponseEntity<Page<VehicleGasLogResponse>> getAll(Pageable pageable) {
+    public ResponseEntity<Page<VehicleGasLogResponse>> getAll(
+            @RequestParam(required = false) Integer vehicleLogId,
+            Pageable pageable) {
+        if (vehicleLogId != null) {
+            return ResponseEntity.ok(gasLogService.getByVehicleLogId(vehicleLogId, pageable));
+        }
         return ResponseEntity.ok(gasLogService.getAll(pageable));
     }
 

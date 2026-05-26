@@ -6,5 +6,6 @@ public record VehicleResponse(
         Integer vehiclesId,
         String vehicleModel,
         String vehiclePlateNum,
-        LocalDateTime addedOn
+        LocalDateTime addedOn,
+        Integer latestOdometer
 ) {}

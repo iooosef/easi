@@ -4,6 +4,7 @@ import dev.tjj.easi.dto.VehicleRequest;
 import dev.tjj.easi.dto.VehicleResponse;
 import dev.tjj.easi.entity.Vehicle;
 import dev.tjj.easi.repository.VehicleRepository;
+import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
 import org.springframework.security.core.Authentication;
@@ -20,10 +21,12 @@ import java.time.LocalDateTime;
 public class VehicleService {
 
     private final VehicleRepository vehicleRepository;
+    private final VehicleLogRepository vehicleLogRepository;
     private final LogService logService;
 
-    public VehicleService(VehicleRepository vehicleRepository, LogService logService) {
+    public VehicleService(VehicleRepository vehicleRepository, VehicleLogRepository vehicleLogRepository, LogService logService) {
         this.vehicleRepository = vehicleRepository;
+        this.vehicleLogRepository = vehicleLogRepository;
         this.logService = logService;
     }
 
@@ -73,11 +76,16 @@ public class VehicleService {
     }
 
     private VehicleResponse toResponse(Vehicle v) {
+        Integer latestOdometer = vehicleLogRepository
+                .findTopByVehicleVehiclesIdAndOdometerEndIsNotNullOrderByAddedOnDesc(v.getVehiclesId())
+                .map(log -> log.getOdometerEnd())
+                .orElse(null);
         return new VehicleResponse(
                 v.getVehiclesId(),
                 v.getVehicleModel(),
                 v.getVehiclePlateNum(),
-                v.getAddedOn()
+                v.getAddedOn(),
+                latestOdometer
         );
     }
 }

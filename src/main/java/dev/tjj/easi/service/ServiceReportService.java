@@ -70,6 +70,26 @@ public class ServiceReportService {
         return serviceReportRepository.findAll(pageable).map(this::toResponse);
     }
 
+    /** Links or unlinks a document on an existing service report. */
+    @Transactional
+    public ServiceReportResponse updateDocument(Integer srNumber, Integer docuId) {
+        ServiceReport report = serviceReportRepository.findById(srNumber)
+                .orElseThrow(() -> new IllegalArgumentException("Service report not found."));
+
+        if (docuId != null) {
+            Document document = documentRepository.findById(docuId)
+                    .orElseThrow(() -> new IllegalArgumentException("Document not found."));
+            report.setDocument(document);
+        } else {
+            report.setDocument(null);
+        }
+
+        ServiceReport saved = serviceReportRepository.save(report);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceReport",
+                String.valueOf(srNumber), "Updated document link for service report #" + srNumber, null);
+        return toResponse(saved);
+    }
+
     /** Returns a single service report record by ID. */
     public ServiceReportResponse getById(Integer srNumber) {
         return serviceReportRepository.findById(srNumber)

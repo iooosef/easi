@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
@@ -12,6 +12,7 @@ const STATUS_OPTIONS = ['driving', 'completed']
 
 const LOG_MENU_ITEMS = [
   { key: 'update', label: 'Update Log', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF', 'CREW'] },
+  { key: 'manage-gas-logs', label: 'Manage Gas Logs', icon: 'icon-[tabler--gas-station]', roles: ['ADMIN', 'STAFF', 'CREW'] },
 ]
 
 const EMPTY_FORM = {
@@ -23,6 +24,11 @@ const EMPTY_FORM = {
   odometerEnd: '',
   status: 'driving',
 }
+
+const EMPTY_GAS_FORM = { invoiceId: '', amount: '' }
+
+const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
+const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
 
 /**
  * Parses a failed API response into field-level or general error object.
@@ -46,7 +52,121 @@ function statusBadgeClass(status) {
   return 'badge-neutral'
 }
 
+/** Formats a number as PHP currency */
+function formatCurrency(value) {
+  if (value == null) return '—'
+  return Number(value).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })
+}
+
 const PAGE_SIZE = 10
+
+/** Modal for viewing gas log details with inline document preview. */
+function GasLogDetailsModal({ gasLog, onClose, apiFetch }) {
+  const [docBlobUrl, setDocBlobUrl] = useState(null)
+  const [docIsImage, setDocIsImage] = useState(false)
+  const [docLoading, setDocLoading] = useState(false)
+  const [docError, setDocError] = useState(null)
+
+  useEffect(() => {
+    if (!gasLog?.docuId) { setDocBlobUrl(null); setDocIsImage(false); return }
+    let active = true
+    let blobUrl = null
+    setDocLoading(true)
+    setDocError(null)
+    apiFetch(`/api/documents/${gasLog.docuId}/file`)
+      .then(async res => {
+        if (!res.ok) throw new Error('Failed to load document')
+        const contentType = res.headers.get('Content-Type') ?? ''
+        const blob = await res.blob()
+        if (!active) return
+        blobUrl = URL.createObjectURL(blob)
+        setDocBlobUrl(blobUrl)
+        setDocIsImage(contentType.startsWith('image/'))
+      })
+      .catch(() => { if (active) setDocError('Could not load document.') })
+      .finally(() => { if (active) setDocLoading(false) })
+    return () => {
+      active = false
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [gasLog?.docuId, apiFetch])
+
+  if (!gasLog) return null
+  return (
+    <>
+      <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={onClose} />
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="modal-content w-full max-w-2xl shadow-xl">
+          <div className="modal-header">
+            <div>
+              <h3 className="modal-title">Gas Log #{gasLog.gasLogId}</h3>
+              <span className="text-sm text-base-content/50">Invoice: {gasLog.invoiceId}</span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <span className="icon-[tabler--x] size-4"></span>
+            </button>
+          </div>
+          <div className="modal-body flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Gas Log ID</span>
+                <span className="text-sm font-medium font-mono">{gasLog.gasLogId}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Vehicle Log ID</span>
+                <span className="text-sm font-medium font-mono">{gasLog.vehicleLogId}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Invoice ID</span>
+                <span className="text-sm font-medium">{gasLog.invoiceId}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Amount</span>
+                <span className="text-sm font-medium text-primary">{formatCurrency(gasLog.amount)}</span>
+              </div>
+            </div>
+
+            {gasLog.docuId != null ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Document</span>
+                {docLoading && (
+                  <div className="flex justify-center py-8">
+                    <span className="loading loading-spinner loading-sm text-primary"></span>
+                  </div>
+                )}
+                {docError && (
+                  <div className="alert alert-error py-2 text-sm">{docError}</div>
+                )}
+                {docBlobUrl && !docLoading && (
+                  docIsImage ? (
+                    <img
+                      src={docBlobUrl}
+                      alt="Document"
+                      className="w-full rounded-box object-contain max-h-80 border border-base-300 bg-base-200"
+                    />
+                  ) : (
+                    <iframe
+                      src={docBlobUrl}
+                      title="Document preview"
+                      className="w-full h-80 rounded-box border border-base-300"
+                    />
+                  )
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-base-content/40 italic">No document attached.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
 
 export default function VehicleLogs() {
   const { apiFetch, hasRole } = useAuth()
@@ -89,7 +209,41 @@ export default function VehicleLogs() {
   const [editProjectLabel, setEditProjectLabel]     = useState('')
   const [editDriverLabel, setEditDriverLabel]       = useState('')
 
-  const canEdit = hasRole('ADMIN', 'STAFF', 'CREW')
+  // Manage Gas Logs modal
+  const [manageGasLogsOpen, setManageGasLogsOpen]       = useState(false)
+  const [manageGasLogsLog, setManageGasLogsLog]         = useState(null)
+  const [gasLogs, setGasLogs]                           = useState([])
+  const [gasLogsLoading, setGasLogsLoading]             = useState(false)
+  const [gasLogsRefresh, setGasLogsRefresh]             = useState(0)
+  const [addGasLogOpen, setAddGasLogOpen]               = useState(false)
+  const [gasLogForm, setGasLogForm]                     = useState(EMPTY_GAS_FORM)
+  const [gasLogFormError, setGasLogFormError]           = useState({})
+  const [gasLogFormSubmitting, setGasLogFormSubmitting] = useState(false)
+
+  // Update gas log sub-modal
+  const [updateGasLogOpen, setUpdateGasLogOpen]             = useState(false)
+  const [updatingGasLog, setUpdatingGasLog]                 = useState(null)
+  const [updateGasLogForm, setUpdateGasLogForm]             = useState(EMPTY_GAS_FORM)
+  const [updateGasLogFormError, setUpdateGasLogFormError]   = useState({})
+  const [updateGasLogSubmitting, setUpdateGasLogSubmitting] = useState(false)
+
+  // View gas log details sub-modal
+  const [viewGasLog, setViewGasLog] = useState(null)
+
+  // Replace gas log file sub-modal
+  const [replaceGasFileOpen, setReplaceGasFileOpen]         = useState(false)
+  const [replaceGasTarget, setReplaceGasTarget]             = useState(null)
+  const [replaceGasFile, setReplaceGasFile]                 = useState(null)
+  const [replaceGasFileError, setReplaceGasFileError]       = useState({})
+  const [replaceGasFileSubmitting, setReplaceGasFileSubmitting] = useState(false)
+  const replaceGasFileRef = useRef(null)
+
+  // Add gas log file (optional)
+  const addGasFileRef = useRef(null)
+  const [addGasFile, setAddGasFile] = useState(null)
+
+  const canEdit     = hasRole('ADMIN', 'STAFF', 'CREW')
+  const canManageDocs = hasRole('ADMIN', 'STAFF')
 
   function openProjectPicker(forForm) {
     setPickerFor(forForm)
@@ -177,6 +331,66 @@ export default function VehicleLogs() {
     setEditForm(prev => ({ ...prev, [name]: value }))
   }
 
+  // — Manage Gas Logs —
+
+  function openManageGasLogs(log) {
+    setManageGasLogsLog(log)
+    setGasLogsRefresh(0)
+    setAddGasLogOpen(false)
+    setGasLogForm(EMPTY_GAS_FORM)
+    setGasLogFormError({})
+    setAddGasFile(null)
+    setManageGasLogsOpen(true)
+  }
+
+  function closeManageGasLogs() {
+    setManageGasLogsOpen(false)
+    setManageGasLogsLog(null)
+    setGasLogs([])
+    setAddGasLogOpen(false)
+    setGasLogForm(EMPTY_GAS_FORM)
+    setGasLogFormError({})
+    setAddGasFile(null)
+  }
+
+  function handleGasLogFormChange(e) {
+    const { name, value } = e.target
+    setGasLogForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  function openUpdateGasLog(g) {
+    setUpdateGasLogForm({ invoiceId: g.invoiceId, amount: String(g.amount) })
+    setUpdatingGasLog(g)
+    setUpdateGasLogFormError({})
+    setUpdateGasLogOpen(true)
+  }
+
+  function closeUpdateGasLog() {
+    setUpdateGasLogOpen(false)
+    setUpdatingGasLog(null)
+    setUpdateGasLogForm(EMPTY_GAS_FORM)
+    setUpdateGasLogFormError({})
+  }
+
+  function handleUpdateGasLogFormChange(e) {
+    const { name, value } = e.target
+    setUpdateGasLogForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  function openReplaceGasFile(g) {
+    setReplaceGasTarget(g)
+    setReplaceGasFile(null)
+    setReplaceGasFileError({})
+    setReplaceGasFileOpen(true)
+  }
+
+  function closeReplaceGasFile() {
+    setReplaceGasFileOpen(false)
+    setReplaceGasTarget(null)
+    setReplaceGasFile(null)
+    setReplaceGasFileError({})
+  }
+
   /** Fetches vehicle logs filtered by vehicle ID. */
   useEffect(() => {
     let active = true
@@ -203,6 +417,24 @@ export default function VehicleLogs() {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [apiFetch, page, vehiclesIdInt, refreshKey])
+
+  /** Fetches gas logs for the selected vehicle log. */
+  useEffect(() => {
+    if (!manageGasLogsOpen || !manageGasLogsLog) { setGasLogs([]); return }
+    let active = true
+    setGasLogsLoading(true)
+    const params = new URLSearchParams({
+      vehicleLogId: String(manageGasLogsLog.vehicleLogId),
+      size: '100',
+      sort: 'gasLogId,asc',
+    })
+    apiFetch(`/api/vehicle-gas-logs?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setGasLogs(data.content ?? []) })
+      .catch(() => { if (active) setGasLogs([]) })
+      .finally(() => { if (active) setGasLogsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, manageGasLogsOpen, manageGasLogsLog, gasLogsRefresh])
 
   const filtered = logs.filter(l => {
     if (search === '') return true
@@ -280,6 +512,137 @@ export default function VehicleLogs() {
       setEditFormError({ _general: err.message })
     } finally {
       setEditSubmitting(false)
+    }
+  }
+
+  /** Submits the add gas log form, optionally uploading a document first. */
+  async function handleAddGasLogSubmit(e) {
+    e.preventDefault()
+    setGasLogFormError({})
+    setGasLogFormSubmitting(true)
+    try {
+      let docuId = null
+      if (addGasFile) {
+        const fd = new FormData()
+        fd.append('file', addGasFile)
+        const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
+        if (!uploadRes.ok) {
+          setGasLogFormError(await parseApiError(uploadRes))
+          notyfError('File upload failed')
+          return
+        }
+        const docData = await uploadRes.json()
+        docuId = docData.docuId
+      }
+
+      const res = await apiFetch('/api/vehicle-gas-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleLogId: manageGasLogsLog.vehicleLogId,
+          amount:       Number(gasLogForm.amount),
+          invoiceId:    gasLogForm.invoiceId,
+          docuId,
+        }),
+      })
+      if (!res.ok) {
+        setGasLogFormError(await parseApiError(res))
+        notyfError('Add gas log failed')
+        return
+      }
+      setAddGasLogOpen(false)
+      setGasLogForm(EMPTY_GAS_FORM)
+      setGasLogFormError({})
+      setAddGasFile(null)
+      notyfSuccess('Gas log added successfully.')
+      setGasLogsRefresh(k => k + 1)
+    } catch (err) {
+      setGasLogFormError({ _general: err.message })
+    } finally {
+      setGasLogFormSubmitting(false)
+    }
+  }
+
+  /** Submits the update gas log form. */
+  async function handleUpdateGasLogSubmit(e) {
+    e.preventDefault()
+    setUpdateGasLogFormError({})
+    setUpdateGasLogSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/vehicle-gas-logs/${updatingGasLog.gasLogId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleLogId: updatingGasLog.vehicleLogId,
+          amount:       Number(updateGasLogForm.amount),
+          invoiceId:    updateGasLogForm.invoiceId,
+          docuId:       updatingGasLog.docuId ?? null,
+        }),
+      })
+      if (!res.ok) {
+        setUpdateGasLogFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeUpdateGasLog()
+      notyfSuccess(`Gas log #${updatingGasLog.gasLogId} updated successfully.`)
+      setGasLogsRefresh(k => k + 1)
+    } catch (err) {
+      setUpdateGasLogFormError({ _general: err.message })
+    } finally {
+      setUpdateGasLogSubmitting(false)
+    }
+  }
+
+  /** Uploads a new document file then links it to the gas log. */
+  async function handleReplaceGasFileSubmit(e) {
+    e.preventDefault()
+    if (!replaceGasFile) {
+      setReplaceGasFileError({ file: 'Please select a file.' })
+      return
+    }
+    if (!ACCEPTED_TYPES.includes(replaceGasFile.type)) {
+      setReplaceGasFileError({ file: 'File must be an image (JPG/PNG/GIF/WebP) or PDF.' })
+      return
+    }
+    setReplaceGasFileError({})
+    setReplaceGasFileSubmitting(true)
+    try {
+      // Step 1: upload new document
+      const fd = new FormData()
+      fd.append('file', replaceGasFile)
+      const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
+      if (!uploadRes.ok) {
+        setReplaceGasFileError(await parseApiError(uploadRes))
+        notyfError('File upload failed')
+        return
+      }
+      const docData = await uploadRes.json()
+      const newDocuId = docData.docuId
+
+      // Step 2: update gas log with new docuId
+      const updateRes = await apiFetch(`/api/vehicle-gas-logs/${replaceGasTarget.gasLogId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleLogId: replaceGasTarget.vehicleLogId,
+          amount:       replaceGasTarget.amount,
+          invoiceId:    replaceGasTarget.invoiceId,
+          docuId:       newDocuId,
+        }),
+      })
+      if (!updateRes.ok) {
+        setReplaceGasFileError(await parseApiError(updateRes))
+        notyfError('Link document failed')
+        return
+      }
+      closeReplaceGasFile()
+      notyfSuccess(`Gas log #${replaceGasTarget.gasLogId} document replaced successfully.`)
+      setGasLogsRefresh(k => k + 1)
+    } catch (err) {
+      setReplaceGasFileError({ _general: err.message })
+    } finally {
+      setReplaceGasFileSubmitting(false)
     }
   }
 
@@ -364,10 +727,12 @@ export default function VehicleLogs() {
                   {filtered.map(l => (
                     <tr key={l.vehicleLogId}>
                       <td className="font-mono font-semibold">{l.vehicleLogId}</td>
-                      <td>
-                        <span className="font-medium">{l.vehicleModel}</span>
-                        <span className="text-base-content/50"> · </span>
-                        <span className="font-mono text-sm">{l.vehiclePlateNum}</span>
+                      <td className="max-w-[160px]">
+                        <p className="line-clamp-2 text-sm leading-snug">
+                          <span className="font-medium">{l.vehicleModel}</span>
+                          <span className="text-base-content/50"> · </span>
+                          <span className="font-mono">{l.vehiclePlateNum}</span>
+                        </p>
                       </td>
                       <td className="max-w-[180px] truncate">{l.projectName}</td>
                       <td>{l.purpose}</td>
@@ -427,8 +792,345 @@ export default function VehicleLogs() {
         onMenuSelect={(key, log) => {
           setSelectedLog(null)
           if (key === 'update') openEditModal(log)
+          if (key === 'manage-gas-logs') openManageGasLogs(log)
         }}
       />
+
+      {/* Manage Gas Logs Modal */}
+      <Modal
+        isOpen={manageGasLogsOpen}
+        onClose={addGasLogOpen ? undefined : closeManageGasLogs}
+        hideClose={addGasLogOpen}
+        title={`Gas Logs — Log #${manageGasLogsLog?.vehicleLogId ?? ''}`}
+        size="max-w-2xl"
+        footer={!addGasLogOpen && (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageGasLogs}>
+            Close
+          </button>
+        )}
+      >
+        {addGasLogOpen ? (
+          <form onSubmit={handleAddGasLogSubmit}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+                <input
+                  type="text"
+                  name="invoiceId"
+                  className={`input input-bordered w-full${gasLogFormError.invoiceId ? ' is-invalid' : ''}`}
+                  placeholder="e.g. INV-001"
+                  maxLength={16}
+                  required
+                  value={gasLogForm.invoiceId}
+                  onChange={handleGasLogFormChange}
+                />
+                {gasLogFormError.invoiceId && <span className="helper-text">{gasLogFormError.invoiceId}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+                <input
+                  type="number"
+                  name="amount"
+                  className={`input input-bordered w-full${gasLogFormError.amount ? ' is-invalid' : ''}`}
+                  placeholder="e.g. 500.00"
+                  min="0"
+                  step="0.01"
+                  required
+                  value={gasLogForm.amount}
+                  onChange={handleGasLogFormChange}
+                />
+                {gasLogFormError.amount && <span className="helper-text">{gasLogFormError.amount}</span>}
+              </div>
+
+              {canManageDocs && (
+                <div className="sm:col-span-2 flex flex-col gap-1">
+                  <label className="label-text font-medium">Document <span className="text-base-content/40 font-normal">(optional)</span></label>
+                  <input
+                    ref={addGasFileRef}
+                    type="file"
+                    accept={ACCEPTED_EXTENSIONS}
+                    className="hidden"
+                    onChange={e => setAddGasFile(e.target.files?.[0] ?? null)}
+                  />
+                  <button
+                    type="button"
+                    className={`btn btn-outline w-full justify-start font-normal${gasLogFormError.file ? ' btn-error' : ''}`}
+                    onClick={() => addGasFileRef.current?.click()}
+                  >
+                    <span className="icon-[tabler--paperclip] size-4"></span>
+                    {addGasFile ? addGasFile.name : 'Choose file…'}
+                  </button>
+                  {gasLogFormError.file && <span className="helper-text">{gasLogFormError.file}</span>}
+                </div>
+              )}
+
+              {gasLogFormError._general && (
+                <div className="sm:col-span-2 alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{gasLogFormError._general}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                className="btn btn-soft btn-secondary btn-sm"
+                onClick={() => { setAddGasLogOpen(false); setGasLogForm(EMPTY_GAS_FORM); setGasLogFormError({}); setAddGasFile(null) }}
+              >
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={gasLogFormSubmitting}>
+                {gasLogFormSubmitting
+                  ? <span className="loading loading-spinner loading-xs"></span>
+                  : <span className="icon-[tabler--plus] size-4"></span>
+                }
+                Add Gas Log
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="flex justify-end mb-3">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => { setGasLogForm(EMPTY_GAS_FORM); setGasLogFormError({}); setAddGasFile(null); setAddGasLogOpen(true) }}
+              >
+                <span className="icon-[tabler--plus] size-4"></span>
+                Add Gas Log
+              </button>
+            </div>
+
+            {gasLogsLoading ? (
+              <div className="flex justify-center py-6">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+              </div>
+            ) : gasLogs.length === 0 ? (
+              <div className="text-center py-6 text-base-content/40 text-sm">
+                No gas logs linked to this vehicle log.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-box border border-base-300">
+                <table className="table table-zebra table-sm w-full">
+                  <thead>
+                    <tr>
+                      <th>Gas Log #</th>
+                      <th>Invoice ID</th>
+                      <th>Amount</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gasLogs.map(g => (
+                      <tr key={g.gasLogId}>
+                        <td className="font-mono text-xs">{g.gasLogId}</td>
+                        <td className="text-sm">{g.invoiceId}</td>
+                        <td className="text-sm">{formatCurrency(g.amount)}</td>
+                        <td>
+                          <div className="flex gap-1 flex-wrap">
+                            <button
+                              className="btn btn-soft btn-primary btn-xs"
+                              onClick={() => setViewGasLog(g)}
+                            >
+                              <span className="icon-[tabler--info-circle] size-3"></span>
+                              View
+                            </button>
+                            <button
+                              className="btn btn-soft btn-secondary btn-xs"
+                              onClick={() => openUpdateGasLog(g)}
+                            >
+                              <span className="icon-[tabler--pencil] size-3"></span>
+                              Update
+                            </button>
+                            {canManageDocs && (
+                              g.docuId != null ? (
+                                <button
+                                  className="btn btn-soft btn-warning btn-xs"
+                                  onClick={() => openReplaceGasFile(g)}
+                                >
+                                  <span className="icon-[tabler--file-upload] size-3"></span>
+                                  Replace File
+                                </button>
+                              ) : (
+                                <button
+                                  className="btn btn-soft btn-accent btn-xs"
+                                  onClick={() => openReplaceGasFile(g)}
+                                >
+                                  <span className="icon-[tabler--paperclip] size-3"></span>
+                                  Attach File
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* View Gas Log Details Sub-modal */}
+      <GasLogDetailsModal
+        gasLog={viewGasLog}
+        onClose={() => setViewGasLog(null)}
+        apiFetch={apiFetch}
+      />
+
+      {/* Update Gas Log Sub-modal */}
+      {updateGasLogOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdateGasLog} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Update Gas Log #{updatingGasLog?.gasLogId}</h3>
+                  <span className="text-sm text-base-content/50">Invoice: {updatingGasLog?.invoiceId}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                  onClick={closeUpdateGasLog}
+                >
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="update-gas-log-form" onSubmit={handleUpdateGasLogSubmit}>
+                  <div className="flex flex-col gap-4">
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+                      <input
+                        type="text"
+                        name="invoiceId"
+                        className={`input input-bordered w-full${updateGasLogFormError.invoiceId ? ' is-invalid' : ''}`}
+                        maxLength={16}
+                        required
+                        value={updateGasLogForm.invoiceId}
+                        onChange={handleUpdateGasLogFormChange}
+                      />
+                      {updateGasLogFormError.invoiceId && <span className="helper-text">{updateGasLogFormError.invoiceId}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+                      <input
+                        type="number"
+                        name="amount"
+                        className={`input input-bordered w-full${updateGasLogFormError.amount ? ' is-invalid' : ''}`}
+                        min="0"
+                        step="0.01"
+                        required
+                        value={updateGasLogForm.amount}
+                        onChange={handleUpdateGasLogFormChange}
+                      />
+                      {updateGasLogFormError.amount && <span className="helper-text">{updateGasLogFormError.amount}</span>}
+                    </div>
+
+                    {updateGasLogFormError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{updateGasLogFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdateGasLog}>
+                  Cancel
+                </button>
+                <button type="submit" form="update-gas-log-form" className="btn btn-primary" disabled={updateGasLogSubmitting}>
+                  {updateGasLogSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--device-floppy] size-4"></span>
+                  }
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Replace Gas Log File Sub-modal */}
+      {replaceGasFileOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeReplaceGasFile} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">
+                    {replaceGasTarget?.docuId != null ? 'Replace File' : 'Attach File'} — Gas Log #{replaceGasTarget?.gasLogId}
+                  </h3>
+                  <span className="text-sm text-base-content/50">Invoice: {replaceGasTarget?.invoiceId}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                  onClick={closeReplaceGasFile}
+                >
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="replace-gas-file-form" onSubmit={handleReplaceGasFileSubmit}>
+                  <div className="flex flex-col gap-4">
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">File <span className="text-error">*</span></label>
+                      <input
+                        ref={replaceGasFileRef}
+                        type="file"
+                        accept={ACCEPTED_EXTENSIONS}
+                        className="hidden"
+                        onChange={e => setReplaceGasFile(e.target.files?.[0] ?? null)}
+                      />
+                      <button
+                        type="button"
+                        className={`btn btn-outline w-full justify-start font-normal${replaceGasFileError.file ? ' btn-error' : ''}`}
+                        onClick={() => replaceGasFileRef.current?.click()}
+                      >
+                        <span className="icon-[tabler--paperclip] size-4"></span>
+                        {replaceGasFile ? replaceGasFile.name : 'Choose file…'}
+                      </button>
+                      {replaceGasFileError.file && <span className="helper-text">{replaceGasFileError.file}</span>}
+                    </div>
+
+                    {replaceGasFileError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{replaceGasFileError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeReplaceGasFile}>
+                  Cancel
+                </button>
+                <button type="submit" form="replace-gas-file-form" className="btn btn-primary" disabled={replaceGasFileSubmitting}>
+                  {replaceGasFileSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--upload] size-4"></span>
+                  }
+                  Upload
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* New Log Modal */}
       <Modal
