@@ -60,6 +60,11 @@ public class ServiceReportBillingItemService {
         return billingItemRepository.findAll(pageable).map(this::toResponse);
     }
 
+    /** Returns a page of billing items for a specific service report. */
+    public Page<ServiceReportBillingItemResponse> getBySrNumber(Integer srNumber, Pageable pageable) {
+        return billingItemRepository.findByServiceReport_SrNumber(srNumber, pageable).map(this::toResponse);
+    }
+
     /** Returns a single service report billing item record by ID. */
     public ServiceReportBillingItemResponse getById(Integer srBillingNum) {
         return billingItemRepository.findById(srBillingNum)

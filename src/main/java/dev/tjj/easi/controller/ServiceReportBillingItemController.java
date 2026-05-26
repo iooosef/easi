@@ -10,6 +10,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Optional;
+
 /**
  * REST endpoints for service report billing item management.
  * ADMIN and ACCOUNTING can add and update billing items.
@@ -39,9 +41,14 @@ public class ServiceReportBillingItemController {
         return ResponseEntity.ok(billingItemService.update(srBillingNum, request));
     }
 
-    /** Returns a page of service report billing item records. Available to ADMIN, ACCOUNTING, STAFF, and CREW. */
+    /** Returns a page of billing item records, optionally filtered by srNumber. Available to ADMIN, ACCOUNTING, STAFF, and CREW. */
     @GetMapping
-    public ResponseEntity<Page<ServiceReportBillingItemResponse>> getAll(Pageable pageable) {
+    public ResponseEntity<Page<ServiceReportBillingItemResponse>> getAll(
+            @RequestParam Optional<Integer> srNumber,
+            Pageable pageable) {
+        if (srNumber.isPresent()) {
+            return ResponseEntity.ok(billingItemService.getBySrNumber(srNumber.get(), pageable));
+        }
         return ResponseEntity.ok(billingItemService.getAll(pageable));
     }
 

@@ -27,10 +27,12 @@ import dev.tjj.easi.repository.VehicleGasLogRepository;
 import dev.tjj.easi.entity.Part;
 import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
+import dev.tjj.easi.entity.ServiceReportBillingItem;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.PurchaseOrderDeliveryContactRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
+import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.SupplierRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
@@ -66,6 +68,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PartRepository partRepository;
     private final PurchaseOrderDeliveryContactRepository poDeliveryContactRepository;
+    private final ServiceReportBillingItemRepository billingItemRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -79,6 +82,7 @@ public class DataInitializer implements CommandLineRunner {
         seedVehicles();
         seedSuppliers();
         seedPurchaseOrders();
+        seedBillingItems();
     }
 
     private void createAdminUser() {
@@ -900,6 +904,147 @@ public class DataInitializer implements CommandLineRunner {
         c.setContactName(contactName);
         c.setContactNumber(contactNumber);
         poDeliveryContactRepository.save(c);
+    }
+
+    /**
+     * Seeds 2–3 billing items per service report.
+     * Items are labor charges and service fees only — no materials or parts.
+     */
+    private void seedBillingItems() {
+        if (billingItemRepository.count() > 0) {
+            log.info("Billing item data already exists, skipping billing item seed.");
+            return;
+        }
+
+        var allReports = serviceReportRepository.findAll(
+                org.springframework.data.domain.Sort.by("srNumber").ascending());
+        if (allReports.isEmpty()) {
+            log.warn("No service reports found to seed billing items, skipping.");
+            return;
+        }
+
+        // Billing data per SR in srNumber order (matches seeded SR order)
+        record BillingEntry(String description, int quantity, String unitPrice) {}
+        record SrBilling(BillingEntry[] items) {}
+
+        SrBilling[] perSr = {
+            // SR 1 — P1: Capacitor replacement & refrigerant recharge
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Capacitor Replacement",              1, "800.00"),
+                new BillingEntry("Labor — Refrigerant Recharge",               1, "600.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 2 — P1: Noisy compressor tightening & lubrication
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Compressor Mount Tightening",        1, "600.00"),
+                new BillingEntry("Labor — Moving Parts Lubrication",           1, "300.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 3 — P1: Drain line clearing & filter cleaning
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Drain Line Clearing",                1, "700.00"),
+                new BillingEntry("Labor — Air Filter Cleaning",                1, "350.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 4 — P1: Routine preventive maintenance
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Full System Inspection",             1, "1500.00"),
+                new BillingEntry("Labor — Coil Cleaning & Filter Replacement", 4, "350.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 5 — P1: Thermostat recalibration
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Thermostat Recalibration",           1, "600.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 6 — P2: PCB fuse & circuit breaker reset
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — PCB Fuse Replacement",               1, "700.00"),
+                new BillingEntry("Labor — Circuit Breaker Reset",              1, "400.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 7 — P2: Evaporator coil deep clean
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Evaporator Coil Deep Clean",         1, "900.00"),
+                new BillingEntry("Labor — Anti-fungal Treatment Application",  1, "400.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 8 — P2: Drain pan & condensate fix
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Condensate Drain Clearing",          1, "600.00"),
+                new BillingEntry("Labor — Drain Pan Re-sealing",               1, "800.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 9 — P2: Condenser coil cleaning & refrigerant top-up
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Condenser Coil Cleaning",            1, "750.00"),
+                new BillingEntry("Labor — Refrigerant Top-up",                 1, "600.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 10 — P2: Receiver module replacement
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Receiver Module Replacement",        1, "700.00"),
+                new BillingEntry("Labor — Remote Pairing & Testing",           1, "300.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 11 — P3: Circuit overload redistribution
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Electrical Circuit Assessment",      1, "1200.00"),
+                new BillingEntry("Labor — Panel Load Redistribution",          1, "2500.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 12 — P3: Frozen coil defrost
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Coil Defrost Service",               1, "800.00"),
+                new BillingEntry("Labor — Air Filter Replacement",             2, "300.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 13 — P3: Ductwork rattling fix
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Ductwork Securing",                  1, "900.00"),
+                new BillingEntry("Labor — Duct Joint Sealing",                 1, "500.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 14 — P3: AHU fan motor replacement
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Fan Motor Replacement",              1, "1500.00"),
+                new BillingEntry("Labor — Rotation & Airflow Testing",         1, "600.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 15 — P3: Routine preventive maintenance (all units)
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Full System Cleaning",               1, "2000.00"),
+                new BillingEntry("Labor — Belt & Coil Inspection",             4, "350.00"),
+                new BillingEntry("Service Call Fee",                           1, "500.00"),
+            }),
+            // SR 16 — P3: Post-maintenance follow-up
+            new SrBilling(new BillingEntry[]{
+                new BillingEntry("Labor — Post-PM Inspection",           1, "600.00"),
+                new BillingEntry("Service Call Fee",                     1, "500.00"),
+            }),
+        };
+
+        int total = 0;
+        for (int i = 0; i < allReports.size() && i < perSr.length; i++) {
+            ServiceReport sr = allReports.get(i);
+            for (BillingEntry entry : perSr[i].items()) {
+                billingItem(sr, entry.description(), entry.quantity(), new BigDecimal(entry.unitPrice()));
+                total++;
+            }
+        }
+
+        log.info("Billing item seed completed: {} items across {} service reports.", total, Math.min(allReports.size(), perSr.length));
+    }
+
+    /** Creates and saves a ServiceReportBillingItem. */
+    private void billingItem(ServiceReport serviceReport, String description, int quantity, BigDecimal unitPrice) {
+        ServiceReportBillingItem item = new ServiceReportBillingItem();
+        item.setServiceReport(serviceReport);
+        item.setDescription(description);
+        item.setQuantity(quantity);
+        item.setUnitPrice(unitPrice);
+        item.setAddedOn(serviceReport.getAddedOn().plusHours(2));
+        billingItemRepository.save(item);
     }
 
 }
