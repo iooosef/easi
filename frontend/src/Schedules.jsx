@@ -846,7 +846,7 @@ export default function Schedules() {
                           <button
                             type="button"
                             className="btn btn-error btn-xs btn-square shrink-0"
-                            title="Remove crew"
+                            title="Un-assign crew"
                             onClick={() => removeCrew(c.employeeId)}
                           >
                             <span className="icon-[tabler--x] size-3.5"></span>

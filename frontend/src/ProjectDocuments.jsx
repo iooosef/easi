@@ -382,13 +382,6 @@ export default function ProjectDocuments() {
                             <span className="icon-[tabler--replace] size-4"></span>
                             Replace File
                           </button>
-                          <button
-                            className="btn btn-soft btn-error btn-sm w-full"
-                            onClick={() => openRemove(doc)}
-                          >
-                            <span className="icon-[tabler--unlink] size-4"></span>
-                            Remove from Project
-                          </button>
                         </>
                       )}
                     </div>
