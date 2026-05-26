@@ -62,6 +62,11 @@ public class PurchaseOrderDocumentService {
         return poDocumentRepository.findAll(pageable).map(this::toResponse);
     }
 
+    /** Returns a page of purchase order document records filtered by PO number. */
+    public Page<PurchaseOrderDocumentResponse> getByPoNum(String poNum, Pageable pageable) {
+        return poDocumentRepository.findByPurchaseOrder_PoNum(poNum, pageable).map(this::toResponse);
+    }
+
     /** Returns a single purchase order document record by ID. */
     public PurchaseOrderDocumentResponse getById(Integer poDocNum) {
         return poDocumentRepository.findById(poDocNum)

@@ -38,9 +38,12 @@ public class PurchaseOrderDocumentController {
         return ResponseEntity.ok(poDocumentService.update(poDocNum, request));
     }
 
-    /** Returns a page of purchase order document records. Available to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of purchase order document records. Filterable by poNum. Available to ADMIN, ACCOUNTING, and STAFF. */
     @GetMapping
-    public ResponseEntity<Page<PurchaseOrderDocumentResponse>> getAll(Pageable pageable) {
+    public ResponseEntity<Page<PurchaseOrderDocumentResponse>> getAll(
+            @RequestParam(required = false) String poNum,
+            Pageable pageable) {
+        if (poNum != null) return ResponseEntity.ok(poDocumentService.getByPoNum(poNum, pageable));
         return ResponseEntity.ok(poDocumentService.getAll(pageable));
     }
 

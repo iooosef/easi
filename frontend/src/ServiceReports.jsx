@@ -12,14 +12,14 @@ import { notyfSuccess, notyfError } from './notyf'
 import { ManageBillingModal } from './Billing'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
-const STATUS_OPTIONS  = ['unpaid', 'paid', 'partial']
+const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
 
 const SR_MENU_ITEMS = [
-  { key: 'update',         label: 'Update Details',        icon: 'icon-[tabler--pencil]',       roles: ['ADMIN', 'STAFF'] },
-  { key: 'findings',       label: 'Manage Findings',       icon: 'icon-[tabler--checklist]',    roles: null },
-  { key: 'billing',        label: 'Manage Billing Items',  icon: 'icon-[tabler--receipt]',      roles: null },
+  { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF'] },
+  { key: 'findings', label: 'Manage Findings', icon: 'icon-[tabler--checklist]', roles: null },
+  { key: 'billing', label: 'Manage Billing Items', icon: 'icon-[tabler--receipt]', roles: null },
   { key: 'purchase-order', label: 'Manage Purchase Order', icon: 'icon-[tabler--file-invoice]', roles: null },
-  { key: 'documents',      label: 'Manage Documents',      icon: 'icon-[tabler--files]',        roles: null },
+  { key: 'documents', label: 'Manage Documents', icon: 'icon-[tabler--files]', roles: null },
 ]
 
 const EMPTY_FORM = {
@@ -65,7 +65,7 @@ async function parseApiError(res) {
 
 /** Returns badge class for report status */
 function statusBadgeClass(status) {
-  if (status === 'paid')    return 'badge-success'
+  if (status === 'paid') return 'badge-success'
   if (status === 'partial') return 'badge-warning'
   return 'badge-neutral'
 }
@@ -83,21 +83,21 @@ export default function ServiceReports() {
   const { projNum: projNumParam } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
-  const projNumFilter  = projNumParam ? Number(projNumParam) : null
+  const projNumFilter = projNumParam ? Number(projNumParam) : null
   const filterProjName = location.state?.projectName ?? null
 
-  const [reports, setReports]           = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState(null)
-  const [search, setSearch]             = useState('')
-  const [page, setPage]                 = useState(0)
-  const [totalPages, setTotalPages]     = useState(0)
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   const [totalElements, setTotalElements] = useState(0)
 
   // Add modal state
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
 
   const [refreshKey, setRefreshKey] = useState(0)
@@ -105,14 +105,14 @@ export default function ServiceReports() {
   const canEdit = hasRole('ADMIN', 'STAFF')
 
   const [selectedReport, setSelectedReport] = useState(null)
-  const [billingReport, setBillingReport]   = useState(null)
+  const [billingReport, setBillingReport] = useState(null)
 
   // Edit modal state
-  const [editModalOpen, setEditModalOpen]       = useState(false)
-  const [editingReport, setEditingReport]       = useState(null)
-  const [editForm, setEditForm]                 = useState(EMPTY_EDIT_FORM)
-  const [editFormError, setEditFormError]       = useState({})
-  const [editSubmitting, setEditSubmitting]     = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editingReport, setEditingReport] = useState(null)
+  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM)
+  const [editFormError, setEditFormError] = useState({})
+  const [editSubmitting, setEditSubmitting] = useState(false)
 
   function openModal() { setModalOpen(true) }
 
@@ -125,19 +125,19 @@ export default function ServiceReports() {
   /** Opens the edit modal pre-populated with the given report's data. */
   function openEditModal(report) {
     setEditForm({
-      projNum:            report.projNum,
-      _projectDisplay:    `${report.projectName} (#${report.projNum})`,
-      schedId:            report.schedId ?? '',
-      _scheduleDisplay:   report.schedId ? `Sched #${report.schedId}` : '',
+      projNum: report.projNum,
+      _projectDisplay: `${report.projectName} (#${report.projNum})`,
+      schedId: report.schedId ?? '',
+      _scheduleDisplay: report.schedId ? `Sched #${report.schedId}` : '',
       engineerEmployeeId: report.engineerEmployeeId ?? '',
-      _engineerDisplay:   report.engineerEmployeeId ? `Employee #${report.engineerEmployeeId}` : '',
-      complaint:          report.complaint ?? '',
-      workDone:           report.workDone ?? '',
-      location:           report.location ?? '',
-      paymentMethod:      report.paymentMethod ?? 'unset',
+      _engineerDisplay: report.engineerEmployeeId ? `Employee #${report.engineerEmployeeId}` : '',
+      complaint: report.complaint ?? '',
+      workDone: report.workDone ?? '',
+      location: report.location ?? '',
+      paymentMethod: report.paymentMethod ?? 'unset',
       receiptReceiveDate: report.receiptReceiveDate ? String(report.receiptReceiveDate).slice(0, 10) : '',
-      docuId:             report.docuId ?? '',
-      status:             report.status ?? 'unpaid',
+      docuId: report.docuId ?? '',
+      status: report.status ?? 'unpaid',
     })
     setEditingReport(report)
     setEditFormError({})
@@ -166,16 +166,16 @@ export default function ServiceReports() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projNum:            Number(editForm.projNum),
-          complaint:          editForm.complaint,
-          workDone:           editForm.workDone,
+          projNum: Number(editForm.projNum),
+          complaint: editForm.complaint,
+          workDone: editForm.workDone,
           engineerEmployeeId: editForm.engineerEmployeeId ? Number(editForm.engineerEmployeeId) : null,
-          location:           editForm.location || null,
-          schedId:            editForm.schedId ? Number(editForm.schedId) : null,
-          paymentMethod:      editForm.paymentMethod || 'unset',
+          location: editForm.location || null,
+          schedId: editForm.schedId ? Number(editForm.schedId) : null,
+          paymentMethod: editForm.paymentMethod || 'unset',
           receiptReceiveDate: editForm.receiptReceiveDate || null,
-          docuId:             editForm.docuId ? Number(editForm.docuId) : null,
-          status:             editForm.status || 'unpaid',
+          docuId: editForm.docuId ? Number(editForm.docuId) : null,
+          status: editForm.status || 'unpaid',
         }),
       })
       if (!res.ok) {
@@ -248,16 +248,16 @@ export default function ServiceReports() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projNum:            form.projNum           ? Number(form.projNum)           : null,
-          complaint:          form.complaint,
-          workDone:           form.workDone,
+          projNum: form.projNum ? Number(form.projNum) : null,
+          complaint: form.complaint,
+          workDone: form.workDone,
           engineerEmployeeId: form.engineerEmployeeId ? Number(form.engineerEmployeeId) : null,
-          location:           form.location || null,
-          schedId:            form.schedId            ? Number(form.schedId)            : null,
-          paymentMethod:      form.paymentMethod || 'unset',
+          location: form.location || null,
+          schedId: form.schedId ? Number(form.schedId) : null,
+          paymentMethod: form.paymentMethod || 'unset',
           receiptReceiveDate: form.receiptReceiveDate || null,
-          docuId:             form.docuId             ? Number(form.docuId)             : null,
-          status:             form.status || 'unpaid',
+          docuId: form.docuId ? Number(form.docuId) : null,
+          status: form.status || 'unpaid',
         }),
       })
       if (!res.ok) {
@@ -684,11 +684,11 @@ export default function ServiceReports() {
         details={selectedReport ? [
           { label: 'Complaint', value: selectedReport.complaint, fullWidth: true },
           { label: 'Work Done', value: selectedReport.workDone, fullWidth: true },
-          { label: 'Location',         value: selectedReport.location },
-          { label: 'Status',           value: selectedReport.status },
-          { label: 'Payment Method',   value: selectedReport.paymentMethod },
-          { label: 'Schedule Date',    value: formatDate(selectedReport.scheduleDate) },
-          { label: 'Receipt Date',     value: formatDate(selectedReport.receiptReceiveDate) },
+          { label: 'Location', value: selectedReport.location },
+          { label: 'Status', value: selectedReport.status },
+          { label: 'Payment Method', value: selectedReport.paymentMethod },
+          { label: 'Schedule Date', value: formatDate(selectedReport.scheduleDate) },
+          { label: 'Receipt Date', value: formatDate(selectedReport.receiptReceiveDate) },
           { label: 'Engineer Emp. ID', value: selectedReport.engineerEmployeeId ?? null },
         ] : []}
         isOpen={!!selectedReport}

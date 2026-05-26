@@ -87,7 +87,7 @@ export function AuthProvider({ children }) {
 
     let res = await doRequest(tokenRef.current)
 
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       const newToken = await refreshAccessToken()
       res = await doRequest(newToken)
     }

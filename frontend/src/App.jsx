@@ -16,6 +16,7 @@ import Vehicles from './Vehicles'
 import VehicleLogs from './VehicleLogs'
 import MaintenancePage from './MaintenancePage'
 import PurchaseOrders from './PurchaseOrders'
+import PurchaseOrderDocuments from './PurchaseOrderDocuments'
 import Documents from './Documents'
 import Inventory from './Inventory'
 import Billing from './Billing'
@@ -50,6 +51,7 @@ function App() {
       <Route path="/ac-units/project/:projNum" element={<Private element={<AirConditioningUnits />} />} />
       <Route path="/service-report/:srNumber/findings" element={<Private element={<ServiceReportFindings />} />} />
       <Route path="/service-report/:srNumber/purchase-orders" element={<Private element={<PurchaseOrders />} />} />
+      <Route path="/service-report/:srNumber/purchase-orders/:poNum/documents" element={<Private element={<PurchaseOrderDocuments />} />} />
       <Route path="/service-report/:srNumber/documents" element={<Private element={<Documents />} />} />
       <Route path="/schedules" element={<Private element={<Schedules />} />} />
       <Route path="/schedules/project/:projNum" element={<Private element={<Schedules />} />} />

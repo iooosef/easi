@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
@@ -329,6 +329,7 @@ export default function PurchaseOrders() {
   const { apiFetch, hasRole } = useAuth()
   const { srNumber } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
   const srNumberInt = Number(srNumber)
   const projectName = location.state?.projectName ?? '...'
   const projNum = location.state?.projNum ?? null
@@ -935,6 +936,15 @@ export default function PurchaseOrders() {
                         >
                           <span className="icon-[tabler--address-book] size-4"></span>
                           Manage Delivery Contacts
+                        </button>
+                        <button
+                          className="btn btn-soft btn-secondary btn-sm w-full"
+                          onClick={() => navigate(`/service-report/${srNumber}/purchase-orders/${o.poNum}/documents`, {
+                            state: { projectName, srNumber: srNumberInt, poNum: o.poNum },
+                          })}
+                        >
+                          <span className="icon-[tabler--files] size-4"></span>
+                          Manage Documents
                         </button>
                       </div>
                     </div>
