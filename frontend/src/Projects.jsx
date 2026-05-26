@@ -393,6 +393,9 @@ export default function Projects() {
           } else if (key === 'schedule') {
             setSelectedProject(null)
             navigate(`/schedules/project/${project.projNum}`, { state: { projectName: project.name } })
+          } else if (key === 'documents') {
+            setSelectedProject(null)
+            navigate(`/projects/${project.projNum}/documents`, { state: { projectName: project.name } })
           } else if (key === 'ac') {
             setSelectedProject(null)
             navigate(`/ac-units/project/${project.projNum}`, { state: { projectName: project.name } })

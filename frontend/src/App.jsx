@@ -18,6 +18,7 @@ import MaintenancePage from './MaintenancePage'
 import PurchaseOrders from './PurchaseOrders'
 import PurchaseOrderDocuments from './PurchaseOrderDocuments'
 import Documents from './Documents'
+import ProjectDocuments from './ProjectDocuments'
 import Inventory from './Inventory'
 import Billing from './Billing'
 
@@ -49,6 +50,7 @@ function App() {
       <Route path="/service-report" element={<Private element={<ServiceReports />} />} />
       <Route path="/service-report/project/:projNum" element={<Private element={<ServiceReports />} />} />
       <Route path="/ac-units/project/:projNum" element={<Private element={<AirConditioningUnits />} />} />
+      <Route path="/projects/:projNum/documents" element={<Private element={<ProjectDocuments />} />} />
       <Route path="/service-report/:srNumber/findings" element={<Private element={<ServiceReportFindings />} />} />
       <Route path="/service-report/:srNumber/purchase-orders" element={<Private element={<PurchaseOrders />} />} />
       <Route path="/service-report/:srNumber/purchase-orders/:poNum/documents" element={<Private element={<PurchaseOrderDocuments />} />} />

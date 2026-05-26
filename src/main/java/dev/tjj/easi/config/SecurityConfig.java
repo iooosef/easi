@@ -132,6 +132,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/purchase-order-documents",
                                 "/api/purchase-order-documents/**")
                         .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                        .requestMatchers(HttpMethod.POST, "/api/project-documents").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.DELETE, "/api/project-documents/**").hasAnyRole("ADMIN", "STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/project-documents", "/api/project-documents/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/vehicle-logs").hasAnyRole("ADMIN", "CREW", "STAFF")
                         .requestMatchers(HttpMethod.PUT, "/api/vehicle-logs/**").hasAnyRole("ADMIN", "CREW", "STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/vehicle-logs", "/api/vehicle-logs/**")
