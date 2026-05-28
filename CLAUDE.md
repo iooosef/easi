@@ -66,3 +66,22 @@ Each field renders:
 ```
 
 General (non-field) errors use key `_general` and render as a compact alert at the bottom of the form. Reset `formError` to `{}` (not `null`) when opening or closing a modal.
+
+### reports
+See [PLAN.md](PLAN.md) for the full implementation plan.
+
+**Backend rules:**
+- All report endpoints are GET-only — no audit logging required.
+- Accept `startDate` and `endDate` as `@RequestParam` with `@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)`, both required.
+- Return a flat list DTO per report type — no nested objects. Resolve FK display names (e.g. project name, employee name) in the JPQL query or in the service layer.
+- All report DTOs live in `dto/report/`. Apply `@Schema` on every field per the endpoint documentation rules.
+- Use JPQL `BETWEEN :startDate AND :endDate` on the primary date field documented in PLAN.md for each report.
+- Restrict report endpoints to roles `ADMIN`, `ACCOUNTING`, `STAFF` in `SecurityConfig`.
+
+**Frontend rules:**
+- All report UI lives in `Reports.jsx`.
+- The printable content must be wrapped in `<div id="print-area">`. The print button calls `window.print()`.
+- Add `@media print` CSS that hides everything except `#print-area`. Elements inside the print area that must not appear in print (e.g. the print button itself) get class `no-print`.
+- The print area header must include: system/company name, report type, applied filters, and generated-on datetime.
+- Show a loading spinner while fetching. On empty result, show "No data found for the selected filters." On error, use the `_general` error pattern.
+- The Print / Save as PDF button is only rendered when data is loaded and non-empty.

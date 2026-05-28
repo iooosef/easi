@@ -21,6 +21,7 @@ import Documents from './Documents'
 import ProjectDocuments from './ProjectDocuments'
 import Inventory from './Inventory'
 import Billing from './Billing'
+import Reports from './Reports'
 
 /** Auth guard — defined outside App so its reference is stable across re-renders */
 function Private({ element }) {
@@ -59,6 +60,7 @@ function App() {
       <Route path="/schedules/project/:projNum" element={<Private element={<Schedules />} />} />
       <Route path="/inventory" element={<Private element={<Inventory />} />} />
       <Route path="/billing" element={<Private element={<Billing />} />} />
+      <Route path="/reports" element={<Private element={<Reports />} />} />
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />
       <Route path="/vehicles/:vehiclesId/logs" element={<Private element={<VehicleLogs />} />} />
       <Route path="/employees" element={<Private element={<Employees />} />} />
