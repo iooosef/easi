@@ -45,6 +45,12 @@ export default function NewSchedule() {
   const [busyEmployeeIds, setBusyEmployeeIds] = useState(new Set())
   const [loadingCrew, setLoadingCrew] = useState(false)
 
+  // Total crew employee count and per-day busy map for the viewed calendar month
+  const [totalCrewCount, setTotalCrewCount] = useState(0)
+  const [calViewYear, setCalViewYear] = useState(() => new Date().getFullYear())
+  const [calViewMonth, setCalViewMonth] = useState(() => new Date().getMonth())
+  const [monthBusyByDate, setMonthBusyByDate] = useState({})
+
 
   /** Set of employee IDs in crewList who are already assigned elsewhere on the date */
   const busyCrewInList = useMemo(
@@ -57,6 +63,19 @@ export default function NewSchedule() {
     () => new Set([...busyEmployeeIds, ...crewList.map(c => c.employeeId)]),
     [busyEmployeeIds, crewList]
   )
+
+  /** Dates in the viewed month where all crew are already assigned */
+  const disabledDates = useMemo(() => {
+    if (totalCrewCount === 0) return new Set()
+    const disabled = new Set()
+    for (const [ds, ids] of Object.entries(monthBusyByDate)) {
+      if (ids.size >= totalCrewCount) disabled.add(ds)
+    }
+    return disabled
+  }, [monthBusyByDate, totalCrewCount])
+
+  /** True when every crew member is busy on the currently selected date */
+  const noCrewOnDate = totalCrewCount > 0 && !loadingCrew && !!form.date && busyEmployeeIds.size >= totalCrewCount
 
   /**
    * When date or project changes, ask the backend whether this project already
@@ -126,6 +145,49 @@ export default function NewSchedule() {
     return () => { cancelled = true }
   }, [form.date, apiFetch])
 
+  /** Fetches the total count of CREW employees once on mount */
+  useEffect(() => {
+    apiFetch('/api/crew-employees?size=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setTotalCrewCount(data.totalElements) })
+      .catch(() => {})
+  }, [apiFetch])
+
+  /** Fetches all crew assignments for every schedule in the viewed calendar month */
+  useEffect(() => {
+    let cancelled = false
+    async function fetchMonthCrewAvailability() {
+      try {
+        const dateFrom = `${calViewYear}-${String(calViewMonth + 1).padStart(2, '0')}-01`
+        const lastDay = new Date(calViewYear, calViewMonth + 1, 0).getDate()
+        const dateTo = `${calViewYear}-${String(calViewMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+        const res = await apiFetch(`/api/service-schedules/calendar?dateFrom=${dateFrom}&dateTo=${dateTo}`)
+        if (!res.ok || cancelled) return
+        const schedules = await res.json()
+        if (cancelled) return
+        const crewResults = await Promise.all(
+          schedules.map(s =>
+            apiFetch(`/api/service-assignments/schedule/${s.schedId}`)
+              .then(r => r.ok ? r.json() : [])
+              .catch(() => [])
+          )
+        )
+        if (cancelled) return
+        const byDate = {}
+        for (let i = 0; i < schedules.length; i++) {
+          const key = schedules[i].date
+          if (!byDate[key]) byDate[key] = new Set()
+          for (const c of crewResults[i]) byDate[key].add(c.employeeId)
+        }
+        if (!cancelled) setMonthBusyByDate(byDate)
+      } catch (_) {
+        if (!cancelled) setMonthBusyByDate({})
+      }
+    }
+    fetchMonthCrewAvailability()
+    return () => { cancelled = true }
+  }, [calViewYear, calViewMonth, apiFetch])
+
   function removeCrew(employeeId) {
     setCrewList(list => list.filter(c => c.employeeId !== employeeId))
   }
@@ -155,7 +217,8 @@ export default function NewSchedule() {
       setStep(2)
     } else if (step === 2) {
       if (!form.date) { setFormError({ date: 'Please select a date.' }); return }
-      if (loadingConflict) return
+      if (loadingConflict || loadingCrew) return
+      if (noCrewOnDate) { setFormError({ date: 'No crew members are available on this date.' }); return }
       if (projectConflict) { setFormError({ date: 'This project already has a schedule on the selected date.' }); return }
       setStep(3)
     }
@@ -312,29 +375,28 @@ export default function NewSchedule() {
                   <label className="label-text font-medium">Date <span className="text-error">*</span></label>
                   <input
                     type="date"
-                    className={`input input-bordered w-full${formError.date || projectConflict ? ' is-invalid' : ''}`}
+                    className={`input input-bordered w-full${formError.date || projectConflict || noCrewOnDate ? ' is-invalid' : ''}`}
                     required
                     value={form.date}
                     onChange={e => { setForm(f => ({ ...f, date: e.target.value })); setFormError({}) }}
                   />
-                  {loadingConflict && (
+                  {loadingConflict || loadingCrew ? (
                     <span className="text-xs text-base-content/50 flex items-center gap-1 mt-0.5">
                       <span className="loading loading-spinner loading-xs"></span>
-                      Checking date availability...
+                      Checking availability...
                     </span>
-                  )}
-                  {!loadingConflict && projectConflict && (
+                  ) : noCrewOnDate ? (
+                    <span className="helper-text">No crew members are available on this date — all crew are fully assigned.</span>
+                  ) : projectConflict ? (
                     <span className="helper-text">This project already has a schedule on this date. Please choose a different date.</span>
-                  )}
-                  {!loadingConflict && !projectConflict && formError.date && (
+                  ) : formError.date ? (
                     <span className="helper-text">{formError.date}</span>
-                  )}
-                  {!loadingConflict && form.date && !projectConflict && (
+                  ) : form.date ? (
                     <span className="text-xs text-success flex items-center gap-1 mt-0.5">
                       <span className="icon-[tabler--circle-check] size-3.5"></span>
                       Date is available for this project.
                     </span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
@@ -433,7 +495,7 @@ export default function NewSchedule() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={step === 2 && loadingConflict}
+                  disabled={step === 2 && (loadingConflict || loadingCrew || noCrewOnDate)}
                   onClick={handleNext}
                 >
                   Next <span className="icon-[tabler--arrow-right] size-4"></span>
@@ -467,6 +529,8 @@ export default function NewSchedule() {
               setFormError(e => ({ ...e, date: undefined }))
             }}
             conflict={projectConflict}
+            disabledDates={disabledDates}
+            onMonthChange={(y, m) => { setCalViewYear(y); setCalViewMonth(m) }}
             renderCellSchedules={(dayScheds) => (
               <div className="flex flex-col gap-0.5">
                 {dayScheds.slice(0, 3).map(s => (
@@ -476,7 +540,7 @@ export default function NewSchedule() {
                     title={`Project #${s.projNum} — ${s.purpose}`}
                   >
                     <span className={`size-1.5 rounded-full shrink-0 ${statusDotColor(s.status)}`}></span>
-                    <span className="truncate leading-tight">{s.purpose ?? `#${s.projNum}`}</span>
+                    <span className="truncate leading-tight">{`Project ${s.projName ?? s.projNum} Schedule`}</span>
                   </div>
                 ))}
                 {dayScheds.length > 3 && (

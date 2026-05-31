@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
@@ -18,6 +18,9 @@ const STEPS = [
   { number: 3, label: 'Purchase Orders (Optional)' },
 ]
 
+const ACCEPTED_DOC_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+const ACCEPTED_DOC_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
+
 const EMPTY_REPORT_FORM = {
   projNum: '',
   _projectDisplay: '',
@@ -29,8 +32,6 @@ const EMPTY_REPORT_FORM = {
   workDone: '',
   location: '',
   paymentMethod: 'unset',
-  receiptReceiveDate: '',
-  docuId: '',
   status: 'unpaid',
 }
 
@@ -75,6 +76,9 @@ export default function NewServiceReport() {
   // Step 1: service report form state
   const [reportForm, setReportForm] = useState(EMPTY_REPORT_FORM)
   const [reportFormError, setReportFormError] = useState({})
+  const [docFile, setDocFile] = useState(null)
+  const [docFileError, setDocFileError] = useState('')
+  const fileInputRef = useRef(null)
 
   // Step 2: local findings list (not yet persisted)
   const [findings, setFindings] = useState([])
@@ -191,9 +195,7 @@ export default function NewServiceReport() {
           location: reportForm.location || null,
           schedId: reportForm.schedId ? Number(reportForm.schedId) : null,
           paymentMethod: reportForm.paymentMethod || 'unset',
-          receiptReceiveDate: reportForm.receiptReceiveDate || null,
-          docuId: reportForm.docuId ? Number(reportForm.docuId) : null,
-          status: reportForm.status || 'unpaid',
+          status: reportForm.paymentMethod === 'unset' ? null : (reportForm.status || 'unpaid'),
         }),
       })
       if (!srRes.ok) {
@@ -204,7 +206,24 @@ export default function NewServiceReport() {
       const sr = await srRes.json()
       const srNumber = sr.srNumber
 
-      // 2. Create each finding
+      // 2. Upload document and link it to the service report
+      if (docFile) {
+        const formData = new FormData()
+        formData.append('file', docFile)
+        const docRes = await apiFetch('/api/documents', { method: 'POST', body: formData })
+        if (docRes.ok) {
+          const doc = await docRes.json()
+          await apiFetch(`/api/service-reports/${srNumber}/document`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ docuId: doc.docuId }),
+          })
+        } else {
+          notyfError('Document could not be uploaded. SR was still created.')
+        }
+      }
+
+      // 4. Create each finding
       for (const f of findings) {
         const fRes = await apiFetch('/api/service-report-findings', {
           method: 'POST',
@@ -222,7 +241,7 @@ export default function NewServiceReport() {
         }
       }
 
-      // 3. Create each purchase order
+      // 5. Create each purchase order
       for (const po of purchaseOrders) {
         const poRes = await apiFetch('/api/purchase-orders', {
           method: 'POST',
@@ -299,14 +318,26 @@ export default function NewServiceReport() {
                     error={reportFormError.projNum}
                     Picker={ProjectPickerModal}
                     onSelect={p => {
-                      setReportForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))
-                      setReportFormError(e => ({ ...e, projNum: undefined }))
+                      setReportForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})`, schedId: '', _scheduleDisplay: '' }))
+                      setReportFormError(e => ({ ...e, projNum: undefined, schedId: undefined }))
                     }}
                     className="sm:col-span-2"
                   />
 
                   <div className="flex flex-col gap-1">
-                    <label className="label-text font-medium">Location <span className="text-error">*</span></label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="label-text font-medium">Location <span className="text-error">*</span></label>
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => {
+                          setReportForm(prev => ({ ...prev, location: 'same as project location' }))
+                          setReportFormError(e => ({ ...e, location: undefined }))
+                        }}
+                      >
+                        Click if Same as project
+                      </button>
+                    </div>
                     <input type="text" name="location" maxLength={255}
                       className={`input input-bordered w-full${reportFormError.location ? ' is-invalid' : ''}`}
                       placeholder="e.g. 3rd Floor East Wing, ABC Corp" required
@@ -366,7 +397,11 @@ export default function NewServiceReport() {
                     <label className="label-text font-medium">Payment Method</label>
                     <select name="paymentMethod"
                       className={`select select-bordered w-full${reportFormError.paymentMethod ? ' is-invalid' : ''}`}
-                      value={reportForm.paymentMethod} onChange={handleReportFormChange}>
+                      value={reportForm.paymentMethod}
+                      onChange={e => {
+                        const val = e.target.value
+                        setReportForm(prev => ({ ...prev, paymentMethod: val, ...(val === 'unset' ? { status: 'unpaid' } : {}) }))
+                      }}>
                       {PAYMENT_OPTIONS.map(o => (
                         <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
                       ))}
@@ -374,33 +409,69 @@ export default function NewServiceReport() {
                     {reportFormError.paymentMethod && <span className="helper-text">{reportFormError.paymentMethod}</span>}
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <label className="label-text font-medium">Status</label>
-                    <select name="status"
-                      className={`select select-bordered w-full${reportFormError.status ? ' is-invalid' : ''}`}
-                      value={reportForm.status} onChange={handleReportFormChange}>
-                      {STATUS_OPTIONS.map(o => (
-                        <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                      ))}
-                    </select>
-                    {reportFormError.status && <span className="helper-text">{reportFormError.status}</span>}
-                  </div>
+                  {reportForm.paymentMethod !== 'unset' && (
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Status</label>
+                      <select name="status"
+                        className={`select select-bordered w-full${reportFormError.status ? ' is-invalid' : ''}`}
+                        value={reportForm.status} onChange={handleReportFormChange}>
+                        {STATUS_OPTIONS.map(o => (
+                          <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
+                        ))}
+                      </select>
+                      {reportFormError.status && <span className="helper-text">{reportFormError.status}</span>}
+                    </div>
+                  )}
 
-                  <div className="flex flex-col gap-1">
-                    <label className="label-text font-medium">Receipt Receive Date</label>
-                    <input type="date" name="receiptReceiveDate"
-                      className={`input input-bordered w-full${reportFormError.receiptReceiveDate ? ' is-invalid' : ''}`}
-                      value={reportForm.receiptReceiveDate} onChange={handleReportFormChange} />
-                    {reportFormError.receiptReceiveDate && <span className="helper-text">{reportFormError.receiptReceiveDate}</span>}
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="label-text font-medium">Document ID</label>
-                    <input type="number" name="docuId" min={1}
-                      className={`input input-bordered w-full${reportFormError.docuId ? ' is-invalid' : ''}`}
-                      placeholder="Optional"
-                      value={reportForm.docuId} onChange={handleReportFormChange} />
-                    {reportFormError.docuId && <span className="helper-text">{reportFormError.docuId}</span>}
+                  <div className="sm:col-span-2 flex flex-col gap-1">
+                    <label className="label-text font-medium">Attach Document <span className="text-base-content/40 font-normal">(optional)</span></label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        className={`input input-bordered flex-1 bg-base-200 cursor-default${docFileError ? ' is-invalid' : ''}`}
+                        value={docFile ? docFile.name : ''}
+                        placeholder="No file chosen"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-soft btn-secondary shrink-0"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <span className="icon-[tabler--upload] size-4"></span>
+                        Browse
+                      </button>
+                      {docFile && (
+                        <button
+                          type="button"
+                          className="btn btn-soft btn-error btn-square shrink-0"
+                          title="Remove file"
+                          onClick={() => { setDocFile(null); setDocFileError(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                        >
+                          <span className="icon-[tabler--x] size-4"></span>
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept={ACCEPTED_DOC_EXTENSIONS}
+                      onChange={e => {
+                        const file = e.target.files?.[0] ?? null
+                        if (file && !ACCEPTED_DOC_TYPES.includes(file.type)) {
+                          setDocFileError('Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.')
+                          setDocFile(null)
+                          return
+                        }
+                        setDocFileError('')
+                        setDocFile(file)
+                      }}
+                    />
+                    {docFileError
+                      ? <span className="helper-text">{docFileError}</span>
+                      : <span className="text-xs text-base-content/40">Accepted: JPEG, PNG, GIF, WebP, PDF</span>
+                    }
                   </div>
 
                   {reportFormError._general && (

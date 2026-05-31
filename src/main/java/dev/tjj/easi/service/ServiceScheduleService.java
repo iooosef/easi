@@ -122,6 +122,7 @@ public class ServiceScheduleService {
         return new ServiceScheduleResponse(
                 s.getSchedId(),
                 s.getProject().getProjNum(),
+                s.getProject().getName(),
                 s.getPurpose(),
                 s.getDate(),
                 s.getStatus(),

@@ -40,6 +40,8 @@ function DefaultCellSchedules({ dayScheds }) {
  * - renderCellSchedules: (dayScheds, dateStr) => ReactNode — custom cell content renderer
  * - showSelectedIndicator: boolean — show a selected-date label below the legend
  * - conflict: boolean — show a conflict badge inside the selected-date indicator
+ * - disabledDates: Set<string>|null — dates that cannot be selected (fully booked)
+ * - onMonthChange: (year, month) => void — called when the visible month changes
  */
 export default function CalendarPanel({
   selectedDate = null,
@@ -49,6 +51,8 @@ export default function CalendarPanel({
   renderCellSchedules = null,
   showSelectedIndicator = false,
   conflict = false,
+  disabledDates = null,
+  onMonthChange = null,
 }) {
   const { apiFetch } = useAuth()
   const today = new Date()
@@ -108,12 +112,18 @@ export default function CalendarPanel({
   }, [calSchedules])
 
   function prevMonth() {
-    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) }
-    else setCalMonth(m => m - 1)
+    const newMonth = calMonth === 0 ? 11 : calMonth - 1
+    const newYear = calMonth === 0 ? calYear - 1 : calYear
+    setCalMonth(newMonth)
+    setCalYear(newYear)
+    onMonthChange?.(newYear, newMonth)
   }
   function nextMonth() {
-    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) }
-    else setCalMonth(m => m + 1)
+    const newMonth = calMonth === 11 ? 0 : calMonth + 1
+    const newYear = calMonth === 11 ? calYear + 1 : calYear
+    setCalMonth(newMonth)
+    setCalYear(newYear)
+    onMonthChange?.(newYear, newMonth)
   }
   function dateStr(day) {
     return `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -148,14 +158,17 @@ export default function CalendarPanel({
             const dayScheds = ds ? (schedByDate[ds] ?? []) : []
             const isToday = day && calYear === today.getFullYear() && calMonth === today.getMonth() && day === today.getDate()
             const isSelected = ds && ds === selectedDate
+            const isDisabled = disabledDates != null && ds != null && disabledDates.has(ds)
 
             return (
               <div
                 key={idx}
                 className={`bg-base-100 p-1.5 transition-colors${fillHeight ? '' : ' min-h-16'}
-                  ${day ? ' cursor-pointer hover:bg-base-200' : ''}
+                  ${day && !isDisabled ? ' cursor-pointer hover:bg-base-200' : ''}
+                  ${day && isDisabled ? ' cursor-not-allowed bg-error/5 opacity-60' : ''}
                   ${isSelected ? ' ring-2 ring-primary ring-inset' : ''}`}
-                onClick={() => day && onDateSelect?.(ds)}
+                title={isDisabled ? 'No crew available — all crew are assigned on this day' : undefined}
+                onClick={() => day && !isDisabled && onDateSelect?.(ds)}
               >
                 {day && (
                   <>
@@ -182,6 +195,12 @@ export default function CalendarPanel({
               <span className="text-xs text-base-content/60 capitalize">{s}</span>
             </div>
           ))}
+          {disabledDates != null && (
+            <div className="flex items-center gap-1.5">
+              <span className="size-2 rounded-full bg-error/50"></span>
+              <span className="text-xs text-base-content/60">No crew available</span>
+            </div>
+          )}
         </div>
 
         {/* Optional selected date indicator */}
