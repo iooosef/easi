@@ -13,7 +13,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /** Handles service report business logic: creation, updates, and retrieval. */
 @Service
@@ -24,6 +28,8 @@ public class ServiceReportService {
     private final EmployeeRepository employeeRepository;
     private final ServiceScheduleRepository serviceScheduleRepository;
     private final DocumentRepository documentRepository;
+    private final ServiceReportBillingItemRepository billingItemRepository;
+    private final PaymentLogRepository paymentLogRepository;
     private final LogService logService;
 
     public ServiceReportService(ServiceReportRepository serviceReportRepository,
@@ -31,12 +37,16 @@ public class ServiceReportService {
                                 EmployeeRepository employeeRepository,
                                 ServiceScheduleRepository serviceScheduleRepository,
                                 DocumentRepository documentRepository,
+                                ServiceReportBillingItemRepository billingItemRepository,
+                                PaymentLogRepository paymentLogRepository,
                                 LogService logService) {
         this.serviceReportRepository = serviceReportRepository;
         this.projectRepository = projectRepository;
         this.employeeRepository = employeeRepository;
         this.serviceScheduleRepository = serviceScheduleRepository;
         this.documentRepository = documentRepository;
+        this.billingItemRepository = billingItemRepository;
+        this.paymentLogRepository = paymentLogRepository;
         this.logService = logService;
     }
 
@@ -62,12 +72,31 @@ public class ServiceReportService {
         return toResponse(saved);
     }
 
-    /** Returns a page of service report records, optionally filtered by project number. */
-    public Page<ServiceReportResponse> getAll(Integer projNum, Pageable pageable) {
-        if (projNum != null) {
-            return serviceReportRepository.findAllByProject_ProjNum(projNum, pageable).map(this::toResponse);
-        }
-        return serviceReportRepository.findAll(pageable).map(this::toResponse);
+    /** Returns a page of service report records, optionally filtered by project number and payment statuses. */
+    public Page<ServiceReportResponse> getAll(Integer projNum, List<String> statuses, Pageable pageable) {
+        boolean noFilter = statuses == null || statuses.isEmpty();
+        boolean wantUnpaid  = !noFilter && statuses.contains("unpaid");
+        boolean wantPartial = !noFilter && statuses.contains("partial");
+        boolean wantPaid    = !noFilter && statuses.contains("paid");
+        Page<ServiceReport> page = serviceReportRepository.findAllFiltered(
+                projNum, noFilter, wantUnpaid, wantPartial, wantPaid, pageable);
+
+        List<Integer> srNums = page.getContent().stream().map(ServiceReport::getSrNumber).toList();
+        if (srNums.isEmpty()) return page.map(sr -> toResponse(sr, BigDecimal.ZERO, BigDecimal.ZERO));
+
+        Map<Integer, BigDecimal> billedMap = billingItemRepository.sumTotalBySrNumbers(srNums)
+                .stream().collect(Collectors.toMap(
+                        row -> (Integer) row[0],
+                        row -> new BigDecimal(row[1].toString())));
+
+        Map<Integer, BigDecimal> paidMap = paymentLogRepository.sumPaidBySrNumbers(srNums)
+                .stream().collect(Collectors.toMap(
+                        row -> (Integer) row[0],
+                        row -> new BigDecimal(row[1].toString())));
+
+        return page.map(sr -> toResponse(sr,
+                billedMap.getOrDefault(sr.getSrNumber(), BigDecimal.ZERO),
+                paidMap.getOrDefault(sr.getSrNumber(), BigDecimal.ZERO)));
     }
 
     /** Links or unlinks a document on an existing service report. */
@@ -114,7 +143,6 @@ public class ServiceReportService {
         report.setWorkDone(request.workDone());
         report.setLocation(request.location());
         report.setServiceSchedule(schedule);
-        report.setReceiptReceiveDate(request.receiptReceiveDate());
 
         if (request.engineerEmployeeId() != null) {
             Employee engineer = employeeRepository.findById(request.engineerEmployeeId())
@@ -132,16 +160,17 @@ public class ServiceReportService {
             report.setDocument(null);
         }
 
-        if (request.paymentMethod() != null && !request.paymentMethod().isBlank()) {
-            report.setPaymentMethod(request.paymentMethod());
-        }
-
-        if (request.status() != null && !request.status().isBlank()) {
-            report.setStatus(request.status());
-        }
     }
 
+    /** Computes payment status from live billing and payment totals for a single SR. */
     private ServiceReportResponse toResponse(ServiceReport r) {
+        BigDecimal billed = billingItemRepository.sumTotalBySrNumber(r.getSrNumber());
+        BigDecimal paid = paymentLogRepository.sumPaidBySrNumber(r.getSrNumber());
+        return toResponse(r, billed, paid);
+    }
+
+    /** Builds the response DTO using precomputed billing and payment totals. */
+    private ServiceReportResponse toResponse(ServiceReport r, BigDecimal billed, BigDecimal paid) {
         return new ServiceReportResponse(
                 r.getSrNumber(),
                 r.getProject().getProjNum(),
@@ -152,11 +181,19 @@ public class ServiceReportService {
                 r.getLocation(),
                 r.getServiceSchedule().getSchedId(),
                 r.getServiceSchedule().getDate(),
-                r.getPaymentMethod(),
-                r.getReceiptReceiveDate(),
                 r.getDocument() != null ? r.getDocument().getDocuId() : null,
-                r.getStatus(),
+                deriveStatus(billed, paid),
+                billed,
+                paid,
                 r.getAddedOn()
         );
+    }
+
+    /** Derives payment status from billed and paid totals. */
+    static String deriveStatus(BigDecimal billed, BigDecimal paid) {
+        if (paid == null || paid.compareTo(BigDecimal.ZERO) == 0) return "unpaid";
+        if (billed != null && billed.compareTo(BigDecimal.ZERO) > 0
+                && paid.compareTo(billed) >= 0) return "paid";
+        return "partial";
     }
 }

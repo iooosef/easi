@@ -27,9 +27,11 @@ import dev.tjj.easi.repository.VehicleGasLogRepository;
 import dev.tjj.easi.entity.Part;
 import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
+import dev.tjj.easi.entity.PaymentLog;
 import dev.tjj.easi.entity.ServiceReportBillingItem;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.PartRepository;
+import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.PurchaseOrderDeliveryContactRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
@@ -69,6 +71,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PartRepository partRepository;
     private final PurchaseOrderDeliveryContactRepository poDeliveryContactRepository;
     private final ServiceReportBillingItemRepository billingItemRepository;
+    private final PaymentLogRepository paymentLogRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -83,6 +86,7 @@ public class DataInitializer implements CommandLineRunner {
         seedSuppliers();
         seedPurchaseOrders();
         seedBillingItems();
+        seedPaymentLogs();
     }
 
     private void createAdminUser() {
@@ -331,26 +335,26 @@ public class DataInitializer implements CommandLineRunner {
 
         // --- Service reports (Jan–Apr 2026) ---
         // Project 1 — 5 reports
-        report(p1, ss1,  "Unit not cooling properly in 3rd floor east wing",  "Replaced capacitor and recharged refrigerant",                          "3rd Floor East Wing, ABC Corp",       "cash",  LocalDate.of(2026, 1, 9),  null, "paid",    LocalDateTime.of(2026, 1, 8, 14, 0));
-        report(p1, ss2,  "Noisy compressor on rooftop unit A",                "Tightened mounting bolts and lubricated moving parts",                  "Rooftop, ABC Corp",                   "gcash", LocalDate.of(2026, 1, 23), null, "paid",    LocalDateTime.of(2026, 1, 22, 15, 0));
-        report(p1, ss3,  "Water dripping from ceiling cassette unit",         "Cleared blocked drain line and cleaned air filter",                     "2nd Floor Lobby, ABC Corp",           "cash",  LocalDate.of(2026, 2, 13), null, "paid",    LocalDateTime.of(2026, 2, 12, 11, 0));
-        report(p1, ss4,  "Routine preventive maintenance check",              "Full system inspection, coil cleaning, filter replacement",             "All Floors, ABC Corp",                "check", null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 5, 9, 0));
-        report(p1, ss5,  "Thermostat reading inaccurate",                     "Recalibrated thermostat sensor and tested operation",                   "1st Floor Office, ABC Corp",          "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 10, 10, 0));
+        report(p1, ss1,  "Unit not cooling properly in 3rd floor east wing",  "Replaced capacitor and recharged refrigerant",                          "3rd Floor East Wing, ABC Corp",       LocalDateTime.of(2026, 1, 8, 14, 0));
+        report(p1, ss2,  "Noisy compressor on rooftop unit A",                "Tightened mounting bolts and lubricated moving parts",                  "Rooftop, ABC Corp",                   LocalDateTime.of(2026, 1, 22, 15, 0));
+        report(p1, ss3,  "Water dripping from ceiling cassette unit",         "Cleared blocked drain line and cleaned air filter",                     "2nd Floor Lobby, ABC Corp",           LocalDateTime.of(2026, 2, 12, 11, 0));
+        report(p1, ss4,  "Routine preventive maintenance check",              "Full system inspection, coil cleaning, filter replacement",             "All Floors, ABC Corp",                LocalDateTime.of(2026, 3, 5, 9, 0));
+        report(p1, ss5,  "Thermostat reading inaccurate",                     "Recalibrated thermostat sensor and tested operation",                   "1st Floor Office, ABC Corp",          LocalDateTime.of(2026, 4, 10, 10, 0));
 
         // Project 2 — 5 reports
-        report(p2, ss6,  "Split unit not turning on after power outage",      "Reset circuit breaker and replaced blown fuse on PCB",                  "Master Bedroom, Santos Residence",    "cash",  LocalDate.of(2026, 1, 15), null, "paid",    LocalDateTime.of(2026, 1, 14, 13, 0));
-        report(p2, ss7,  "Foul smell from indoor unit",                       "Deep cleaned evaporator coil and applied anti-fungal treatment",         "Living Room, Santos Residence",       "cash",  LocalDate.of(2026, 2, 6),  null, "paid",    LocalDateTime.of(2026, 2, 5, 10, 0));
-        report(p2, ss8,  "Unit leaking water indoors",                        "Fixed clogged condensate drain and re-sealed drain pan",                 "2nd Floor Hallway, Santos Residence", "gcash", LocalDate.of(2026, 2, 26), null, "paid",    LocalDateTime.of(2026, 2, 25, 14, 0));
-        report(p2, ss9,  "Compressor overheating and shutting off",           "Cleaned condenser coil and topped up refrigerant to spec",               "Outdoor Unit, Santos Residence",      "check", null,                      null, "partial", LocalDateTime.of(2026, 3, 18, 9, 30));
-        report(p2, ss10, "Remote control not working and unit unresponsive",  "Replaced faulty receiver module and tested remote pairing",              "Guest Room, Santos Residence",        "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 22, 11, 0));
+        report(p2, ss6,  "Split unit not turning on after power outage",      "Reset circuit breaker and replaced blown fuse on PCB",                  "Master Bedroom, Santos Residence",    LocalDateTime.of(2026, 1, 14, 13, 0));
+        report(p2, ss7,  "Foul smell from indoor unit",                       "Deep cleaned evaporator coil and applied anti-fungal treatment",         "Living Room, Santos Residence",       LocalDateTime.of(2026, 2, 5, 10, 0));
+        report(p2, ss8,  "Unit leaking water indoors",                        "Fixed clogged condensate drain and re-sealed drain pan",                 "2nd Floor Hallway, Santos Residence", LocalDateTime.of(2026, 2, 25, 14, 0));
+        report(p2, ss9,  "Compressor overheating and shutting off",           "Cleaned condenser coil and topped up refrigerant to spec",               "Outdoor Unit, Santos Residence",      LocalDateTime.of(2026, 3, 18, 9, 30));
+        report(p2, ss10, "Remote control not working and unit unresponsive",  "Replaced faulty receiver module and tested remote pairing",              "Guest Room, Santos Residence",        LocalDateTime.of(2026, 4, 22, 11, 0));
 
         // Project 3 — 6 reports
-        report(p3, ss11, "Multiple units tripping breaker simultaneously",    "Identified overloaded circuit; redistributed unit loads across panels",  "Main Electrical Room, Greenfield B",  "cash",  LocalDate.of(2026, 1, 8),  null, "paid",    LocalDateTime.of(2026, 1, 7, 9, 0));
-        report(p3, ss12, "Evaporator coil frozen on unit B2",                 "Defrosted coil, replaced air filter, checked refrigerant level",         "Unit B2 Server Room, Greenfield B",   "cash",  LocalDate.of(2026, 1, 29), null, "paid",    LocalDateTime.of(2026, 1, 28, 15, 0));
-        report(p3, ss13, "Loud rattling noise from ductwork",                 "Secured loose duct sections with sheet metal screws and tape",           "Ceiling Duct, Wing C, Greenfield B",  "check", LocalDate.of(2026, 2, 19), null, "paid",    LocalDateTime.of(2026, 2, 18, 10, 0));
-        report(p3, ss14, "Central AHU fan motor failure",                     "Replaced fan motor and capacitor; tested rotation and airflow",          "AHU Room, Basement, Greenfield B",    "check", LocalDate.of(2026, 3, 12), null, "paid",    LocalDateTime.of(2026, 3, 11, 8, 0));
-        report(p3, ss15, "Routine preventive maintenance — all units",        "Full cleaning, belt inspection, coil washing, and refrigerant check",    "All Areas, Greenfield B",             "cash",  null,                      null, "unpaid",  LocalDateTime.of(2026, 3, 31, 9, 0));
-        report(p3, ss16, "Post-maintenance follow-up inspection",             "Verified all units operating within spec after March PM",                "All Areas, Greenfield B",             "unset", null,                      null, "unpaid",  LocalDateTime.of(2026, 4, 15, 13, 0));
+        report(p3, ss11, "Multiple units tripping breaker simultaneously",    "Identified overloaded circuit; redistributed unit loads across panels",  "Main Electrical Room, Greenfield B",  LocalDateTime.of(2026, 1, 7, 9, 0));
+        report(p3, ss12, "Evaporator coil frozen on unit B2",                 "Defrosted coil, replaced air filter, checked refrigerant level",         "Unit B2 Server Room, Greenfield B",   LocalDateTime.of(2026, 1, 28, 15, 0));
+        report(p3, ss13, "Loud rattling noise from ductwork",                 "Secured loose duct sections with sheet metal screws and tape",           "Ceiling Duct, Wing C, Greenfield B",  LocalDateTime.of(2026, 2, 18, 10, 0));
+        report(p3, ss14, "Central AHU fan motor failure",                     "Replaced fan motor and capacitor; tested rotation and airflow",          "AHU Room, Basement, Greenfield B",    LocalDateTime.of(2026, 3, 11, 8, 0));
+        report(p3, ss15, "Routine preventive maintenance — all units",        "Full cleaning, belt inspection, coil washing, and refrigerant check",    "All Areas, Greenfield B",             LocalDateTime.of(2026, 3, 31, 9, 0));
+        report(p3, ss16, "Post-maintenance follow-up inspection",             "Verified all units operating within spec after March PM",                "All Areas, Greenfield B",             LocalDateTime.of(2026, 4, 15, 13, 0));
 
         seedAcUnitsForProjects(p1, p2, p3);
         seedFindings();
@@ -423,22 +427,18 @@ public class DataInitializer implements CommandLineRunner {
         acUnitRepository.save(u);
     }
 
-    /** Creates and saves a ServiceReport. */
-    private void report(Project project, ServiceSchedule schedule, String complaint, String workDone,
-                        String location, String paymentMethod, LocalDate receiptDate,
-                        Integer docuId, String status, LocalDateTime addedOn) {
+    /** Creates and saves a ServiceReport. Status is computed dynamically from payment logs. */
+    private ServiceReport report(Project project, ServiceSchedule schedule, String complaint,
+                                 String workDone, String location, LocalDateTime addedOn) {
         ServiceReport r = new ServiceReport();
         r.setProject(project);
         r.setServiceSchedule(schedule);
         r.setComplaint(complaint);
         r.setWorkDone(workDone);
         r.setLocation(location);
-        r.setPaymentMethod(paymentMethod);
-        r.setReceiptReceiveDate(receiptDate);
         r.setDocument(null);
-        r.setStatus(status);
         r.setAddedOn(addedOn);
-        serviceReportRepository.save(r);
+        return serviceReportRepository.save(r);
     }
 
     /** Seeds sample findings across service reports if none exist. */
@@ -1048,6 +1048,73 @@ public class DataInitializer implements CommandLineRunner {
         item.setUnitPrice(unitPrice);
         item.setAddedOn(serviceReport.getAddedOn().plusHours(2));
         billingItemRepository.save(item);
+    }
+
+    /**
+     * Seeds payment logs for service reports that have been paid or partially paid.
+     * Each log represents one receipt. Amounts match the billed billing item totals.
+     */
+    private void seedPaymentLogs() {
+        if (paymentLogRepository.count() > 0) {
+            log.info("Payment log data already exists, skipping payment log seed.");
+            return;
+        }
+
+        var allReports = serviceReportRepository.findAll(
+                org.springframework.data.domain.Sort.by("srNumber").ascending());
+        if (allReports.size() < 14) {
+            log.warn("Not enough service reports to seed payment logs, skipping.");
+            return;
+        }
+
+        // SR indices (0-based): 0=SR1, 1=SR2, ..., 13=SR14
+        // Paid SRs: 0,1,2,5,6,7,10,11,12,13  Partial: 8
+        ServiceReport sr1  = allReports.get(0);
+        ServiceReport sr2  = allReports.get(1);
+        ServiceReport sr3  = allReports.get(2);
+        ServiceReport sr6  = allReports.get(5);
+        ServiceReport sr7  = allReports.get(6);
+        ServiceReport sr8  = allReports.get(7);
+        ServiceReport sr9  = allReports.get(8);
+        ServiceReport sr11 = allReports.get(10);
+        ServiceReport sr12 = allReports.get(11);
+        ServiceReport sr13 = allReports.get(12);
+        ServiceReport sr14 = allReports.get(13);
+
+        // Project 1 — ABC Corporation
+        payment(sr1,  new BigDecimal("1900.00"), "cash",  LocalDate.of(2026, 1, 9),  "OR-2026-P1-001", "ABC Corporation",          null);
+        payment(sr2,  new BigDecimal("1400.00"), "gcash", LocalDate.of(2026, 1, 23), "OR-2026-P1-002", "ABC Corporation",          null);
+        payment(sr3,  new BigDecimal("1550.00"), "cash",  LocalDate.of(2026, 2, 13), "OR-2026-P1-003", "ABC Corporation",          null);
+
+        // Project 2 — Santos Residence
+        payment(sr6,  new BigDecimal("1600.00"), "cash",  LocalDate.of(2026, 1, 15), "OR-2026-P2-001", "Roberto Santos",           null);
+        payment(sr7,  new BigDecimal("1800.00"), "cash",  LocalDate.of(2026, 2, 6),  "OR-2026-P2-002", "Roberto Santos",           null);
+        payment(sr8,  new BigDecimal("1900.00"), "gcash", LocalDate.of(2026, 2, 26), "OR-2026-P2-003", "Roberto Santos",           null);
+        // SR 9 — partial: 1000 of 1850 billed
+        payment(sr9,  new BigDecimal("1000.00"), "check", LocalDate.of(2026, 3, 25), "CHK-2026-P2-004", "Roberto Santos",          "Partial payment; balance to follow.");
+
+        // Project 3 — Greenfield Mall Inc.
+        payment(sr11, new BigDecimal("4200.00"), "cash",  LocalDate.of(2026, 1, 8),  "OR-2026-P3-001", "Greenfield Mall Inc.",     null);
+        payment(sr12, new BigDecimal("1900.00"), "cash",  LocalDate.of(2026, 1, 29), "OR-2026-P3-002", "Greenfield Mall Inc.",     null);
+        payment(sr13, new BigDecimal("1900.00"), "check", LocalDate.of(2026, 2, 19), "CHK-2026-P3-003", "Greenfield Mall Inc.",    null);
+        payment(sr14, new BigDecimal("2600.00"), "check", LocalDate.of(2026, 3, 12), "CHK-2026-P3-004", "Greenfield Mall Inc.",    null);
+
+        log.info("Payment log seed completed: 11 payment logs created.");
+    }
+
+    /** Creates and saves a PaymentLog for a service report. */
+    private void payment(ServiceReport sr, BigDecimal amount, String paymentMethod,
+                         LocalDate receiptDate, String receiptNumber, String paidBy, String notes) {
+        PaymentLog pl = new PaymentLog();
+        pl.setServiceReport(sr);
+        pl.setAmount(amount);
+        pl.setPaymentMethod(paymentMethod);
+        pl.setReceiptDate(receiptDate);
+        pl.setReceiptNumber(receiptNumber);
+        pl.setPaidBy(paidBy);
+        pl.setNotes(notes);
+        pl.setAddedOn(receiptDate.atTime(10, 0));
+        paymentLogRepository.save(pl);
     }
 
 }

@@ -33,13 +33,7 @@ public record ServiceReportSummaryRow(
         @Schema(description = "Scheduled service date", example = "2025-03-15")
         LocalDate scheduleDate,
 
-        @Schema(description = "Payment method", example = "cash")
-        String paymentMethod,
-
-        @Schema(description = "Date receipt was received; null if not yet received", example = "2025-03-20")
-        LocalDate receiptReceiveDate,
-
-        @Schema(description = "Payment status", example = "paid",
+        @Schema(description = "Computed payment status", example = "paid",
                 allowableValues = {"unpaid", "partial", "paid"})
         String status,
 
@@ -47,6 +41,9 @@ public record ServiceReportSummaryRow(
         LocalDateTime addedOn,
 
         @Schema(description = "Sum of all billing item amounts for this service report", example = "3500.00")
-        BigDecimal totalBilled
+        BigDecimal totalBilled,
+
+        @Schema(description = "Sum of all payment log amounts for this service report", example = "3500.00")
+        BigDecimal totalPaid
 
 ) {}

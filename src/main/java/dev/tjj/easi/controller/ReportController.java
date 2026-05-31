@@ -36,7 +36,7 @@ public class ReportController {
     @Operation(
             summary = "Generate service report summary",
             description = "Returns all service reports recorded within the date range. " +
-                    "Optionally filter by project, payment status, or payment method. " +
+                    "Optionally filter by project or payment status. " +
                     "Each row includes the total billed amount from linked billing items."
     )
     @ApiResponses({
@@ -56,12 +56,9 @@ public class ReportController {
             @RequestParam(required = false) Integer projNum,
 
             @Parameter(description = "Filter by payment status", example = "unpaid")
-            @RequestParam(required = false) String status,
-
-            @Parameter(description = "Filter by payment method", example = "cash")
-            @RequestParam(required = false) String paymentMethod) {
+            @RequestParam(required = false) String status) {
 
         return ResponseEntity.ok(reportService.getServiceReportSummary(
-                startDate, endDate, projNum, status, paymentMethod));
+                startDate, endDate, projNum, status));
     }
 }

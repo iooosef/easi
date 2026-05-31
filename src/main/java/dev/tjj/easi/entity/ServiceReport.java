@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -51,26 +50,11 @@ public class ServiceReport {
     @Setter
     private ServiceSchedule serviceSchedule;
 
-    @Column(name = "payment_method", length = 16, nullable = false, columnDefinition = "varchar(16) DEFAULT 'unset'")
-    @Getter
-    @Setter
-    private String paymentMethod = "unset";
-
-    @Column(name = "receipt_receive_date")
-    @Getter
-    @Setter
-    private LocalDate receiptReceiveDate;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "docu_id")
     @Getter
     @Setter
     private Document document;
-
-    @Column(name = "status", length = 16, nullable = false, columnDefinition = "varchar(16) DEFAULT 'unpaid'")
-    @Getter
-    @Setter
-    private String status = "unpaid";
 
     @Column(name = "added_on", nullable = false)
     @Getter

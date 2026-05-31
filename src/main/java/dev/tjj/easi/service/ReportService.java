@@ -3,6 +3,7 @@ package dev.tjj.easi.service;
 import dev.tjj.easi.dto.report.ServiceReportSummaryRow;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.ServiceReport;
+import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import org.springframework.stereotype.Service;
@@ -20,29 +21,32 @@ public class ReportService {
 
     private final ServiceReportRepository serviceReportRepository;
     private final ServiceReportBillingItemRepository billingItemRepository;
+    private final PaymentLogRepository paymentLogRepository;
 
     public ReportService(ServiceReportRepository serviceReportRepository,
-                         ServiceReportBillingItemRepository billingItemRepository) {
+                         ServiceReportBillingItemRepository billingItemRepository,
+                         PaymentLogRepository paymentLogRepository) {
         this.serviceReportRepository = serviceReportRepository;
         this.billingItemRepository = billingItemRepository;
+        this.paymentLogRepository = paymentLogRepository;
     }
 
     /**
      * Returns service report rows within the given date range.
+     * Status is computed from payment logs and filtered post-query.
      * Blank or null optional filters are ignored (treated as "no filter").
      */
     public List<ServiceReportSummaryRow> getServiceReportSummary(
             LocalDate startDate, LocalDate endDate,
-            Integer projNum, String status, String paymentMethod) {
+            Integer projNum, String status) {
 
         LocalDateTime start = startDate.atStartOfDay();
         LocalDateTime end = endDate.atTime(23, 59, 59);
 
         String normalizedStatus = (status == null || status.isBlank()) ? null : status;
-        String normalizedPaymentMethod = (paymentMethod == null || paymentMethod.isBlank()) ? null : paymentMethod;
 
         List<ServiceReport> reports = serviceReportRepository.findForSummaryReport(
-                start, end, projNum, normalizedStatus, normalizedPaymentMethod);
+                start, end, projNum);
 
         if (reports.isEmpty()) return List.of();
 
@@ -58,17 +62,31 @@ public class ReportService {
                         row -> new BigDecimal(row[1].toString())
                 ));
 
+        Map<Integer, BigDecimal> paidTotals = paymentLogRepository
+                .sumPaidBySrNumbers(srNumbers)
+                .stream()
+                .collect(Collectors.toMap(
+                        row -> (Integer) row[0],
+                        row -> new BigDecimal(row[1].toString())
+                ));
+
         return reports.stream()
-                .map(sr -> toRow(sr, billingTotals))
+                .map(sr -> toRow(sr, billingTotals, paidTotals))
+                .filter(row -> normalizedStatus == null || normalizedStatus.equals(row.status()))
                 .toList();
     }
 
-    /** Maps a ServiceReport entity and its billing total to a flat summary row. */
-    private ServiceReportSummaryRow toRow(ServiceReport sr, Map<Integer, BigDecimal> billingTotals) {
+    /** Maps a ServiceReport entity and its billing/payment totals to a flat summary row. */
+    private ServiceReportSummaryRow toRow(ServiceReport sr,
+                                          Map<Integer, BigDecimal> billingTotals,
+                                          Map<Integer, BigDecimal> paidTotals) {
         Employee eng = sr.getEngineerEmployee();
         String engineerName = eng != null
                 ? (eng.getFirstName() + " " + eng.getLastName()).strip()
                 : null;
+
+        BigDecimal billed = billingTotals.getOrDefault(sr.getSrNumber(), BigDecimal.ZERO);
+        BigDecimal paid = paidTotals.getOrDefault(sr.getSrNumber(), BigDecimal.ZERO);
 
         return new ServiceReportSummaryRow(
                 sr.getSrNumber(),
@@ -79,11 +97,10 @@ public class ReportService {
                 engineerName,
                 sr.getLocation(),
                 sr.getServiceSchedule().getDate(),
-                sr.getPaymentMethod(),
-                sr.getReceiptReceiveDate(),
-                sr.getStatus(),
+                ServiceReportService.deriveStatus(billed, paid),
                 sr.getAddedOn(),
-                billingTotals.getOrDefault(sr.getSrNumber(), BigDecimal.ZERO)
+                billed,
+                paid
         );
     }
 }

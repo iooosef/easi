@@ -6,6 +6,7 @@ import Layout from './Layout'
 const HOME_NAV_ITEMS = [
   { page: 'new-schedule', label: 'Make new Schedule', icon: 'icon-[tabler--calendar-plus]', path: '/schedules/new', roles: ['ADMIN', 'STAFF'] },
   { page: 'new-service-report', label: 'New Service Report', icon: 'icon-[tabler--file-plus]', path: '/service-report/new', roles: ['ADMIN', 'STAFF'] },
+  { page: 'record-payment', label: 'Record a Payment', icon: 'icon-[tabler--cash]', path: '/billing?status=unpaid,partial', roles: ['ADMIN', 'ACCOUNTING'] },
 ]
 
 export default function Home() {

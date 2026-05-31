@@ -32,10 +32,7 @@ const EMPTY_FORM = {
   complaint: '',
   workDone: '',
   location: '',
-  paymentMethod: 'unset',
-  receiptReceiveDate: '',
   docuId: '',
-  status: 'unpaid',
 }
 
 const EMPTY_EDIT_FORM = {
@@ -48,10 +45,7 @@ const EMPTY_EDIT_FORM = {
   complaint: '',
   workDone: '',
   location: '',
-  paymentMethod: 'unset',
-  receiptReceiveDate: '',
   docuId: '',
-  status: 'unpaid',
 }
 
 /**
@@ -134,10 +128,7 @@ export default function ServiceReports() {
       complaint: report.complaint ?? '',
       workDone: report.workDone ?? '',
       location: report.location ?? '',
-      paymentMethod: report.paymentMethod ?? 'unset',
-      receiptReceiveDate: report.receiptReceiveDate ? String(report.receiptReceiveDate).slice(0, 10) : '',
       docuId: report.docuId ?? '',
-      status: report.status ?? 'unpaid',
     })
     setEditingReport(report)
     setEditFormError({})
@@ -172,10 +163,7 @@ export default function ServiceReports() {
           engineerEmployeeId: editForm.engineerEmployeeId ? Number(editForm.engineerEmployeeId) : null,
           location: editForm.location || null,
           schedId: editForm.schedId ? Number(editForm.schedId) : null,
-          paymentMethod: editForm.paymentMethod || 'unset',
-          receiptReceiveDate: editForm.receiptReceiveDate || null,
           docuId: editForm.docuId ? Number(editForm.docuId) : null,
-          status: editForm.status || 'unpaid',
         }),
       })
       if (!res.ok) {
@@ -254,10 +242,7 @@ export default function ServiceReports() {
           engineerEmployeeId: form.engineerEmployeeId ? Number(form.engineerEmployeeId) : null,
           location: form.location || null,
           schedId: form.schedId ? Number(form.schedId) : null,
-          paymentMethod: form.paymentMethod || 'unset',
-          receiptReceiveDate: form.receiptReceiveDate || null,
           docuId: form.docuId ? Number(form.docuId) : null,
-          status: form.status || 'unpaid',
         }),
       })
       if (!res.ok) {
@@ -501,38 +486,6 @@ export default function ServiceReports() {
             />
 
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Method</label>
-              <select name="paymentMethod"
-                className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
-                value={form.paymentMethod} onChange={handleFormChange}>
-                {PAYMENT_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                ))}
-              </select>
-              {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select name="status"
-                className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
-                value={form.status} onChange={handleFormChange}>
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                ))}
-              </select>
-              {formError.status && <span className="helper-text">{formError.status}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Receipt Receive Date</label>
-              <input type="date" name="receiptReceiveDate"
-                className={`input input-bordered w-full${formError.receiptReceiveDate ? ' is-invalid' : ''}`}
-                value={form.receiptReceiveDate} onChange={handleFormChange} />
-              {formError.receiptReceiveDate && <span className="helper-text">{formError.receiptReceiveDate}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Document ID</label>
               <input type="number" name="docuId" min={1}
                 className={`input input-bordered w-full${formError.docuId ? ' is-invalid' : ''}`}
@@ -634,38 +587,6 @@ export default function ServiceReports() {
               className="sm:col-span-2"
             />
 
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Method</label>
-              <select name="paymentMethod"
-                className={`select select-bordered w-full${editFormError.paymentMethod ? ' is-invalid' : ''}`}
-                value={editForm.paymentMethod} onChange={handleEditFormChange}>
-                {PAYMENT_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                ))}
-              </select>
-              {editFormError.paymentMethod && <span className="helper-text">{editFormError.paymentMethod}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select name="status"
-                className={`select select-bordered w-full${editFormError.status ? ' is-invalid' : ''}`}
-                value={editForm.status} onChange={handleEditFormChange}>
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                ))}
-              </select>
-              {editFormError.status && <span className="helper-text">{editFormError.status}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Receipt Receive Date</label>
-              <input type="date" name="receiptReceiveDate"
-                className={`input input-bordered w-full${editFormError.receiptReceiveDate ? ' is-invalid' : ''}`}
-                value={editForm.receiptReceiveDate} onChange={handleEditFormChange} />
-              {editFormError.receiptReceiveDate && <span className="helper-text">{editFormError.receiptReceiveDate}</span>}
-            </div>
-
             {editFormError._general && (
               <div className="sm:col-span-2 alert alert-error py-2">
                 <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
@@ -686,9 +607,7 @@ export default function ServiceReports() {
           { label: 'Work Done', value: selectedReport.workDone, fullWidth: true },
           { label: 'Location', value: selectedReport.location },
           { label: 'Status', value: selectedReport.status },
-          { label: 'Payment Method', value: selectedReport.paymentMethod },
           { label: 'Schedule Date', value: formatDate(selectedReport.scheduleDate) },
-          { label: 'Receipt Date', value: formatDate(selectedReport.receiptReceiveDate) },
           { label: 'Engineer Emp. ID', value: selectedReport.engineerEmployeeId ?? null },
         ] : []}
         isOpen={!!selectedReport}

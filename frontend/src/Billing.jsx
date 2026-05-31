@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
@@ -39,6 +40,7 @@ function subtotal(items) {
 
 const EMPTY_BILLING_FORM = { description: '', quantity: '', unitPrice: '' }
 
+
 /** Modal for adding and updating billing items for an SR — modeled after Manage Parts */
 export function ManageBillingModal({ report, apiFetch, onClose }) {
   const [items, setItems]           = useState([])
@@ -51,12 +53,24 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
   const [addFormError, setAddFormError]     = useState({})
   const [addSubmitting, setAddSubmitting]   = useState(false)
 
-  // Update sub-modal
+  // Update billing sub-modal
   const [updateOpen, setUpdateOpen]               = useState(false)
   const [updatingItem, setUpdatingItem]           = useState(null)
   const [updateForm, setUpdateForm]               = useState(EMPTY_BILLING_FORM)
   const [updateFormError, setUpdateFormError]     = useState({})
   const [updateSubmitting, setUpdateSubmitting]   = useState(false)
+
+  // Payments
+  const [payments, setPayments]               = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [paymentsRefresh, setPaymentsRefresh] = useState(0)
+
+  // Update payment sub-modal
+  const [updatePaymentOpen, setUpdatePaymentOpen]             = useState(false)
+  const [updatingPayment, setUpdatingPayment]                 = useState(null)
+  const [updatePaymentForm, setUpdatePaymentForm]             = useState(EMPTY_PAYMENT_FORM)
+  const [updatePaymentFormError, setUpdatePaymentFormError]   = useState({})
+  const [updatePaymentSubmitting, setUpdatePaymentSubmitting] = useState(false)
 
   useEffect(() => {
     if (!report) { setItems([]); return }
@@ -70,6 +84,18 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
   }, [apiFetch, report, refresh])
+
+  useEffect(() => {
+    if (!report) { setPayments([]); return }
+    let active = true
+    setPaymentsLoading(true)
+    apiFetch(`/api/payment-logs?srNumber=${encodeURIComponent(report.srNumber)}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setPayments(Array.isArray(data) ? data : []) })
+      .catch(() => { if (active) setPayments([]) })
+      .finally(() => { if (active) setPaymentsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report, paymentsRefresh])
 
   function handleAddChange(e) {
     const { name, value } = e.target
@@ -157,13 +183,79 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
     }
   }
 
+  function openUpdatePayment(p) {
+    setUpdatePaymentForm({
+      paidBy:        p.paidBy ?? '',
+      amount:        p.amount ?? '',
+      paymentMethod: p.paymentMethod ?? 'cash',
+      receiptDate:   p.receiptDate ? String(p.receiptDate).slice(0, 10) : '',
+      receiptNumber: p.receiptNumber ?? '',
+      notes:         p.notes ?? '',
+    })
+    setUpdatingPayment(p)
+    setUpdatePaymentFormError({})
+    setUpdatePaymentOpen(true)
+  }
+
+  function closeUpdatePayment() {
+    setUpdatePaymentOpen(false)
+    setUpdatingPayment(null)
+    setUpdatePaymentForm(EMPTY_PAYMENT_FORM)
+    setUpdatePaymentFormError({})
+  }
+
+  function handleUpdatePaymentChange(e) {
+    const { name, value } = e.target
+    if (name === 'amount') {
+      const updateBalance = Math.max(0, subtotal(items) -
+        payments.reduce((s, p) => s + (p.logId !== updatingPayment?.logId ? Number(p.amount ?? 0) : 0), 0))
+      const num = parseFloat(value)
+      if (!isNaN(num) && num < 0)             { setUpdatePaymentForm(prev => ({ ...prev, amount: '0' })); return }
+      if (!isNaN(num) && num > updateBalance)  { setUpdatePaymentForm(prev => ({ ...prev, amount: updateBalance.toFixed(2) })); return }
+    }
+    setUpdatePaymentForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleUpdatePaymentSubmit(e) {
+    e.preventDefault()
+    setUpdatePaymentFormError({})
+    setUpdatePaymentSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/payment-logs/${updatingPayment.logId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber:      report.srNumber,
+          paidBy:        updatePaymentForm.paidBy,
+          amount:        Number(updatePaymentForm.amount),
+          paymentMethod: updatePaymentForm.paymentMethod,
+          receiptDate:   updatePaymentForm.receiptDate,
+          receiptNumber: updatePaymentForm.receiptNumber || null,
+          notes:         updatePaymentForm.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        setUpdatePaymentFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeUpdatePayment()
+      notyfSuccess(`Payment #${updatingPayment.logId} updated.`)
+      setPaymentsRefresh(k => k + 1)
+    } catch (err) {
+      setUpdatePaymentFormError({ _general: err.message })
+    } finally {
+      setUpdatePaymentSubmitting(false)
+    }
+  }
+
   return (
     <>
       <Modal
         isOpen={!!report}
         onClose={addOpen ? undefined : onClose}
         hideClose={addOpen}
-        title={`Billing Items — SR #${report?.srNumber ?? ''}`}
+        title={`Manage Billing — SR #${report?.srNumber ?? ''}`}
         size="max-w-2xl"
         footer={!addOpen && (
           <button type="button" className="btn btn-soft btn-secondary" onClick={onClose}>
@@ -287,11 +379,49 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
                 </div>
               </>
             )}
+
+            {/* Payments section — shown when payments exist */}
+            {!paymentsLoading && payments.length > 0 && (
+              <>
+                <div className="divider my-2 text-xs text-base-content/40">Payments</div>
+                <div className="overflow-x-auto rounded-box border border-base-300">
+                  <table className="table table-zebra table-sm w-full">
+                    <thead>
+                      <tr>
+                        <th>Receipt Date</th>
+                        <th>Paid By</th>
+                        <th>Method</th>
+                        <th>Receipt #</th>
+                        <th className="text-right">Amount</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map(p => (
+                        <tr key={p.logId}>
+                          <td className="text-sm">{p.receiptDate ? String(p.receiptDate).slice(0, 10) : '—'}</td>
+                          <td className="text-sm">{p.paidBy ?? '—'}</td>
+                          <td className="text-sm">{formatPaymentMethod(p.paymentMethod)}</td>
+                          <td className="font-mono text-xs">{p.receiptNumber ?? '—'}</td>
+                          <td className="text-right text-sm font-medium">{formatCurrency(p.amount)}</td>
+                          <td>
+                            <button className="btn btn-soft btn-secondary btn-xs" onClick={() => openUpdatePayment(p)}>
+                              <span className="icon-[tabler--pencil] size-3"></span>
+                              Update
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </>
         )}
       </Modal>
 
-      {/* Update sub-modal — sits above Manage modal */}
+      {/* Update billing sub-modal — sits above Manage modal */}
       {updateOpen && (
         <>
           <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdate} />
@@ -357,11 +487,135 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
           </div>
         </>
       )}
+      {/* Update payment sub-modal — sits above Manage modal */}
+      {updatePaymentOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdatePayment} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-md shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Update Payment #{updatingPayment?.logId}</h3>
+                  <span className="text-sm text-base-content/50">{updatingPayment?.paidBy}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdatePayment}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="update-payment-form" onSubmit={handleUpdatePaymentSubmit}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                    <div className="sm:col-span-2 flex flex-col gap-1">
+                      <label className="label-text font-medium">Paid By <span className="text-error">*</span></label>
+                      <input type="text" name="paidBy" maxLength={120} required
+                        className={`input input-bordered w-full${updatePaymentFormError.paidBy ? ' is-invalid' : ''}`}
+                        value={updatePaymentForm.paidBy} onChange={handleUpdatePaymentChange} />
+                      {updatePaymentFormError.paidBy && <span className="helper-text">{updatePaymentFormError.paidBy}</span>}
+                    </div>
+
+
+                    {(() => {
+                      const updateBalance = Math.max(0, subtotal(items) -
+                        payments.reduce((s, p) => s + (p.logId !== updatingPayment?.logId ? Number(p.amount ?? 0) : 0), 0))
+                      return (
+                        <div className="sm:col-span-2 flex flex-col gap-1">
+                          <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+                          <div className="flex gap-1 mb-1">
+                            {[25, 50, 75].map(p => (
+                              <button key={p} type="button"
+                                className="btn btn-xs btn-soft btn-secondary flex-1"
+                                onClick={() => setUpdatePaymentForm(prev => ({ ...prev, amount: ((p / 100) * updateBalance).toFixed(2) }))}>
+                                {p}%
+                              </button>
+                            ))}
+                            <button type="button"
+                              className="btn btn-xs btn-soft btn-primary flex-1"
+                              onClick={() => setUpdatePaymentForm(prev => ({ ...prev, amount: updateBalance.toFixed(2) }))}>
+                              Full
+                            </button>
+                          </div>
+                          <input type="number" name="amount" min="0.01" step="0.01" required
+                            className={`input input-bordered w-full${updatePaymentFormError.amount ? ' is-invalid' : ''}`}
+                            value={updatePaymentForm.amount} onChange={handleUpdatePaymentChange} />
+                          {updatePaymentFormError.amount && <span className="helper-text">{updatePaymentFormError.amount}</span>}
+                        </div>
+                      )
+                    })()}
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
+                      <select name="paymentMethod" required
+                        className={`select select-bordered w-full${updatePaymentFormError.paymentMethod ? ' is-invalid' : ''}`}
+                        value={updatePaymentForm.paymentMethod} onChange={handleUpdatePaymentChange}>
+                        <option value="cash">Cash</option>
+                        <option value="check">Check</option>
+                        <option value="gcash">GCash</option>
+                        <option value="bank">Bank Transfer</option>
+                      </select>
+                      {updatePaymentFormError.paymentMethod && <span className="helper-text">{updatePaymentFormError.paymentMethod}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>
+                      <input type="date" name="receiptDate" required
+                        className={`input input-bordered w-full${updatePaymentFormError.receiptDate ? ' is-invalid' : ''}`}
+                        value={updatePaymentForm.receiptDate} onChange={handleUpdatePaymentChange} />
+                      {updatePaymentFormError.receiptDate && <span className="helper-text">{updatePaymentFormError.receiptDate}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Receipt #</label>
+                      <input type="text" name="receiptNumber" maxLength={60}
+                        className={`input input-bordered w-full${updatePaymentFormError.receiptNumber ? ' is-invalid' : ''}`}
+                        placeholder="e.g. OR-2026-001"
+                        value={updatePaymentForm.receiptNumber} onChange={handleUpdatePaymentChange} />
+                      {updatePaymentFormError.receiptNumber && <span className="helper-text">{updatePaymentFormError.receiptNumber}</span>}
+                    </div>
+
+                    <div className="sm:col-span-2 flex flex-col gap-1">
+                      <label className="label-text font-medium">Notes</label>
+                      <textarea name="notes" maxLength={255} rows={2}
+                        className={`textarea textarea-bordered w-full${updatePaymentFormError.notes ? ' is-invalid' : ''}`}
+                        value={updatePaymentForm.notes} onChange={handleUpdatePaymentChange} />
+                      {updatePaymentFormError.notes && <span className="helper-text">{updatePaymentFormError.notes}</span>}
+                    </div>
+
+                    {updatePaymentFormError._general && (
+                      <div className="sm:col-span-2 alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{updatePaymentFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdatePayment}>Cancel</button>
+                <button type="submit" form="update-payment-form" className="btn btn-primary" disabled={updatePaymentSubmitting}>
+                  {updatePaymentSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--device-floppy] size-4"></span>
+                  }
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </>
   )
 }
 
-/** Modal showing SR details, billing items, parts from POs, and totals */
+/** Formats a payment method string for display */
+function formatPaymentMethod(m) {
+  if (!m) return '—'
+  const map = { cash: 'Cash', check: 'Check', gcash: 'GCash', bank: 'Bank Transfer', unset: 'Unset' }
+  return map[m.toLowerCase()] ?? m
+}
+
+/** Modal showing SR details, billing items, parts from POs, payments, and totals */
 function BillingModal({ report, apiFetch, onClose }) {
   const [billingItems, setBillingItems]     = useState([])
   const [billingLoading, setBillingLoading] = useState(true)
@@ -370,6 +624,10 @@ function BillingModal({ report, apiFetch, onClose }) {
   const [parts, setParts]             = useState([])
   const [partsLoading, setPartsLoading] = useState(true)
   const [partsError, setPartsError]   = useState(null)
+
+  const [payments, setPayments]             = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [paymentsError, setPaymentsError]   = useState(null)
 
   useEffect(() => {
     if (!report) return
@@ -417,6 +675,22 @@ function BillingModal({ report, apiFetch, onClose }) {
     return () => { active = false }
   }, [apiFetch, report])
 
+  useEffect(() => {
+    if (!report) return
+    let active = true
+    setPaymentsLoading(true)
+    setPaymentsError(null)
+    apiFetch(`/api/payment-logs?srNumber=${encodeURIComponent(report.srNumber)}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to load payments (${res.status})`)
+        return res.json()
+      })
+      .then(data => { if (active) setPayments(Array.isArray(data) ? data : []) })
+      .catch(err => { if (active) setPaymentsError(err.message) })
+      .finally(() => { if (active) setPaymentsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report])
+
   if (!report) return null
 
   const billingSubtotal = subtotal(billingItems)
@@ -460,16 +734,8 @@ function BillingModal({ report, apiFetch, onClose }) {
                 <span className={`badge badge-soft ${statusBadgeClass(report.status)} text-xs`}>{report.status}</span>
               </div>
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Payment Method</span>
-                <span className="text-sm font-medium">{report.paymentMethod ?? '—'}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
                 <span className="text-xs text-base-content/50 uppercase tracking-wide">Schedule Date</span>
                 <span className="text-sm font-medium">{formatDate(report.scheduleDate)}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Receipt Date</span>
-                <span className="text-sm font-medium">{formatDate(report.receiptReceiveDate)}</span>
               </div>
             </div>
 
@@ -559,15 +825,77 @@ function BillingModal({ report, apiFetch, onClose }) {
               )}
             </div>
 
-            {/* Grand Total */}
-            {!billingLoading && !partsLoading && (
-              <div className="flex justify-end">
-                <div className="rounded-box border border-base-300 bg-base-200 px-6 py-3 flex items-center gap-8">
-                  <span className="text-sm font-semibold text-base-content/70">Grand Total</span>
-                  <span className="text-lg font-bold text-primary">{formatCurrency(grandTotal)}</span>
+            {/* Payments */}
+            <div>
+              <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Payments</p>
+              {paymentsLoading && <div className="flex justify-center py-6"><span className="loading loading-spinner loading-md text-primary"></span></div>}
+              {paymentsError && <div className="alert alert-error py-2 text-sm"><span className="icon-[tabler--alert-circle] size-4"></span>{paymentsError}</div>}
+              {!paymentsLoading && !paymentsError && payments.length === 0 && (
+                <p className="text-sm text-base-content/40 text-center py-4">No payments recorded.</p>
+              )}
+              {!paymentsLoading && !paymentsError && payments.length > 0 && (
+                <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+                  <table className="table table-zebra table-sm w-full">
+                    <thead>
+                      <tr>
+                        <th>Receipt Date</th>
+                        <th>Paid By</th>
+                        <th>Method</th>
+                        <th>Receipt #</th>
+                        <th>Notes</th>
+                        <th className="text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {payments.map(p => (
+                        <tr key={p.logId}>
+                          <td className="text-sm">{formatDate(p.receiptDate)}</td>
+                          <td className="text-sm">{p.paidBy ?? '—'}</td>
+                          <td className="text-sm">{formatPaymentMethod(p.paymentMethod)}</td>
+                          <td className="font-mono text-xs">{p.receiptNumber ?? '—'}</td>
+                          <td className="max-w-40"><span className="line-clamp-2 text-sm" title={p.notes}>{p.notes ?? '—'}</span></td>
+                          <td className="text-right text-sm font-medium">{formatCurrency(p.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={5} className="text-right text-sm font-semibold">Total Paid</td>
+                        <td className="text-right text-sm font-semibold text-success">
+                          {formatCurrency(payments.reduce((s, p) => s + Number(p.amount ?? 0), 0))}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* Grand Total */}
+            {!billingLoading && !partsLoading && !paymentsLoading && (() => {
+              const totalPaid = payments.reduce((s, p) => s + Number(p.amount ?? 0), 0)
+              const balance   = grandTotal - totalPaid
+              return (
+                <div className="flex justify-end">
+                  <div className="rounded-box border border-base-300 bg-base-200 px-6 py-3 flex flex-col sm:flex-row items-end sm:items-center gap-4 sm:gap-8">
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-base-content/70">Grand Total</span>
+                      <span className="text-base font-bold">{formatCurrency(grandTotal)}</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-base-content/70">Total Paid</span>
+                      <span className="text-base font-bold text-success">{formatCurrency(totalPaid)}</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-base-content/70">Balance</span>
+                      <span className={`text-lg font-bold ${balance <= 0 ? 'text-success' : 'text-error'}`}>
+                        {formatCurrency(Math.max(balance, 0))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
           </div>
         </div>
@@ -576,26 +904,193 @@ function BillingModal({ report, apiFetch, onClose }) {
   )
 }
 
+const EMPTY_PAYMENT_FORM = { paidBy: '', amount: '', paymentMethod: 'cash', receiptDate: '', receiptNumber: '', notes: '' }
+
+/** Modal for recording a new payment against an SR */
+function AddPaymentModal({ report, apiFetch, onClose, onSuccess }) {
+  const [form, setForm]           = useState(EMPTY_PAYMENT_FORM)
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  const balance = Math.max(0, Number(report?.totalBilled ?? 0) - Number(report?.totalPaid ?? 0))
+
+  useEffect(() => {
+    if (report) { setForm(EMPTY_PAYMENT_FORM); setFormError({}) }
+  }, [report])
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    if (name === 'amount' && balance > 0) {
+      const num = parseFloat(value)
+      if (!isNaN(num) && num < 0)       { setForm(prev => ({ ...prev, amount: '0' })); return }
+      if (!isNaN(num) && num > balance)  { setForm(prev => ({ ...prev, amount: balance.toFixed(2) })); return }
+    }
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/payment-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber:      report.srNumber,
+          paidBy:        form.paidBy,
+          amount:        Number(form.amount),
+          paymentMethod: form.paymentMethod,
+          receiptDate:   form.receiptDate,
+          receiptNumber: form.receiptNumber || null,
+          notes:         form.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Payment failed to record')
+        return
+      }
+      notyfSuccess('Payment recorded.')
+      onSuccess()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal
+      isOpen={!!report}
+      onClose={onClose}
+      title={`Record Payment — SR #${report?.srNumber ?? ''}`}
+      size="max-w-lg"
+      footer={
+        <>
+          <button type="button" className="btn btn-soft btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="submit" form="add-payment-form" className="btn btn-success" disabled={submitting}>
+            {submitting
+              ? <span className="loading loading-spinner loading-sm"></span>
+              : <span className="icon-[tabler--cash] size-4"></span>
+            }
+            Record Payment
+          </button>
+        </>
+      }
+    >
+      <form id="add-payment-form" onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <div className="sm:col-span-2 flex flex-col gap-1">
+            <label className="label-text font-medium">Paid By <span className="text-error">*</span></label>
+            <input type="text" name="paidBy" maxLength={120} required
+              className={`input input-bordered w-full${formError.paidBy ? ' is-invalid' : ''}`}
+              placeholder="Enter Name or Organization"
+              value={form.paidBy} onChange={handleChange} />
+            {formError.paidBy && <span className="helper-text">{formError.paidBy}</span>}
+          </div>
+
+
+          <div className="sm:col-span-2 flex flex-col gap-1">
+            <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+            <div className="flex gap-1 mb-1">
+              {[25, 50, 75].map(p => (
+                <button key={p} type="button"
+                  className="btn btn-xs btn-soft btn-secondary flex-1"
+                  onClick={() => setForm(prev => ({ ...prev, amount: ((p / 100) * balance).toFixed(2) }))}>
+                  {p}%
+                </button>
+              ))}
+              <button type="button"
+                className="btn btn-xs btn-soft btn-primary flex-1"
+                onClick={() => setForm(prev => ({ ...prev, amount: balance.toFixed(2) }))}>
+                Full
+              </button>
+            </div>
+            <input type="number" name="amount" min="0.01" step="0.01" required
+              className={`input input-bordered w-full${formError.amount ? ' is-invalid' : ''}`}
+              placeholder="e.g. 1500.00"
+              value={form.amount} onChange={handleChange} />
+            {formError.amount && <span className="helper-text">{formError.amount}</span>}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
+            <select name="paymentMethod" required
+              className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
+              value={form.paymentMethod} onChange={handleChange}>
+              <option value="cash">Cash</option>
+              <option value="check">Check</option>
+              <option value="gcash">GCash</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+            {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>
+            <input type="date" name="receiptDate" required
+              className={`input input-bordered w-full${formError.receiptDate ? ' is-invalid' : ''}`}
+              value={form.receiptDate} onChange={handleChange} />
+            {formError.receiptDate && <span className="helper-text">{formError.receiptDate}</span>}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="label-text font-medium">Receipt #</label>
+            <input type="text" name="receiptNumber" maxLength={60}
+              className={`input input-bordered w-full${formError.receiptNumber ? ' is-invalid' : ''}`}
+              placeholder="e.g. OR-2026-001"
+              value={form.receiptNumber} onChange={handleChange} />
+            {formError.receiptNumber && <span className="helper-text">{formError.receiptNumber}</span>}
+          </div>
+
+          <div className="sm:col-span-2 flex flex-col gap-1">
+            <label className="label-text font-medium">Notes</label>
+            <textarea name="notes" maxLength={255} rows={2}
+              className={`textarea textarea-bordered w-full${formError.notes ? ' is-invalid' : ''}`}
+              placeholder="Optional notes"
+              value={form.notes} onChange={handleChange} />
+            {formError.notes && <span className="helper-text">{formError.notes}</span>}
+          </div>
+
+          {formError._general && (
+            <div className="sm:col-span-2 alert alert-error py-2">
+              <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+              <span className="text-sm">{formError._general}</span>
+            </div>
+          )}
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 export default function Billing() {
   const { apiFetch, hasRole } = useAuth()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING')
+  const [searchParams] = useSearchParams()
 
   const [reports, setReports]             = useState([])
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState(null)
   const [search, setSearch]               = useState('')
+  const [statusFilter, setStatusFilter]   = useState(() => searchParams.get('status') ?? '')
   const [page, setPage]                   = useState(0)
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
+  const [refresh, setRefresh]             = useState(0)
 
   const [viewReport, setViewReport]     = useState(null)
   const [manageReport, setManageReport] = useState(null)
+  const [payReport, setPayReport]       = useState(null)
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setError(null)
     const params = new URLSearchParams({ page: String(page), size: String(SR_PAGE_SIZE), sort: 'srNumber,asc' })
+    if (statusFilter) params.set('status', statusFilter)
     apiFetch(`/api/service-reports?${params}`)
       .then(res => {
         if (!res.ok) throw new Error(`Failed to load service reports (${res.status})`)
@@ -610,7 +1105,7 @@ export default function Billing() {
       .catch(err => { if (active) setError(err.message) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [apiFetch, page])
+  }, [apiFetch, page, refresh, statusFilter])
 
   const filtered = reports.filter(r => {
     if (search === '') return true
@@ -638,6 +1133,17 @@ export default function Billing() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+        <select
+          className="select select-bordered w-40 shrink-0"
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setPage(0) }}
+        >
+          <option value="">All statuses</option>
+          <option value="unpaid,partial">Unpaid &amp; Partial</option>
+          <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial</option>
+          <option value="paid">Paid</option>
+        </select>
       </div>
 
       {loading && (
@@ -693,7 +1199,7 @@ export default function Billing() {
                         <span className={`badge badge-soft ${statusBadgeClass(r.status)} text-xs`}>{r.status}</span>
                       </td>
                       <td>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           <button className="btn btn-soft btn-primary btn-xs" title="View Billing" onClick={() => setViewReport(r)}>
                             <span className="icon-[tabler--receipt] size-3.5"></span>
                             View
@@ -702,6 +1208,12 @@ export default function Billing() {
                             <button className="btn btn-soft btn-secondary btn-xs" title="Update Billing" onClick={() => setManageReport(r)}>
                               <span className="icon-[tabler--pencil] size-3.5"></span>
                               Update
+                            </button>
+                          )}
+                          {canEdit && (r.status === 'unpaid' || r.status === 'partial') && (
+                            <button className="btn btn-soft btn-success btn-xs" title="Record Payment" onClick={() => setPayReport(r)}>
+                              <span className="icon-[tabler--cash] size-3.5"></span>
+                              Pay
                             </button>
                           )}
                         </div>
@@ -739,6 +1251,13 @@ export default function Billing() {
         report={manageReport}
         apiFetch={apiFetch}
         onClose={() => setManageReport(null)}
+      />
+
+      <AddPaymentModal
+        report={payReport}
+        apiFetch={apiFetch}
+        onClose={() => setPayReport(null)}
+        onSuccess={() => { setPayReport(null); setRefresh(k => k + 1) }}
       />
     </Layout>
   )

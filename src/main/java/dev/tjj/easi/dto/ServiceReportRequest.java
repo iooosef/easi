@@ -4,8 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDate;
-
 public record ServiceReportRequest(
 
         @NotNull(message = "Project number is required")
@@ -28,13 +26,5 @@ public record ServiceReportRequest(
         @NotNull(message = "Schedule ID is required")
         Integer schedId,
 
-        @Size(max = 16, message = "Payment method must not exceed 16 characters")
-        String paymentMethod,
-
-        LocalDate receiptReceiveDate,
-
-        Integer docuId,
-
-        @Size(max = 16, message = "Status must not exceed 16 characters")
-        String status
+        Integer docuId
 ) {}

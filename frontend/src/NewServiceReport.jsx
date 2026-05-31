@@ -31,8 +31,6 @@ const EMPTY_REPORT_FORM = {
   complaint: '',
   workDone: '',
   location: '',
-  paymentMethod: 'unset',
-  status: 'unpaid',
 }
 
 const EMPTY_FINDING_FORM = {
@@ -194,8 +192,6 @@ export default function NewServiceReport() {
           engineerEmployeeId: reportForm.engineerEmployeeId ? Number(reportForm.engineerEmployeeId) : null,
           location: reportForm.location || null,
           schedId: reportForm.schedId ? Number(reportForm.schedId) : null,
-          paymentMethod: reportForm.paymentMethod || 'unset',
-          status: reportForm.paymentMethod === 'unset' ? null : (reportForm.status || 'unpaid'),
         }),
       })
       if (!srRes.ok) {
@@ -392,36 +388,6 @@ export default function NewServiceReport() {
                     }))}
                     className="sm:col-span-2"
                   />
-
-                  <div className="flex flex-col gap-1">
-                    <label className="label-text font-medium">Payment Method</label>
-                    <select name="paymentMethod"
-                      className={`select select-bordered w-full${reportFormError.paymentMethod ? ' is-invalid' : ''}`}
-                      value={reportForm.paymentMethod}
-                      onChange={e => {
-                        const val = e.target.value
-                        setReportForm(prev => ({ ...prev, paymentMethod: val, ...(val === 'unset' ? { status: 'unpaid' } : {}) }))
-                      }}>
-                      {PAYMENT_OPTIONS.map(o => (
-                        <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                      ))}
-                    </select>
-                    {reportFormError.paymentMethod && <span className="helper-text">{reportFormError.paymentMethod}</span>}
-                  </div>
-
-                  {reportForm.paymentMethod !== 'unset' && (
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Status</label>
-                      <select name="status"
-                        className={`select select-bordered w-full${reportFormError.status ? ' is-invalid' : ''}`}
-                        value={reportForm.status} onChange={handleReportFormChange}>
-                        {STATUS_OPTIONS.map(o => (
-                          <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                        ))}
-                      </select>
-                      {reportFormError.status && <span className="helper-text">{reportFormError.status}</span>}
-                    </div>
-                  )}
 
                   <div className="sm:col-span-2 flex flex-col gap-1">
                     <label className="label-text font-medium">Attach Document <span className="text-base-content/40 font-normal">(optional)</span></label>

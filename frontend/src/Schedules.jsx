@@ -35,7 +35,6 @@ const EMPTY_SR_EDIT_FORM = {
   schedId: '', _scheduleDisplay: '',
   engineerEmployeeId: '', _engineerDisplay: '',
   complaint: '', workDone: '', location: '',
-  paymentMethod: 'unset', receiptReceiveDate: '', status: 'unpaid',
 }
 const LIST_SIZE = 8
 
@@ -283,9 +282,6 @@ export default function Schedules() {
       complaint: sr.complaint ?? '',
       workDone: sr.workDone ?? '',
       location: sr.location ?? '',
-      paymentMethod: sr.paymentMethod ?? 'unset',
-      receiptReceiveDate: sr.receiptReceiveDate ? String(sr.receiptReceiveDate).slice(0, 10) : '',
-      status: sr.status ?? 'unpaid',
     })
     setEditingSr(sr)
     setEditSrFormError({})
@@ -315,9 +311,6 @@ export default function Schedules() {
           engineerEmployeeId: editSrForm.engineerEmployeeId ? Number(editSrForm.engineerEmployeeId) : null,
           location: editSrForm.location || null,
           schedId: editSrForm.schedId ? Number(editSrForm.schedId) : null,
-          paymentMethod: editSrForm.paymentMethod || 'unset',
-          receiptReceiveDate: editSrForm.receiptReceiveDate || null,
-          status: editSrForm.status || 'unpaid',
         }),
       })
       if (!res.ok) { setEditSrFormError(await parseApiError(res)); notyfError('Update failed'); return }
@@ -853,10 +846,8 @@ export default function Schedules() {
           { label: 'Complaint',      value: srForSched.complaint,      fullWidth: true },
           { label: 'Work Done',      value: srForSched.workDone,       fullWidth: true },
           { label: 'Location',       value: srForSched.location },
-          { label: 'Status',         value: srForSched.status },
-          { label: 'Payment Method', value: srForSched.paymentMethod },
-          { label: 'Schedule Date',  value: srForSched.scheduleDate ? String(srForSched.scheduleDate).slice(0, 10) : '—' },
-          { label: 'Receipt Date',   value: srForSched.receiptReceiveDate ? String(srForSched.receiptReceiveDate).slice(0, 10) : '—' },
+          { label: 'Status',        value: srForSched.status },
+          { label: 'Schedule Date', value: srForSched.scheduleDate ? String(srForSched.scheduleDate).slice(0, 10) : '—' },
         ] : []}
       />
 
@@ -952,41 +943,6 @@ export default function Schedules() {
               onSelect={emp => setEditSrForm(f => ({ ...f, engineerEmployeeId: emp.employeeId, _engineerDisplay: `${emp.lastName}, ${emp.firstName} (#${emp.employeeId})` }))}
               className="sm:col-span-2"
             />
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Method</label>
-              <select
-                className={`select select-bordered w-full${editSrFormError.paymentMethod ? ' is-invalid' : ''}`}
-                value={editSrForm.paymentMethod}
-                onChange={e => setEditSrForm(f => ({ ...f, paymentMethod: e.target.value }))}>
-                {SR_PAYMENT_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                ))}
-              </select>
-              {editSrFormError.paymentMethod && <span className="helper-text">{editSrFormError.paymentMethod}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select
-                className={`select select-bordered w-full${editSrFormError.status ? ' is-invalid' : ''}`}
-                value={editSrForm.status}
-                onChange={e => setEditSrForm(f => ({ ...f, status: e.target.value }))}>
-                {SR_STATUS_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
-                ))}
-              </select>
-              {editSrFormError.status && <span className="helper-text">{editSrFormError.status}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Receipt Receive Date</label>
-              <input type="date"
-                className={`input input-bordered w-full${editSrFormError.receiptReceiveDate ? ' is-invalid' : ''}`}
-                value={editSrForm.receiptReceiveDate}
-                onChange={e => setEditSrForm(f => ({ ...f, receiptReceiveDate: e.target.value }))} />
-              {editSrFormError.receiptReceiveDate && <span className="helper-text">{editSrFormError.receiptReceiveDate}</span>}
-            </div>
 
             {editSrFormError._general && (
               <div className="sm:col-span-2 alert alert-error py-2">

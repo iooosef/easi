@@ -46,7 +46,6 @@ export default function Reports() {
   const [endDate, setEndDate] = useState('')
   const [projNum, setProjNum] = useState('')
   const [status, setStatus] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('')
 
   // Results
   const [rows, setRows] = useState(null)       // null = not yet generated
@@ -73,7 +72,6 @@ export default function Reports() {
     const params = new URLSearchParams({ startDate, endDate })
     if (projNum) params.set('projNum', projNum)
     if (status) params.set('status', status)
-    if (paymentMethod) params.set('paymentMethod', paymentMethod)
 
     try {
       const res = await apiFetch(`/api/reports/service-report-summary?${params}`)
@@ -85,7 +83,7 @@ export default function Reports() {
       const data = await res.json()
       setRows(data)
       setGeneratedAt(new Date())
-      setAppliedFilters({ startDate, endDate, projNum, status, paymentMethod })
+      setAppliedFilters({ startDate, endDate, projNum, status })
     } catch (err) {
       setError(err.message)
     } finally {
@@ -161,17 +159,6 @@ export default function Reports() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="label-text font-medium">Payment Method <span className="text-base-content/40 font-normal">(optional)</span></label>
-            <input
-              type="text"
-              className="input input-bordered w-full"
-              placeholder="e.g. cash, check"
-              value={paymentMethod}
-              onChange={e => setPaymentMethod(e.target.value)}
-            />
-          </div>
-
         </div>
 
         <div className="flex justify-end">
@@ -206,7 +193,6 @@ export default function Reports() {
                     {formatDate(appliedFilters?.startDate)} &mdash; {formatDate(appliedFilters?.endDate)}
                     {appliedFilters?.projNum ? ` · Project #${appliedFilters.projNum}` : ''}
                     {appliedFilters?.status ? ` · Status: ${appliedFilters.status}` : ''}
-                    {appliedFilters?.paymentMethod ? ` · Payment: ${appliedFilters.paymentMethod}` : ''}
                   </p>
                   <p className="text-xs text-base-content/40 mt-1">
                     Generated: {generatedAt?.toLocaleString('en-PH')}
@@ -251,8 +237,6 @@ export default function Reports() {
                         <th>Location</th>
                         <th>Sched. Date</th>
                         <th>Status</th>
-                        <th>Payment</th>
-                        <th>Receipt Date</th>
                         <th>Added On</th>
                         <th className="text-right">Total Billed</th>
                       </tr>
@@ -278,8 +262,6 @@ export default function Reports() {
                               {r.status}
                             </span>
                           </td>
-                          <td className="text-sm">{r.paymentMethod}</td>
-                          <td className="text-sm whitespace-nowrap">{formatDate(r.receiptReceiveDate)}</td>
                           <td className="text-sm whitespace-nowrap">{formatDateTime(r.addedOn)}</td>
                           <td className="text-right text-sm font-medium">{formatCurrency(r.totalBilled)}</td>
                         </tr>
@@ -287,7 +269,7 @@ export default function Reports() {
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={11} className="text-right text-sm font-semibold">Grand Total</td>
+                        <td colSpan={9} className="text-right text-sm font-semibold">Grand Total</td>
                         <td className="text-right text-sm font-bold text-primary">
                           {formatCurrency(grandTotal)}
                         </td>

@@ -16,6 +16,48 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
 
     Page<ServiceReport> findAllByProject_ProjNum(Integer projNum, Pageable pageable);
 
+    @Query(value = """
+            SELECT sr FROM ServiceReport sr
+            WHERE (:projNum IS NULL OR sr.project.projNum = :projNum)
+            AND (
+                :noFilter = true
+                OR (:wantUnpaid = true
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) = 0)
+                OR (:wantPartial = true
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) <
+                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+                OR (:wantPaid = true
+                    AND (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) >=
+                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+            )
+            """,
+            countQuery = """
+            SELECT COUNT(sr) FROM ServiceReport sr
+            WHERE (:projNum IS NULL OR sr.project.projNum = :projNum)
+            AND (
+                :noFilter = true
+                OR (:wantUnpaid = true
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) = 0)
+                OR (:wantPartial = true
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) <
+                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+                OR (:wantPaid = true
+                    AND (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) >=
+                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+            )
+            """)
+    Page<ServiceReport> findAllFiltered(
+            @Param("projNum") Integer projNum,
+            @Param("noFilter") boolean noFilter,
+            @Param("wantUnpaid") boolean wantUnpaid,
+            @Param("wantPartial") boolean wantPartial,
+            @Param("wantPaid") boolean wantPaid,
+            Pageable pageable);
+
     @Query("""
             SELECT sr FROM ServiceReport sr
             LEFT JOIN FETCH sr.project
@@ -23,14 +65,10 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
             LEFT JOIN FETCH sr.engineerEmployee
             WHERE sr.addedOn >= :start AND sr.addedOn <= :end
             AND (:projNum IS NULL OR sr.project.projNum = :projNum)
-            AND (:status IS NULL OR sr.status = :status)
-            AND (:paymentMethod IS NULL OR sr.paymentMethod = :paymentMethod)
             ORDER BY sr.addedOn ASC
             """)
     List<ServiceReport> findForSummaryReport(
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end,
-            @Param("projNum") Integer projNum,
-            @Param("status") String status,
-            @Param("paymentMethod") String paymentMethod);
+            @Param("projNum") Integer projNum);
 }

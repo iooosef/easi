@@ -16,6 +16,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
+import java.util.List;
+
 /**
  * REST endpoints for service report management.
  * ADMIN and STAFF can add and update reports.
@@ -78,7 +81,7 @@ public class ServiceReportController {
     }
 
     /** Returns a page of service report records. Available to ADMIN, STAFF, and CREW. */
-    @Operation(summary = "List service reports", description = "Returns a paginated list of service reports, optionally filtered by project number.")
+    @Operation(summary = "List service reports", description = "Returns a paginated list of service reports, optionally filtered by project number and/or payment status. Multiple statuses can be passed as a comma-separated value (e.g. unpaid,partial).")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Reports returned"),
         @ApiResponse(responseCode = "403", description = "Forbidden")
@@ -86,8 +89,13 @@ public class ServiceReportController {
     @GetMapping
     public ResponseEntity<Page<ServiceReportResponse>> getAll(
             @Parameter(description = "Filter by project number") @RequestParam(required = false) Integer projNum,
+            @Parameter(description = "Comma-separated payment statuses to include", example = "unpaid,partial")
+            @RequestParam(required = false) String status,
             Pageable pageable) {
-        return ResponseEntity.ok(serviceReportService.getAll(projNum, pageable));
+        List<String> statuses = (status != null && !status.isBlank())
+                ? Arrays.asList(status.split(","))
+                : List.of();
+        return ResponseEntity.ok(serviceReportService.getAll(projNum, statuses, pageable));
     }
 
     /** Returns a single service report record by ID. Available to ADMIN, STAFF, and CREW. */

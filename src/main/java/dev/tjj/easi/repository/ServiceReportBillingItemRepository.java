@@ -8,12 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Repository
 public interface ServiceReportBillingItemRepository extends JpaRepository<ServiceReportBillingItem, Integer> {
 
     Page<ServiceReportBillingItem> findByServiceReport_SrNumber(Integer srNumber, Pageable pageable);
+
+    @Query("SELECT COALESCE(SUM(bi.quantity * bi.unitPrice), 0) FROM ServiceReportBillingItem bi WHERE bi.serviceReport.srNumber = :srNumber")
+    BigDecimal sumTotalBySrNumber(@Param("srNumber") Integer srNumber);
 
     @Query("""
             SELECT bi.serviceReport.srNumber, SUM(bi.quantity * bi.unitPrice)
