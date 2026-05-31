@@ -332,12 +332,12 @@ export default function Projects() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-8">
-              <button className="btn btn-sm btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              <button className="btn btn-sm btn-secondary" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
                 <span className="icon-[tabler--chevron-left] size-4"></span>
                 Prev
               </button>
               <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
-              <button className="btn btn-sm btn-ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+              <button className="btn btn-sm btn-secondary" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
                 Next
                 <span className="icon-[tabler--chevron-right] size-4"></span>
               </button>

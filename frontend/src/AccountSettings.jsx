@@ -57,7 +57,7 @@ function VerifyOtpStep({ email, onVerified, onBack }) {
       </div>
       {formError._general && <div className="alert alert-error text-sm py-2">{formError._general}</div>}
       <div className="flex gap-2">
-        <button type="button" className="btn btn-ghost flex-1" onClick={onBack}>Back</button>
+        <button type="button" className="btn btn-secondary flex-1" onClick={onBack}>Back</button>
         <button type="submit" className="btn btn-primary flex-1" disabled={loading}>
           {loading ? <span className="loading loading-spinner loading-sm" /> : 'Verify OTP'}
         </button>
@@ -251,7 +251,7 @@ export default function AccountSettings() {
               <div className="flex flex-col gap-4 items-center text-center">
                 <span className="icon-[tabler--circle-check] size-12 text-success" />
                 <p className="font-medium">Password changed successfully!</p>
-                <button className="btn btn-ghost btn-sm" onClick={() => { setStep('idle'); setOtp('') }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => { setStep('idle'); setOtp('') }}>
                   Back to Account Settings
                 </button>
               </div>

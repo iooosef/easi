@@ -7,15 +7,36 @@ import ManageMenu from './ManageMenu'
 import PickerInput from './PickerInput'
 import ProjectPickerModal from './ProjectPickerModal'
 import CrewPickerModal from './CrewPickerModal'
+import SchedulePickerModal from './SchedulePickerModal'
+import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 import CalendarPanel, { statusDotColor } from './CalendarPanel'
+import { ManageBillingModal } from './Billing'
 
 const SCHEDULE_MENU_ITEMS = [
-  { key: 'update', label: 'Update Schedule',       icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF'] },
-  { key: 'crew',   label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',  roles: null },
+  { key: 'update',          label: 'Update Schedule',        icon: 'icon-[tabler--pencil]',       roles: ['ADMIN', 'STAFF'] },
+  { key: 'crew',            label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',         roles: null },
+  { key: 'service-report',  label: 'Manage Service Report',  icon: 'icon-[tabler--file-report]',  roles: null },
+]
+
+const SR_MENU_ITEMS = [
+  { key: 'update',         label: 'Update Details',         icon: 'icon-[tabler--pencil]',        roles: ['ADMIN', 'STAFF'] },
+  { key: 'findings',       label: 'Manage Findings',        icon: 'icon-[tabler--checklist]',     roles: null },
+  { key: 'billing',        label: 'Manage Billing Items',   icon: 'icon-[tabler--receipt]',       roles: null },
+  { key: 'purchase-order', label: 'Manage Purchase Order',  icon: 'icon-[tabler--file-invoice]',  roles: null },
+  { key: 'documents',      label: 'Manage Documents',       icon: 'icon-[tabler--files]',         roles: null },
 ]
 
 const STATUS_OPTIONS = ['pending', 'confirmed', 'completed', 'cancelled']
+const SR_PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
+const SR_STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
+const EMPTY_SR_EDIT_FORM = {
+  projNum: '', _projectDisplay: '',
+  schedId: '', _scheduleDisplay: '',
+  engineerEmployeeId: '', _engineerDisplay: '',
+  complaint: '', workDone: '', location: '',
+  paymentMethod: 'unset', receiptReceiveDate: '', status: 'unpaid',
+}
 const LIST_SIZE = 8
 
 const EMPTY_FORM = { projNum: '', projName: '', purpose: '', date: '', status: 'pending' }
@@ -88,6 +109,23 @@ export default function Schedules() {
 
   // Selected schedule for ManageMenu
   const [selectedSched, setSelectedSched] = useState(null)
+  const [selectedSchedCrew, setSelectedSchedCrew] = useState([])
+  const [selectedSchedCrewLoading, setSelectedSchedCrewLoading] = useState(false)
+
+  // SR linked to the selected schedule — preloaded when ManageMenu opens
+  // null = loading, false = none found, object = found
+  const [selectedSchedSr, setSelectedSchedSr] = useState(null)
+
+  // Service report manage modal (opened from schedule ManageMenu)
+  const [srForSched, setSrForSched] = useState(null)
+  const [billingReport, setBillingReport] = useState(null)
+
+  // Edit SR modal
+  const [editSrOpen, setEditSrOpen] = useState(false)
+  const [editingSr, setEditingSr] = useState(null)
+  const [editSrForm, setEditSrForm] = useState(EMPTY_SR_EDIT_FORM)
+  const [editSrFormError, setEditSrFormError] = useState({})
+  const [editSrSubmitting, setEditSrSubmitting] = useState(false)
 
   // Crew assignment modal
   const [crewOpen, setCrewOpen] = useState(false)
@@ -141,6 +179,34 @@ export default function Schedules() {
 
   // List refetches when page, search, filter, or project scope changes
   useEffect(() => { fetchList() }, [apiFetch, listPage, appliedSearch, hideFinished, projNum])
+
+  // Fetch crew for the selected schedule shown in ManageMenu
+  useEffect(() => {
+    if (!selectedSched) { setSelectedSchedCrew([]); return }
+    let cancelled = false
+    setSelectedSchedCrewLoading(true)
+    apiFetch(`/api/service-assignments/schedule/${selectedSched.schedId}`)
+      .then(r => r.ok ? r.json() : [])
+      .catch(() => [])
+      .then(data => { if (!cancelled) { setSelectedSchedCrew(data); setSelectedSchedCrewLoading(false) } })
+    return () => { cancelled = true }
+  }, [selectedSched, apiFetch])
+
+  // Preload the service report linked to the selected schedule
+  useEffect(() => {
+    if (!selectedSched) { setSelectedSchedSr(null); return }
+    let cancelled = false
+    setSelectedSchedSr(null)
+    apiFetch(`/api/service-reports?projNum=${selectedSched.projNum}&size=200&sort=srNumber,asc`)
+      .then(r => r.ok ? r.json() : { content: [] })
+      .catch(() => ({ content: [] }))
+      .then(data => {
+        if (cancelled) return
+        const sr = (data.content ?? []).find(r => r.schedId === selectedSched.schedId)
+        setSelectedSchedSr(sr ?? false)
+      })
+    return () => { cancelled = true }
+  }, [selectedSched, apiFetch])
 
   // Debounce search input: apply after 400ms of no typing, reset to page 0
   useEffect(() => {
@@ -204,6 +270,65 @@ export default function Schedules() {
 
   /** Opens the ManageMenu for a schedule */
   function openManage(sched) { setSelectedSched(sched) }
+
+  /** Opens the edit SR modal pre-populated with the given report's data */
+  function openEditSr(sr) {
+    setEditSrForm({
+      projNum: sr.projNum,
+      _projectDisplay: `${sr.projectName} (#${sr.projNum})`,
+      schedId: sr.schedId ?? '',
+      _scheduleDisplay: sr.schedId ? `Sched #${sr.schedId}` : '',
+      engineerEmployeeId: sr.engineerEmployeeId ?? '',
+      _engineerDisplay: sr.engineerEmployeeId ? `Employee #${sr.engineerEmployeeId}` : '',
+      complaint: sr.complaint ?? '',
+      workDone: sr.workDone ?? '',
+      location: sr.location ?? '',
+      paymentMethod: sr.paymentMethod ?? 'unset',
+      receiptReceiveDate: sr.receiptReceiveDate ? String(sr.receiptReceiveDate).slice(0, 10) : '',
+      status: sr.status ?? 'unpaid',
+    })
+    setEditingSr(sr)
+    setEditSrFormError({})
+    setEditSrOpen(true)
+  }
+
+  function closeEditSr() {
+    setEditSrOpen(false)
+    setEditingSr(null)
+    setEditSrForm(EMPTY_SR_EDIT_FORM)
+    setEditSrFormError({})
+  }
+
+  /** Submits the update for an existing service report */
+  async function handleSrUpdate(e) {
+    e.preventDefault()
+    setEditSrFormError({})
+    setEditSrSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/service-reports/${editingSr.srNumber}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projNum: Number(editSrForm.projNum),
+          complaint: editSrForm.complaint,
+          workDone: editSrForm.workDone,
+          engineerEmployeeId: editSrForm.engineerEmployeeId ? Number(editSrForm.engineerEmployeeId) : null,
+          location: editSrForm.location || null,
+          schedId: editSrForm.schedId ? Number(editSrForm.schedId) : null,
+          paymentMethod: editSrForm.paymentMethod || 'unset',
+          receiptReceiveDate: editSrForm.receiptReceiveDate || null,
+          status: editSrForm.status || 'unpaid',
+        }),
+      })
+      if (!res.ok) { setEditSrFormError(await parseApiError(res)); notyfError('Update failed'); return }
+      closeEditSr()
+      setTimeout(() => notyfSuccess(`SR #${editingSr.srNumber} updated successfully.`), 150)
+    } catch (err) {
+      setEditSrFormError({ _general: err.message })
+    } finally {
+      setEditSrSubmitting(false)
+    }
+  }
 
   // Crew modal handlers
   const fetchCrew = useCallback(async (schedId) => {
@@ -345,7 +470,7 @@ export default function Schedules() {
                 {listTotal} schedule{listTotal !== 1 ? 's' : ''}
               </p>
               <button
-                className={`btn btn-xs gap-1 ${hideFinished ? 'btn-primary' : 'btn-ghost border border-base-300'}`}
+                className={`btn btn-xs gap-1 ${hideFinished ? 'btn-primary' : 'btn-secondary border border-base-300'}`}
                 onClick={toggleHideFinished}
                 title={hideFinished ? 'Click to show completed and cancelled schedules' : 'Click to hide completed and cancelled schedules'}
               >
@@ -408,7 +533,7 @@ export default function Schedules() {
             {listTotalPages > 1 && (
               <div className="flex items-center justify-center gap-2 mt-1 shrink-0">
                 <button
-                  className="btn btn-ghost btn-sm btn-square"
+                  className="btn btn-secondary btn-sm btn-square"
                   disabled={listPage === 0 || listLoading}
                   onClick={() => setListPage(p => p - 1)}
                 >
@@ -418,7 +543,7 @@ export default function Schedules() {
                   Page {listPage + 1} of {listTotalPages}
                 </span>
                 <button
-                  className="btn btn-ghost btn-sm btn-square"
+                  className="btn btn-secondary btn-sm btn-square"
                   disabled={listPage >= listTotalPages - 1 || listLoading}
                   onClick={() => setListPage(p => p + 1)}
                 >
@@ -508,17 +633,19 @@ export default function Schedules() {
               {updateFormError.purpose && <span className="helper-text">{updateFormError.purpose}</span>}
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Date <span className="text-error">*</span></label>
-              <input
-                type="date"
-                className={`input input-bordered w-full${updateFormError.date ? ' is-invalid' : ''}`}
-                required
-                value={updateForm.date}
-                onChange={e => setUpdateForm(f => ({ ...f, date: e.target.value }))}
-              />
-              {updateFormError.date && <span className="helper-text">{updateFormError.date}</span>}
-            </div>
+            {updateForm.status === 'pending' && (
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Date <span className="text-error">*</span></label>
+                <input
+                  type="date"
+                  className={`input input-bordered w-full${updateFormError.date ? ' is-invalid' : ''}`}
+                  required
+                  value={updateForm.date}
+                  onChange={e => setUpdateForm(f => ({ ...f, date: e.target.value }))}
+                />
+                {updateFormError.date && <span className="helper-text">{updateFormError.date}</span>}
+              </div>
+            )}
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Status</label>
@@ -647,7 +774,10 @@ export default function Schedules() {
         isOpen={!!selectedSched}
         onClose={() => setSelectedSched(null)}
         hasRole={hasRole}
-        menuItems={SCHEDULE_MENU_ITEMS}
+        menuItems={[
+          ...SCHEDULE_MENU_ITEMS.filter(i => i.key !== 'service-report'),
+          ...(selectedSchedSr ? [{ key: 'service-report', label: 'Manage Service Report', icon: 'icon-[tabler--file-report]', roles: null }] : []),
+        ]}
         onMenuSelect={(key, sched) => {
           if (key === 'update') {
             setSelectedSched(null)
@@ -655,6 +785,9 @@ export default function Schedules() {
           } else if (key === 'crew') {
             setSelectedSched(null)
             openCrew(sched)
+          } else if (key === 'service-report') {
+            setSelectedSched(null)
+            setSrForSched(selectedSchedSr || null)
           }
         }}
         details={selectedSched ? [
@@ -663,8 +796,207 @@ export default function Schedules() {
           { label: 'Date',     value: formatDate(selectedSched.date) },
           { label: 'Status',   value: selectedSched.status?.charAt(0).toUpperCase() + selectedSched.status?.slice(1) },
           { label: 'Added On', value: formatDateTime(selectedSched.addedOn) },
+          {
+            fullWidth: true,
+            component: (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Crew Assigned</span>
+                {selectedSchedCrewLoading ? (
+                  <span className="loading loading-spinner loading-xs text-primary"></span>
+                ) : selectedSchedCrew.length === 0 ? (
+                  <span className="text-sm text-base-content/40">No crew assigned.</span>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSchedCrew.map(c => (
+                      <span key={c.employeeId} className="badge badge-soft badge-neutral text-xs">
+                        {c.lastName}, {c.firstName}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ),
+          },
         ] : []}
       />
+
+      {/* Service Report ManageMenu — opened from schedule ManageMenu */}
+      <ManageMenu
+        title={srForSched ? `SR #${srForSched.srNumber}` : ''}
+        subtitle={srForSched ? (projectMap[srForSched.projNum] ?? `Project #${srForSched.projNum}`) : ''}
+        item={srForSched}
+        isOpen={!!srForSched}
+        onClose={() => setSrForSched(null)}
+        hasRole={hasRole}
+        menuItems={SR_MENU_ITEMS}
+        onMenuSelect={(key, sr) => {
+          setSrForSched(null)
+          if (key === 'findings') navigate(`/service-report/${sr.srNumber}/findings`, {
+            state: { projectName: sr.projectName, projNum: sr.projNum },
+          })
+          else if (key === 'purchase-order') navigate(`/service-report/${sr.srNumber}/purchase-orders`, {
+            state: { projectName: sr.projectName, srNumber: sr.srNumber, projNum: sr.projNum },
+          })
+          else if (key === 'billing') setBillingReport(sr)
+          else if (key === 'documents') navigate(`/service-report/${sr.srNumber}/documents`, {
+            state: {
+              entityType: 'service-report',
+              entityId:   sr.srNumber,
+              entityLabel: `SR #${sr.srNumber}`,
+              parentLabel: sr.projectName,
+              docuId:     sr.docuId ?? null,
+            },
+          })
+          else if (key === 'update') openEditSr(sr)
+        }}
+        details={srForSched ? [
+          { label: 'Complaint',      value: srForSched.complaint,      fullWidth: true },
+          { label: 'Work Done',      value: srForSched.workDone,       fullWidth: true },
+          { label: 'Location',       value: srForSched.location },
+          { label: 'Status',         value: srForSched.status },
+          { label: 'Payment Method', value: srForSched.paymentMethod },
+          { label: 'Schedule Date',  value: srForSched.scheduleDate ? String(srForSched.scheduleDate).slice(0, 10) : '—' },
+          { label: 'Receipt Date',   value: srForSched.receiptReceiveDate ? String(srForSched.receiptReceiveDate).slice(0, 10) : '—' },
+        ] : []}
+      />
+
+      <ManageBillingModal
+        report={billingReport}
+        apiFetch={apiFetch}
+        onClose={() => setBillingReport(null)}
+      />
+
+      {/* Edit Service Report Modal */}
+      <Modal
+        isOpen={editSrOpen}
+        onClose={closeEditSr}
+        title={`Update SR #${editingSr?.srNumber}`}
+        footer={
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditSr}>
+              Cancel
+            </button>
+            <button type="submit" form="edit-sr-form" className="btn btn-primary" disabled={editSrSubmitting}>
+              {editSrSubmitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--device-floppy] size-4"></span>
+              }
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <form id="edit-sr-form" onSubmit={handleSrUpdate}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <PickerInput
+              label="Project"
+              displayValue={editSrForm._projectDisplay}
+              placeholder="None selected"
+              buttonLabel="Change Project"
+              required
+              error={editSrFormError.projNum}
+              Picker={ProjectPickerModal}
+              onSelect={p => setEditSrForm(f => ({ ...f, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))}
+              className="sm:col-span-2"
+            />
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Location <span className="text-error">*</span></label>
+              <input type="text" maxLength={255}
+                className={`input input-bordered w-full${editSrFormError.location ? ' is-invalid' : ''}`}
+                placeholder="e.g. 3rd Floor East Wing" required
+                value={editSrForm.location}
+                onChange={e => setEditSrForm(f => ({ ...f, location: e.target.value }))} />
+              {editSrFormError.location && <span className="helper-text">{editSrFormError.location}</span>}
+            </div>
+
+            <PickerInput
+              label="Schedule"
+              displayValue={editSrForm._scheduleDisplay}
+              placeholder="None selected"
+              buttonLabel="Change Schedule"
+              required
+              error={editSrFormError.schedId}
+              Picker={SchedulePickerModal}
+              onSelect={s => setEditSrForm(f => ({ ...f, schedId: s.schedId, _scheduleDisplay: `Sched #${s.schedId} — ${s.purpose ?? ''}` }))}
+            />
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Complaint <span className="text-error">*</span></label>
+              <textarea rows={3} maxLength={900}
+                className={`textarea textarea-bordered w-full${editSrFormError.complaint ? ' is-invalid' : ''}`}
+                placeholder="Describe the complaint..." required
+                value={editSrForm.complaint}
+                onChange={e => setEditSrForm(f => ({ ...f, complaint: e.target.value }))} />
+              {editSrFormError.complaint && <span className="helper-text">{editSrFormError.complaint}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Work Done <span className="text-error">*</span></label>
+              <textarea rows={3} maxLength={900}
+                className={`textarea textarea-bordered w-full${editSrFormError.workDone ? ' is-invalid' : ''}`}
+                placeholder="Describe the work performed..." required
+                value={editSrForm.workDone}
+                onChange={e => setEditSrForm(f => ({ ...f, workDone: e.target.value }))} />
+              {editSrFormError.workDone && <span className="helper-text">{editSrFormError.workDone}</span>}
+            </div>
+
+            <PickerInput
+              label="Assigned Engineer"
+              displayValue={editSrForm._engineerDisplay}
+              placeholder="None assigned"
+              buttonLabel="Select Engineer"
+              error={editSrFormError.engineerEmployeeId}
+              Picker={EmployeePickerModal}
+              onSelect={emp => setEditSrForm(f => ({ ...f, engineerEmployeeId: emp.employeeId, _engineerDisplay: `${emp.lastName}, ${emp.firstName} (#${emp.employeeId})` }))}
+              className="sm:col-span-2"
+            />
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Method</label>
+              <select
+                className={`select select-bordered w-full${editSrFormError.paymentMethod ? ' is-invalid' : ''}`}
+                value={editSrForm.paymentMethod}
+                onChange={e => setEditSrForm(f => ({ ...f, paymentMethod: e.target.value }))}>
+                {SR_PAYMENT_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
+                ))}
+              </select>
+              {editSrFormError.paymentMethod && <span className="helper-text">{editSrFormError.paymentMethod}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select
+                className={`select select-bordered w-full${editSrFormError.status ? ' is-invalid' : ''}`}
+                value={editSrForm.status}
+                onChange={e => setEditSrForm(f => ({ ...f, status: e.target.value }))}>
+                {SR_STATUS_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.charAt(0).toUpperCase() + o.slice(1)}</option>
+                ))}
+              </select>
+              {editSrFormError.status && <span className="helper-text">{editSrFormError.status}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Receipt Receive Date</label>
+              <input type="date"
+                className={`input input-bordered w-full${editSrFormError.receiptReceiveDate ? ' is-invalid' : ''}`}
+                value={editSrForm.receiptReceiveDate}
+                onChange={e => setEditSrForm(f => ({ ...f, receiptReceiveDate: e.target.value }))} />
+              {editSrFormError.receiptReceiveDate && <span className="helper-text">{editSrFormError.receiptReceiveDate}</span>}
+            </div>
+
+            {editSrFormError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{editSrFormError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </Modal>
     </Layout>
   )
 }

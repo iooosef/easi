@@ -635,7 +635,7 @@ export default function Documents() {
               <span className="text-white font-medium truncate">{document?.fileName}</span>
               <button
                 type="button"
-                className="btn btn-circle btn-sm btn-ghost text-white"
+                className="btn btn-circle btn-sm btn-secondary text-white"
                 onClick={closeView}
               >
                 <span className="icon-[tabler--x] size-5"></span>

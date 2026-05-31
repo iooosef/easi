@@ -125,11 +125,11 @@ export default function CalendarPanel({
 
         {/* Month navigation */}
         <div className="flex items-center justify-between mb-3">
-          <button className="btn btn-ghost btn-sm btn-square" onClick={prevMonth}>
+          <button className="btn btn-secondary btn-sm btn-square" onClick={prevMonth}>
             <span className="icon-[tabler--chevron-left] size-4"></span>
           </button>
           <h2 className="font-semibold text-base">{MONTH_NAMES[calMonth]} {calYear}</h2>
-          <button className="btn btn-ghost btn-sm btn-square" onClick={nextMonth}>
+          <button className="btn btn-secondary btn-sm btn-square" onClick={nextMonth}>
             <span className="icon-[tabler--chevron-right] size-4"></span>
           </button>
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import CalendarPanel from './CalendarPanel'
+import CalendarPanel, { statusDotColor } from './CalendarPanel'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
@@ -186,6 +186,23 @@ export default function NewSchedule() {
         return
       }
       const created = await res.json()
+
+      // Auto-create a corresponding service report for the new schedule
+      const reportRes = await apiFetch('/api/service-reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projNum: Number(form.projNum),
+          complaint: form.purpose,
+          workDone: 'add work done here',
+          location: 'same as project location',
+          schedId: created.schedId,
+        }),
+      })
+      if (!reportRes.ok) {
+        notyfError('Schedule created but service report could not be generated.')
+      }
+
       const crewFailures = []
       for (const c of crewList) {
         const assignRes = await apiFetch('/api/service-assignments', {
@@ -449,8 +466,24 @@ export default function NewSchedule() {
               setForm(f => ({ ...f, date: ds }))
               setFormError(e => ({ ...e, date: undefined }))
             }}
-            showSelectedIndicator
             conflict={projectConflict}
+            renderCellSchedules={(dayScheds) => (
+              <div className="flex flex-col gap-0.5">
+                {dayScheds.slice(0, 3).map(s => (
+                  <div
+                    key={s.schedId}
+                    className="flex items-center gap-1 px-1 py-0.5 rounded text-xs bg-base-200"
+                    title={`Project #${s.projNum} — ${s.purpose}`}
+                  >
+                    <span className={`size-1.5 rounded-full shrink-0 ${statusDotColor(s.status)}`}></span>
+                    <span className="truncate leading-tight">{s.purpose ?? `#${s.projNum}`}</span>
+                  </div>
+                ))}
+                {dayScheds.length > 3 && (
+                  <p className="text-xs text-base-content/40 px-1">+{dayScheds.length - 3} more</p>
+                )}
+              </div>
+            )}
           />
         </div>{/* end right column */}
 

@@ -633,7 +633,7 @@ export default function PurchaseOrderDocuments() {
           <div className="fixed inset-0 z-[51] flex flex-col items-center justify-center p-4 gap-3">
             <div className="flex items-center justify-between w-full max-w-5xl">
               <span className="text-white font-medium truncate">{viewDocMeta?.fileName ?? 'Document'}</span>
-              <button type="button" className="btn btn-circle btn-sm btn-ghost text-white" onClick={closeView}>
+              <button type="button" className="btn btn-circle btn-sm btn-secondary text-white" onClick={closeView}>
                 <span className="icon-[tabler--x] size-5"></span>
               </button>
             </div>

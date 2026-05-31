@@ -420,7 +420,7 @@ export default function MaintenancePage() {
               {logTotalPages > 1 && (
                 <div className="flex items-center justify-center gap-1 mt-2 flex-wrap">
                   <button
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-secondary"
                     disabled={logPage === 0}
                     onClick={() => setLogPage(p => p - 1)}
                   >
@@ -439,7 +439,7 @@ export default function MaintenancePage() {
                     return (
                       <button
                         key={i}
-                        className={`btn btn-sm ${logPage === i ? 'btn-primary' : 'btn-ghost'}`}
+                        className={`btn btn-sm ${logPage === i ? 'btn-primary' : 'btn-secondary'}`}
                         onClick={() => setLogPage(i)}
                       >
                         {i + 1}
@@ -448,7 +448,7 @@ export default function MaintenancePage() {
                   })}
 
                   <button
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-sm btn-secondary"
                     disabled={logPage >= logTotalPages - 1}
                     onClick={() => setLogPage(p => p + 1)}
                   >

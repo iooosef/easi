@@ -109,10 +109,10 @@ function PartsTable({ parts, loading, onSelectPart }) {
             Page {partsPage + 1} of {totalPages} · {parts.length} part{parts.length !== 1 ? 's' : ''}
           </span>
           <div className="flex gap-1">
-            <button className="btn btn-xs btn-ghost" disabled={partsPage === 0} onClick={() => setPartsPage(p => p - 1)}>
+            <button className="btn btn-xs btn-secondary" disabled={partsPage === 0} onClick={() => setPartsPage(p => p - 1)}>
               <span className="icon-[tabler--chevron-left] size-3"></span>
             </button>
-            <button className="btn btn-xs btn-ghost" disabled={partsPage >= totalPages - 1} onClick={() => setPartsPage(p => p + 1)}>
+            <button className="btn btn-xs btn-secondary" disabled={partsPage >= totalPages - 1} onClick={() => setPartsPage(p => p + 1)}>
               <span className="icon-[tabler--chevron-right] size-3"></span>
             </button>
           </div>
@@ -187,10 +187,10 @@ function DeliveryContactsTable({ contacts, loading, onSelectContact }) {
             Page {contactsPage + 1} of {totalPages} · {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
           </span>
           <div className="flex gap-1">
-            <button className="btn btn-xs btn-ghost" disabled={contactsPage === 0} onClick={() => setContactsPage(p => p - 1)}>
+            <button className="btn btn-xs btn-secondary" disabled={contactsPage === 0} onClick={() => setContactsPage(p => p - 1)}>
               <span className="icon-[tabler--chevron-left] size-3"></span>
             </button>
-            <button className="btn btn-xs btn-ghost" disabled={contactsPage >= totalPages - 1} onClick={() => setContactsPage(p => p + 1)}>
+            <button className="btn btn-xs btn-secondary" disabled={contactsPage >= totalPages - 1} onClick={() => setContactsPage(p => p + 1)}>
               <span className="icon-[tabler--chevron-right] size-3"></span>
             </button>
           </div>
@@ -956,12 +956,12 @@ export default function PurchaseOrders() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-8">
-              <button className="btn btn-sm btn-ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              <button className="btn btn-sm btn-secondary" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
                 <span className="icon-[tabler--chevron-left] size-4"></span>
                 Prev
               </button>
               <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
-              <button className="btn btn-sm btn-ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+              <button className="btn btn-sm btn-secondary" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
                 Next
                 <span className="icon-[tabler--chevron-right] size-4"></span>
               </button>
