@@ -521,8 +521,8 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Seeds service assignments for the first 3 projects, assigning at least 2 CREW
-     * employees to every schedule of each project. Skipped if assignments already exist.
+     * Seeds 2 crew assignments per schedule. Crew members are rotated across schedules
+     * and a per-date busy set ensures no crew member is double-booked on the same day.
      */
     private void seedServiceAssignments() {
         if (serviceAssignmentRepository.count() > 0) {
@@ -530,39 +530,42 @@ public class DataInitializer implements CommandLineRunner {
             return;
         }
 
-        // Collect all employees linked to a CREW-role user
-        java.util.List<Employee> crewEmployees = userRepository.findAll().stream()
+        java.util.List<Employee> crew = userRepository.findAll().stream()
                 .filter(u -> Role.CREW.name().equals(u.getRole()))
                 .map(User::getEmployee)
                 .filter(e -> e != null)
-                .toList();
+                .collect(java.util.stream.Collectors.toList());
 
-        if (crewEmployees.size() < 2) {
+        if (crew.size() < 2) {
             log.warn("Not enough CREW employees to seed assignments, skipping.");
             return;
         }
 
-        var projects = projectRepository.findAll(
-                org.springframework.data.domain.PageRequest.of(0, 3,
-                        org.springframework.data.domain.Sort.by("projNum").ascending()))
-                .getContent();
+        // Track employee IDs already assigned per calendar date to prevent same-day double-booking
+        java.util.Map<LocalDate, java.util.Set<Integer>> busyByDate = new java.util.HashMap<>();
 
-        var allSchedules = serviceScheduleRepository.findAll();
+        java.util.List<ServiceSchedule> schedules = serviceScheduleRepository.findAll();
+        schedules.sort(java.util.Comparator.comparing(ServiceSchedule::getDate)
+                .thenComparingInt(ServiceSchedule::getSchedId));
 
         int assigned = 0;
-        for (int pi = 0; pi < projects.size(); pi++) {
-            Project project = projects.get(pi);
+        int startIdx = 0;
 
-            // Pick 2 distinct crew members for this project, cycling through the list
-            Employee crew1 = crewEmployees.get((pi * 2)     % crewEmployees.size());
-            Employee crew2 = crewEmployees.get((pi * 2 + 1) % crewEmployees.size());
+        for (ServiceSchedule schedule : schedules) {
+            LocalDate date = schedule.getDate();
+            java.util.Set<Integer> busy = busyByDate.computeIfAbsent(date, k -> new java.util.HashSet<>());
 
-            for (ServiceSchedule schedule : allSchedules) {
-                if (!schedule.getProject().getProjNum().equals(project.getProjNum())) continue;
-                assign(crew1, schedule);
-                assign(crew2, schedule);
-                assigned += 2;
+            int picked = 0;
+            for (int i = 0; i < crew.size() && picked < 2; i++) {
+                Employee e = crew.get((startIdx + i) % crew.size());
+                if (!busy.contains(e.getEmployeeId())) {
+                    assign(e, schedule);
+                    busy.add(e.getEmployeeId());
+                    picked++;
+                    assigned++;
+                }
             }
+            startIdx = (startIdx + 2) % crew.size();
         }
 
         log.info("Service assignment seed completed: {} assignments created.", assigned);

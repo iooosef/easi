@@ -40,6 +40,9 @@ public class ServiceScheduleService {
     public ServiceScheduleResponse add(ServiceScheduleRequest request) {
         Project project = projectRepository.findById(request.projNum())
                 .orElseThrow(() -> new IllegalArgumentException("Project not found."));
+        if (serviceScheduleRepository.existsByProjectProjNumAndDate(request.projNum(), request.date())) {
+            throw new IllegalArgumentException("This project already has a schedule on the selected date.");
+        }
         ServiceSchedule schedule = new ServiceSchedule();
         applyRequest(schedule, request, project);
         schedule.setAddedOn(LocalDateTime.now());

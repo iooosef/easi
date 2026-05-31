@@ -1,12 +1,17 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from './auth'
-import Layout, { NAV_ITEMS } from './Layout'
+import Layout from './Layout'
+
+/** Navigation items shown as icon cards on the Home page. Independent from the sidebar. */
+const HOME_NAV_ITEMS = [
+  { page: 'new-schedule', label: 'Make new Schedule', icon: 'icon-[tabler--calendar-plus]', path: '/schedules/new', roles: ['ADMIN', 'STAFF'] },
+]
 
 export default function Home() {
   const { fullName, hasRole } = useAuth()
 
-  const navCards = NAV_ITEMS.filter(
-    ({ page, roles }) => page !== 'home' && (roles === null || hasRole(...roles))
+  const navCards = HOME_NAV_ITEMS.filter(
+    ({ roles }) => roles === null || hasRole(...roles)
   )
 
   return (

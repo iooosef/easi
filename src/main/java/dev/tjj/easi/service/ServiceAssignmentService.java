@@ -42,8 +42,18 @@ public class ServiceAssignmentService {
     /** Creates and persists a new service assignment record. */
     @Transactional
     public ServiceAssignmentResponse add(ServiceAssignmentRequest request) {
+        Employee employee = employeeRepository.findById(request.employeeId())
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found."));
+        ServiceSchedule schedule = serviceScheduleRepository.findById(request.schedId())
+                .orElseThrow(() -> new IllegalArgumentException("Service schedule not found."));
+        if (assignmentRepository.existsByEmployeeEmployeeIdAndServiceScheduleDate(request.employeeId(), schedule.getDate())) {
+            throw new IllegalArgumentException(
+                    "Employee " + employee.getFirstName() + " " + employee.getLastName()
+                    + " is already assigned to another schedule on " + schedule.getDate() + ".");
+        }
         ServiceAssignment assignment = new ServiceAssignment();
-        applyRequest(assignment, request);
+        assignment.setEmployee(employee);
+        assignment.setServiceSchedule(schedule);
         assignment.setAddedOn(LocalDateTime.now());
         ServiceAssignment saved = assignmentRepository.save(assignment);
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceAssignment", String.valueOf(saved.getServAssgnId()), "Created service assignment #" + saved.getServAssgnId(), null);

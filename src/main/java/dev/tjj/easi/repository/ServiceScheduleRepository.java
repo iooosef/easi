@@ -37,4 +37,6 @@ public interface ServiceScheduleRepository extends JpaRepository<ServiceSchedule
 
     @Query("SELECT s FROM ServiceSchedule s JOIN FETCH s.project p WHERE s.status = 'pending' AND s.date = :date")
     List<ServiceSchedule> findPendingByDate(@Param("date") LocalDate date);
+
+    boolean existsByProjectProjNumAndDate(Integer projNum, LocalDate date);
 }

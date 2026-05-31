@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
@@ -8,17 +8,13 @@ import PickerInput from './PickerInput'
 import ProjectPickerModal from './ProjectPickerModal'
 import CrewPickerModal from './CrewPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
+import CalendarPanel, { statusDotColor } from './CalendarPanel'
 
 const SCHEDULE_MENU_ITEMS = [
   { key: 'update', label: 'Update Schedule',       icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF'] },
   { key: 'crew',   label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',  roles: null },
 ]
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
 const STATUS_OPTIONS = ['pending', 'confirmed', 'completed', 'cancelled']
 const LIST_SIZE = 8
 
@@ -35,12 +31,6 @@ async function parseApiError(res) {
 function statusBadge(status) {
   const map = { pending: 'badge-warning', confirmed: 'badge-info', completed: 'badge-success', cancelled: 'badge-error' }
   return `badge badge-soft ${map[status?.toLowerCase()] ?? 'badge-neutral'}`
-}
-
-/** Returns Tailwind bg color for calendar dot based on status */
-function statusDotColor(status) {
-  const map = { pending: 'bg-warning', confirmed: 'bg-info', completed: 'bg-success', cancelled: 'bg-error' }
-  return map[status?.toLowerCase()] ?? 'bg-neutral'
 }
 
 /** Formats a LocalDate string (yyyy-MM-dd) into a readable date */
@@ -60,6 +50,7 @@ export default function Schedules() {
   const { apiFetch, hasRole } = useAuth()
   const { projNum: projNumParam } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
   const projNum = projNumParam ? Number(projNumParam) : null
   const projectName = location.state?.projectName ?? null
   const isProjectView = projNum !== null
@@ -69,11 +60,6 @@ export default function Schedules() {
 
   // Project name lookup map, fetched once
   const [projectMap, setProjectMap] = useState({})
-
-  // Calendar data: all schedules for the month view (large fetch, not paginated)
-  const [calSchedules, setCalSchedules] = useState([])
-  const [calLoading, setCalLoading] = useState(true)
-  const [calError, setCalError] = useState(null)
 
   // List data: paginated, searchable
   const [listSchedules, setListSchedules] = useState([])
@@ -90,16 +76,8 @@ export default function Schedules() {
   // Toggle: hide completed + cancelled schedules
   const [hideFinished, setHideFinished] = useState(false)
 
-  // Calendar navigation
-  const [calYear, setCalYear] = useState(today.getFullYear())
-  const [calMonth, setCalMonth] = useState(today.getMonth())
+  // Highlighted date — set by clicking a calendar day, used to highlight matching list cards
   const [highlightDate, setHighlightDate] = useState(null)
-
-  // Add schedule modal
-  const [addOpen, setAddOpen] = useState(false)
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [formError, setFormError] = useState({})
-  const [submitting, setSubmitting] = useState(false)
 
   // Update schedule modal
   const [updateOpen, setUpdateOpen] = useState(false)
@@ -132,28 +110,6 @@ export default function Schedules() {
     } catch (_) {}
   }
 
-  /** Fetches schedules for the calendar, scoped to the currently viewed month */
-  async function fetchCalendar() {
-    setCalLoading(true)
-    setCalError(null)
-    setCalSchedules([])
-    try {
-      const dateFrom = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-01`
-      const lastDay = new Date(calYear, calMonth + 1, 0).getDate()
-      const dateTo = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
-      const params = new URLSearchParams({ dateFrom, dateTo })
-      if (projNum) params.set('projNum', String(projNum))
-      const res = await apiFetch(`/api/service-schedules/calendar?${params}`)
-      if (!res.ok) throw new Error(`Failed to load schedules (${res.status})`)
-      const data = await res.json()
-      setCalSchedules(data)
-    } catch (err) {
-      setCalError(err.message)
-    } finally {
-      setCalLoading(false)
-    }
-  }
-
   /** Fetches the paginated list with current search and hideFinished state */
   async function fetchList() {
     setListLoading(true)
@@ -183,9 +139,6 @@ export default function Schedules() {
   // Projects fetched once on mount
   useEffect(() => { fetchProjects() }, [apiFetch])
 
-  // Calendar refetches when month, year, or hideFinished changes
-  useEffect(() => { fetchCalendar() }, [apiFetch, calYear, calMonth, hideFinished])
-
   // List refetches when page, search, filter, or project scope changes
   useEffect(() => { fetchList() }, [apiFetch, listPage, appliedSearch, hideFinished, projNum])
 
@@ -202,64 +155,6 @@ export default function Schedules() {
   function toggleHideFinished() {
     setListPage(0)
     setHideFinished(h => !h)
-  }
-
-  // Calendar helpers
-  const calDays = useMemo(() => {
-    const firstDay = new Date(calYear, calMonth, 1).getDay()
-    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate()
-    const cells = []
-    for (let i = 0; i < firstDay; i++) cells.push(null)
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-    return cells
-  }, [calYear, calMonth])
-
-  const schedByDate = useMemo(() => {
-    const map = {}
-    for (const s of calSchedules) {
-      if (!map[s.date]) map[s.date] = []
-      map[s.date].push(s)
-    }
-    return map
-  }, [calSchedules])
-
-  function prevMonth() {
-    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1) }
-    else setCalMonth(m => m - 1)
-  }
-  function nextMonth() {
-    if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1) }
-    else setCalMonth(m => m + 1)
-  }
-  function dateStr(day) {
-    return `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-  }
-
-  // Add modal handlers
-  function openAdd() { setForm(EMPTY_FORM); setFormError({}); setAddOpen(true) }
-  function closeAdd() { setAddOpen(false); setForm(EMPTY_FORM); setFormError({}) }
-
-  /** Submits a new schedule */
-  async function handleAdd(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/service-schedules', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projNum: Number(form.projNum), purpose: form.purpose, date: form.date, status: form.status }),
-      })
-      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Add failed'); return }
-      closeAdd()
-      setTimeout(() => notyfSuccess('Schedule added successfully.'), 150)
-      fetchCalendar()
-      fetchList()
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
   }
 
   // Update modal handlers
@@ -394,7 +289,7 @@ export default function Schedules() {
     }
   }
 
-  const initialLoading = calLoading && listSchedules.length === 0
+  const initialLoading = listLoading && listSchedules.length === 0
 
   return (
     <Layout activePage={isProjectView ? 'projects' : 'schedules'}>
@@ -410,7 +305,7 @@ export default function Schedules() {
         </div>
         <div className="flex gap-2 items-center h-full">
           {canEdit && (
-            <button type="button" className="btn btn-primary h-full min-h-0" onClick={openAdd}>
+            <button type="button" className="btn btn-primary h-full min-h-0" onClick={() => navigate('/schedules/new')}>
               <span className="icon-[tabler--plus] size-4"></span>
               Add New Schedule
             </button>
@@ -427,13 +322,13 @@ export default function Schedules() {
 
       {/* Main content */}
       {!initialLoading && (
-        <div className="flex gap-6 items-start">
+        <div className="flex gap-6 items-stretch h-[calc(100vh-14rem)]">
 
           {/* Left: Paginated schedule list (1/3) */}
-          <div className="w-1/3 flex flex-col gap-3">
+          <div className="w-1/3 flex flex-col gap-3 h-full">
 
             {/* Search bar */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <span className="icon-[tabler--search] size-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></span>
               <input
                 type="text"
@@ -445,7 +340,7 @@ export default function Schedules() {
             </div>
 
             {/* Count + hide-finished toggle */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between shrink-0">
               <p className="text-xs text-base-content/50">
                 {listTotal} schedule{listTotal !== 1 ? 's' : ''}
               </p>
@@ -461,14 +356,14 @@ export default function Schedules() {
 
             {/* List error */}
             {listError && (
-              <div className="alert alert-error py-2 text-sm">
+              <div className="alert alert-error py-2 text-sm shrink-0">
                 <span className="icon-[tabler--alert-circle] size-4"></span>
                 <span>{listError}</span>
               </div>
             )}
 
             {/* Schedule cards */}
-            <div className={`flex flex-col gap-3 transition-opacity ${listLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className={`flex-1 overflow-y-auto flex flex-col gap-3 pr-1 transition-opacity ${listLoading ? 'opacity-50 pointer-events-none' : ''}`}>
               {!listError && listSchedules.length === 0 ? (
                 <div className="text-center py-12 text-base-content/40">
                   <span className="icon-[tabler--calendar-off] size-10 mx-auto mb-2 block"></span>
@@ -511,7 +406,7 @@ export default function Schedules() {
 
             {/* Pagination controls */}
             {listTotalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 mt-1">
+              <div className="flex items-center justify-center gap-2 mt-1 shrink-0">
                 <button
                   className="btn btn-ghost btn-sm btn-square"
                   disabled={listPage === 0 || listLoading}
@@ -534,173 +429,37 @@ export default function Schedules() {
           </div>
 
           {/* Right: Calendar (2/3) */}
-          <div className="flex-1 card bg-base-100 border border-base-300">
-            <div className="card-body p-4">
-
-              {/* Month navigation */}
-              <div className="flex items-center justify-between mb-3">
-                <button className="btn btn-ghost btn-sm btn-square" onClick={prevMonth}>
-                  <span className="icon-[tabler--chevron-left] size-4"></span>
-                </button>
-                <h2 className="font-semibold text-base">{MONTH_NAMES[calMonth]} {calYear}</h2>
-                <button className="btn btn-ghost btn-sm btn-square" onClick={nextMonth}>
-                  <span className="icon-[tabler--chevron-right] size-4"></span>
-                </button>
-              </div>
-
-              {/* Day-of-week headers */}
-              <div className="grid grid-cols-7 mb-1">
-                {DAYS.map(d => (
-                  <div key={d} className="text-center text-xs font-medium text-base-content/50 py-1">{d}</div>
-                ))}
-              </div>
-
-              {/* Day cells */}
-              <div className={`grid grid-cols-7 gap-px bg-base-300 border border-base-300 rounded-box overflow-hidden transition-opacity ${calLoading ? 'opacity-50' : ''}`}>
-                {calDays.map((day, idx) => {
-                  const ds = day ? dateStr(day) : null
-                  const dayScheds = ds ? (schedByDate[ds] ?? []) : []
-                  const isToday = day &&
-                    calYear === today.getFullYear() &&
-                    calMonth === today.getMonth() &&
-                    day === today.getDate()
-                  const isHighlighted = ds && ds === highlightDate
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`bg-base-100 min-h-20 p-1.5 transition-colors
-                        ${day ? 'cursor-pointer hover:bg-base-200' : ''}
-                        ${isHighlighted ? 'ring-2 ring-primary ring-inset' : ''}`}
-                      onClick={() => day && setHighlightDate(isHighlighted ? null : ds)}
-                    >
-                      {day && (
-                        <>
-                          <div className={`text-xs font-medium mb-1 w-5 h-5 flex items-center justify-center rounded-full
-                            ${isToday ? 'bg-primary text-primary-content' : 'text-base-content/70'}`}>
-                            {day}
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            {dayScheds.slice(0, 3).map(s => (
-                              <div
-                                key={s.schedId}
-                                className="flex items-center gap-1 px-1 py-0.5 rounded text-xs bg-base-200 hover:bg-base-300 cursor-pointer"
-                                title={`${projectMap[s.projNum] ?? `Project #${s.projNum}`} — ${s.purpose}`}
-                                onClick={e => { e.stopPropagation(); openManage(s) }}
-                              >
-                                <span className={`size-1.5 rounded-full shrink-0 ${statusDotColor(s.status)}`}></span>
-                                <span className="truncate leading-tight">
-                                  {projectMap[s.projNum] ?? `#${s.projNum}`}
-                                </span>
-                              </div>
-                            ))}
-                            {dayScheds.length > 3 && (
-                              <p className="text-xs text-base-content/40 px-1">+{dayScheds.length - 3} more</p>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Status legend */}
-              <div className="flex items-center gap-4 mt-3 flex-wrap">
-                {STATUS_OPTIONS.map(s => (
-                  <div key={s} className="flex items-center gap-1.5">
-                    <span className={`size-2 rounded-full ${statusDotColor(s)}`}></span>
-                    <span className="text-xs text-base-content/60 capitalize">{s}</span>
+          <div className="flex-1 h-full">
+          <CalendarPanel
+            selectedDate={highlightDate}
+            onDateSelect={ds => setHighlightDate(h => h === ds ? null : ds)}
+            projNum={projNum}
+            fillHeight
+            renderCellSchedules={(dayScheds) => (
+              <div className="flex flex-col gap-0.5">
+                {dayScheds.slice(0, 3).map(s => (
+                  <div
+                    key={s.schedId}
+                    className="flex items-center gap-1 px-1 py-0.5 rounded text-xs bg-base-200 hover:bg-base-300 cursor-pointer"
+                    title={`${projectMap[s.projNum] ?? `Project #${s.projNum}`} — ${s.purpose}`}
+                    onClick={e => { e.stopPropagation(); openManage(s) }}
+                  >
+                    <span className={`size-1.5 rounded-full shrink-0 ${statusDotColor(s.status)}`}></span>
+                    <span className="truncate leading-tight">
+                      {projectMap[s.projNum] ?? `#${s.projNum}`}
+                    </span>
                   </div>
                 ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add New Schedule Modal */}
-      <Modal
-        isOpen={addOpen}
-        onClose={closeAdd}
-        title="Add New Schedule"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAdd}>
-              Cancel
-            </button>
-            <button type="submit" form="add-schedule-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Schedule
-            </button>
-          </>
-        }
-      >
-        <form id="add-schedule-form" onSubmit={handleAdd}>
-          <div className="flex flex-col gap-4">
-            <PickerInput
-              label="Project"
-              displayValue={form.projName}
-              placeholder="Select a project..."
-              buttonLabel="Browse"
-              required
-              error={formError.projNum}
-              Picker={ProjectPickerModal}
-              onSelect={p => setForm(f => ({ ...f, projNum: p.projNum, projName: p.name }))}
-            />
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
-              <input
-                type="text"
-                className={`input input-bordered w-full${formError.purpose ? ' is-invalid' : ''}`}
-                placeholder="e.g. Quarterly maintenance"
-                maxLength={30}
-                required
-                value={form.purpose}
-                onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
-              />
-              {formError.purpose && <span className="helper-text">{formError.purpose}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Date <span className="text-error">*</span></label>
-              <input
-                type="date"
-                className={`input input-bordered w-full${formError.date ? ' is-invalid' : ''}`}
-                required
-                value={form.date}
-                onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-              />
-              {formError.date && <span className="helper-text">{formError.date}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select
-                className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
-                value={form.status}
-                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-              >
-                {STATUS_OPTIONS.map(s => (
-                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                ))}
-              </select>
-              {formError.status && <span className="helper-text">{formError.status}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
+                {dayScheds.length > 3 && (
+                  <p className="text-xs text-base-content/40 px-1">+{dayScheds.length - 3} more</p>
+                )}
               </div>
             )}
+          />
           </div>
-        </form>
-      </Modal>
+
+        </div>
+      )}
 
       {/* Update Schedule Modal */}
       <Modal

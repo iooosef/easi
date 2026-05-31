@@ -12,6 +12,7 @@ import AirConditioningUnits from './AirConditioningUnits'
 import AccountSettings from './AccountSettings'
 import Employees from './Employees'
 import Schedules from './Schedules'
+import NewSchedule from './NewSchedule'
 import Vehicles from './Vehicles'
 import VehicleLogs from './VehicleLogs'
 import MaintenancePage from './MaintenancePage'
@@ -57,6 +58,7 @@ function App() {
       <Route path="/service-report/:srNumber/purchase-orders/:poNum/documents" element={<Private element={<PurchaseOrderDocuments />} />} />
       <Route path="/service-report/:srNumber/documents" element={<Private element={<Documents />} />} />
       <Route path="/schedules" element={<Private element={<Schedules />} />} />
+      <Route path="/schedules/new" element={<Private element={<NewSchedule />} />} />
       <Route path="/schedules/project/:projNum" element={<Private element={<Schedules />} />} />
       <Route path="/inventory" element={<Private element={<Inventory />} />} />
       <Route path="/billing" element={<Private element={<Billing />} />} />
