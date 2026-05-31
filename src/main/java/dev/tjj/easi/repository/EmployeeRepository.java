@@ -13,4 +13,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
 
     @Query("SELECT e FROM Employee e WHERE EXISTS (SELECT u FROM User u WHERE u.employee = e AND u.role = :role)")
     Page<Employee> findByUserRole(@Param("role") String role, Pageable pageable);
+
+    @Query("SELECT e FROM Employee e WHERE (:position IS NULL OR LOWER(e.position) LIKE LOWER(CONCAT('%', :position, '%')))")
+    Page<Employee> findFiltered(@Param("position") String position, Pageable pageable);
 }

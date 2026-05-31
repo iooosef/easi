@@ -48,9 +48,10 @@ public class ServiceScheduleController {
     public ResponseEntity<Page<ServiceScheduleResponse>> getAll(
             Pageable pageable,
             @RequestParam(defaultValue = "false") boolean hideFinished,
+            @RequestParam(defaultValue = "false") boolean withoutReport,
             @RequestParam(required = false) String search,
             @RequestParam(required = false) Integer projNum) {
-        return ResponseEntity.ok(serviceScheduleService.getAll(pageable, hideFinished, search, projNum));
+        return ResponseEntity.ok(serviceScheduleService.getAll(pageable, hideFinished, withoutReport, search, projNum));
     }
 
     /** Returns all schedules within the given date range for calendar display, optionally scoped to a project. */

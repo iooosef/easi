@@ -11,13 +11,14 @@ import { useState } from 'react'
  *   buttonLabel  - text on the trigger button
  *   onSelect     - function(item) called when the user picks an item
  *   Picker       - picker modal component (e.g. ProjectPickerModal)
+ *   pickerProps  - extra props forwarded to the Picker component (e.g. { position: 'Engineer' })
  *   error        - validation error string
  *   required     - shows a red asterisk on the label when true
  *   className    - extra class on the wrapper div (e.g. 'sm:col-span-2')
  */
 export default function PickerInput({
   label, displayValue, placeholder = 'None selected',
-  buttonLabel, onSelect, Picker,
+  buttonLabel, onSelect, Picker, pickerProps,
   error, required, className = '',
 }) {
   const [open, setOpen] = useState(false)
@@ -48,6 +49,7 @@ export default function PickerInput({
           isOpen={open}
           onClose={() => setOpen(false)}
           onSelect={item => { onSelect(item); setOpen(false) }}
+          {...(pickerProps ?? {})}
         />
       )}
     </div>

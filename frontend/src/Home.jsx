@@ -5,6 +5,7 @@ import Layout from './Layout'
 /** Navigation items shown as icon cards on the Home page. Independent from the sidebar. */
 const HOME_NAV_ITEMS = [
   { page: 'new-schedule', label: 'Make new Schedule', icon: 'icon-[tabler--calendar-plus]', path: '/schedules/new', roles: ['ADMIN', 'STAFF'] },
+  { page: 'new-service-report', label: 'New Service Report', icon: 'icon-[tabler--file-plus]', path: '/service-report/new', roles: ['ADMIN', 'STAFF'] },
 ]
 
 export default function Home() {

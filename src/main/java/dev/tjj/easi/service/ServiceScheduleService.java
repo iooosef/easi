@@ -75,10 +75,17 @@ public class ServiceScheduleService {
      * Optionally filters by purpose or project name when search is provided.
      * Optionally restricts results to a single project when projNum is provided.
      */
-    public Page<ServiceScheduleResponse> getAll(Pageable pageable, boolean hideFinished, String search, Integer projNum) {
+    /** Returns a filtered, paginated page of service schedule records. */
+    public Page<ServiceScheduleResponse> getAll(Pageable pageable, boolean hideFinished, boolean withoutReport, String search, Integer projNum) {
         String q = (search != null && !search.isBlank()) ? search : "";
+        if (hideFinished && withoutReport) {
+            return serviceScheduleRepository.findFilteredHideFinishedWithoutReport(q, projNum, pageable).map(this::toResponse);
+        }
         if (hideFinished) {
             return serviceScheduleRepository.findFilteredHideFinished(q, projNum, pageable).map(this::toResponse);
+        }
+        if (withoutReport) {
+            return serviceScheduleRepository.findFilteredWithoutReport(q, projNum, pageable).map(this::toResponse);
         }
         return serviceScheduleRepository.findFiltered(q, projNum, pageable).map(this::toResponse);
     }

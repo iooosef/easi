@@ -13,6 +13,7 @@ import AccountSettings from './AccountSettings'
 import Employees from './Employees'
 import Schedules from './Schedules'
 import NewSchedule from './NewSchedule'
+import NewServiceReport from './NewServiceReport'
 import Vehicles from './Vehicles'
 import VehicleLogs from './VehicleLogs'
 import MaintenancePage from './MaintenancePage'
@@ -50,6 +51,7 @@ function App() {
       <Route path="/home" element={<Private element={<Home />} />} />
       <Route path="/projects" element={<Private element={<Projects />} />} />
       <Route path="/service-report" element={<Private element={<ServiceReports />} />} />
+      <Route path="/service-report/new" element={<Private element={<NewServiceReport />} />} />
       <Route path="/service-report/project/:projNum" element={<Private element={<ServiceReports />} />} />
       <Route path="/ac-units/project/:projNum" element={<Private element={<AirConditioningUnits />} />} />
       <Route path="/projects/:projNum/documents" element={<Private element={<ProjectDocuments />} />} />

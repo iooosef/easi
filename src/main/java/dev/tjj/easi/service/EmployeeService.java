@@ -55,9 +55,9 @@ public class EmployeeService {
         return toResponse(saved);
     }
 
-    /** Returns a page of employee records. */
-    public Page<EmployeeResponse> getAll(Pageable pageable) {
-        return employeeRepository.findAll(pageable).map(this::toResponse);
+    /** Returns a page of employee records, optionally filtered by position (case-insensitive contains). */
+    public Page<EmployeeResponse> getAll(Pageable pageable, String position) {
+        return employeeRepository.findFiltered(position, pageable).map(this::toResponse);
     }
 
     /** Returns a page of employees whose linked user has the given role. */

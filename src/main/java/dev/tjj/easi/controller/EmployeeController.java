@@ -41,10 +41,12 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.update(id, request));
     }
 
-    /** Returns a page of employee records. Restricted to ADMIN and HR. */
+    /** Returns a page of employee records, optionally filtered by position. Restricted to ADMIN and HR. */
     @GetMapping
-    public ResponseEntity<Page<EmployeeResponse>> getAll(Pageable pageable) {
-        return ResponseEntity.ok(employeeService.getAll(pageable));
+    public ResponseEntity<Page<EmployeeResponse>> getAll(
+            Pageable pageable,
+            @RequestParam(required = false) String position) {
+        return ResponseEntity.ok(employeeService.getAll(pageable, position));
     }
 
     /** Returns a single employee record by ID. Restricted to ADMIN and HR. */

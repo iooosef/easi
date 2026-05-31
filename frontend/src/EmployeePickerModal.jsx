@@ -1,8 +1,5 @@
+import { useCallback } from 'react'
 import PickerModal from './PickerModal'
-
-// Stable module-level references required by PickerModal's useEffect
-const fetchUrl = page =>
-  `/api/employees?${new URLSearchParams({ page: String(page), size: '12', sort: 'lastName,asc' })}`
 
 const fullName = e =>
   [e.lastName, e.firstName, e.middleName].filter(Boolean).join(', ')
@@ -33,14 +30,28 @@ const renderCard = (e, onSelect) => (
   </div>
 )
 
-/** Picker modal for selecting an Employee. Wraps PickerModal with employee-specific config. */
-export default function EmployeePickerModal({ isOpen, onClose, onSelect }) {
+/**
+ * Picker modal for selecting an Employee.
+ * Accepts an optional `position` prop to filter results server-side (case-insensitive contains).
+ */
+export default function EmployeePickerModal({ isOpen, onClose, onSelect, position }) {
+  // useCallback keeps fetchUrl stable as long as `position` doesn't change,
+  // satisfying PickerModal's useEffect dependency requirement
+  const fetchUrl = useCallback(
+    page => {
+      const params = new URLSearchParams({ page: String(page), size: '12', sort: 'lastName,asc' })
+      if (position) params.set('position', position)
+      return `/api/employees?${params}`
+    },
+    [position]
+  )
+
   return (
     <PickerModal
       isOpen={isOpen}
       onClose={onClose}
       onSelect={onSelect}
-      title="Select Engineer"
+      title="Select Employee"
       fetchUrl={fetchUrl}
       searchFilter={searchFilter}
       renderCard={renderCard}

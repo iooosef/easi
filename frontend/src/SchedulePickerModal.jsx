@@ -2,7 +2,7 @@ import PickerModal from './PickerModal'
 
 // Stable module-level references required by PickerModal's useEffect
 const fetchUrl = page =>
-  `/api/service-schedules?${new URLSearchParams({ page: String(page), size: '12', sort: 'date,desc' })}`
+  `/api/service-schedules?${new URLSearchParams({ page: String(page), size: '12', sort: 'date,desc', withoutReport: 'true' })}`
 
 const searchFilter = (s, q) =>
   q === '' ||
@@ -31,7 +31,7 @@ const renderCard = (s, onSelect) => (
   </div>
 )
 
-/** Picker modal for selecting a Service Schedule. Wraps PickerModal with schedule-specific config. */
+/** Picker modal for selecting a Service Schedule. Only shows schedules without an existing service report. */
 export default function SchedulePickerModal({ isOpen, onClose, onSelect }) {
   return (
     <PickerModal

@@ -295,7 +295,7 @@ export default function ServiceReports() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={openModal}
+              onClick={() => navigate('/service-report/new')}
             >
               <span className="icon-[tabler--plus] size-4"></span>
               New Project Service Report

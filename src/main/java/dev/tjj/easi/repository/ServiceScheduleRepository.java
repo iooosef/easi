@@ -23,6 +23,16 @@ public interface ServiceScheduleRepository extends JpaRepository<ServiceSchedule
     Page<ServiceSchedule> findFiltered(@Param("search") String search, @Param("projNum") Integer projNum, Pageable pageable);
 
     @Query(value = "SELECT s FROM ServiceSchedule s JOIN FETCH s.project p WHERE " +
+                   "(:search = '' OR LOWER(s.purpose) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+                   "(:projNum IS NULL OR p.projNum = :projNum) AND " +
+                   "NOT EXISTS (SELECT r FROM ServiceReport r WHERE r.serviceSchedule = s)",
+           countQuery = "SELECT COUNT(s) FROM ServiceSchedule s JOIN s.project p WHERE " +
+                        "(:search = '' OR LOWER(s.purpose) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+                        "(:projNum IS NULL OR p.projNum = :projNum) AND " +
+                        "NOT EXISTS (SELECT r FROM ServiceReport r WHERE r.serviceSchedule = s)")
+    Page<ServiceSchedule> findFilteredWithoutReport(@Param("search") String search, @Param("projNum") Integer projNum, Pageable pageable);
+
+    @Query(value = "SELECT s FROM ServiceSchedule s JOIN FETCH s.project p WHERE " +
                    "s.status NOT IN ('completed', 'cancelled') AND " +
                    "(:search = '' OR LOWER(s.purpose) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
                    "(:projNum IS NULL OR p.projNum = :projNum)",
@@ -31,6 +41,18 @@ public interface ServiceScheduleRepository extends JpaRepository<ServiceSchedule
                         "(:search = '' OR LOWER(s.purpose) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
                         "(:projNum IS NULL OR p.projNum = :projNum)")
     Page<ServiceSchedule> findFilteredHideFinished(@Param("search") String search, @Param("projNum") Integer projNum, Pageable pageable);
+
+    @Query(value = "SELECT s FROM ServiceSchedule s JOIN FETCH s.project p WHERE " +
+                   "s.status NOT IN ('completed', 'cancelled') AND " +
+                   "(:search = '' OR LOWER(s.purpose) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+                   "(:projNum IS NULL OR p.projNum = :projNum) AND " +
+                   "NOT EXISTS (SELECT r FROM ServiceReport r WHERE r.serviceSchedule = s)",
+           countQuery = "SELECT COUNT(s) FROM ServiceSchedule s JOIN s.project p WHERE " +
+                        "s.status NOT IN ('completed', 'cancelled') AND " +
+                        "(:search = '' OR LOWER(s.purpose) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))) AND " +
+                        "(:projNum IS NULL OR p.projNum = :projNum) AND " +
+                        "NOT EXISTS (SELECT r FROM ServiceReport r WHERE r.serviceSchedule = s)")
+    Page<ServiceSchedule> findFilteredHideFinishedWithoutReport(@Param("search") String search, @Param("projNum") Integer projNum, Pageable pageable);
 
     @Query("SELECT s FROM ServiceSchedule s JOIN FETCH s.project p WHERE s.date >= :dateFrom AND s.date <= :dateTo AND (:projNum IS NULL OR p.projNum = :projNum) ORDER BY s.date ASC")
     List<ServiceSchedule> findForCalendar(@Param("dateFrom") LocalDate dateFrom, @Param("dateTo") LocalDate dateTo, @Param("projNum") Integer projNum);
