@@ -1,15 +1,11 @@
 package dev.tjj.easi.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record PurchaseOrderRequest(
 
         String poNum,
-
-        @NotNull(message = "Project number is required")
-        Integer projNum,
 
         @NotBlank(message = "Purpose is required")
         @Size(max = 30, message = "Purpose must not exceed 30 characters")

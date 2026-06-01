@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+
 public record VehicleLogRequest(
 
         @NotNull(message = "Vehicle ID is required")
@@ -14,8 +15,7 @@ public record VehicleLogRequest(
         @Size(max = 30, message = "Purpose must not exceed 30 characters")
         String purpose,
 
-        @NotNull(message = "Project number is required")
-        Integer projNum,
+        Integer schedId,
 
         @NotBlank(message = "Destination is required")
         @Size(max = 255, message = "Destination must not exceed 255 characters")

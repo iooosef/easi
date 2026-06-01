@@ -2,11 +2,9 @@ package dev.tjj.easi.service;
 
 import dev.tjj.easi.dto.PurchaseOrderRequest;
 import dev.tjj.easi.dto.PurchaseOrderResponse;
-import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.repository.PartRepository;
-import dev.tjj.easi.repository.ProjectRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import dev.tjj.easi.entity.LogSeverity;
@@ -28,18 +26,15 @@ import org.springframework.data.domain.PageRequest;
 public class PurchaseOrderService {
 
     private final PurchaseOrderRepository purchaseOrderRepository;
-    private final ProjectRepository projectRepository;
     private final ServiceReportRepository serviceReportRepository;
     private final PartRepository partRepository;
     private final LogService logService;
 
     public PurchaseOrderService(PurchaseOrderRepository purchaseOrderRepository,
-                                ProjectRepository projectRepository,
                                 ServiceReportRepository serviceReportRepository,
                                 PartRepository partRepository,
                                 LogService logService) {
         this.purchaseOrderRepository = purchaseOrderRepository;
-        this.projectRepository = projectRepository;
         this.serviceReportRepository = serviceReportRepository;
         this.partRepository = partRepository;
         this.logService = logService;
@@ -103,9 +98,6 @@ public class PurchaseOrderService {
 
     /** Applies request fields onto the purchase order entity. */
     private void applyRequest(PurchaseOrder po, PurchaseOrderRequest request) {
-        Project project = projectRepository.findById(request.projNum())
-                .orElseThrow(() -> new IllegalArgumentException("Project not found."));
-        po.setProject(project);
         po.setPurpose(request.purpose());
         po.setTerms(request.terms());
         po.setDeliveryAddress(request.deliveryAddress());
@@ -130,7 +122,6 @@ public class PurchaseOrderService {
         BigDecimal totalCost = partRepository.sumTotalCostByPoNum(po.getPoNum());
         return new PurchaseOrderResponse(
                 po.getPoNum(),
-                po.getProject().getProjNum(),
                 po.getPurpose(),
                 po.getTerms(),
                 po.getServiceReport() != null ? po.getServiceReport().getSrNumber() : null,

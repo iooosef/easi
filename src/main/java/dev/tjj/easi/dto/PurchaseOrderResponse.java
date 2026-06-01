@@ -5,7 +5,6 @@ import java.time.LocalDateTime;
 
 public record PurchaseOrderResponse(
         String poNum,
-        Integer projNum,
         String purpose,
         String terms,
         Integer srNum,

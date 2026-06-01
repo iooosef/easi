@@ -619,12 +619,12 @@ public class DataInitializer implements CommandLineRunner {
         // --- Van ---
         Vehicle van = vehicle("Toyota HiAce", "AAA 1234", LocalDateTime.of(2025, 11, 15, 8, 0));
 
-        VehicleLog vl1 = vehicleLog(van, "Material Delivery",    p1, "123 Ayala Ave, Makati City",           d1, 12500, 12563, "completed", LocalDateTime.of(2026, 1,  9, 7, 30));
-        VehicleLog vl2 = vehicleLog(van, "Personnel Transport",  p1, "ABC Corporation, Makati City",          d2, 12563, 12598, "completed", LocalDateTime.of(2026, 1, 22, 7, 0));
-        VehicleLog vl3 = vehicleLog(van, "Material Delivery",    p2, "45 Sampaguita St, Quezon City",         d1, 12598, 12671, "completed", LocalDateTime.of(2026, 2,  5, 8, 0));
-        VehicleLog vl4 = vehicleLog(van, "Personnel Transport",  p2, "Santos Residence, Quezon City",         d2, 12671, 12704, "completed", LocalDateTime.of(2026, 2, 25, 7, 30));
-        VehicleLog vl5 = vehicleLog(van, "Material Delivery",    p3, "Greenfield District, Mandaluyong City", d1, 12704, 12789, "completed", LocalDateTime.of(2026, 3, 11, 8, 0));
-        VehicleLog vl6 = vehicleLog(van, "Personnel Transport",  p1, "ABC Corporation, Makati City",          d2, 12789, null,  "driving",   LocalDateTime.of(2026, 5, 20, 7, 0));
+        VehicleLog vl1 = vehicleLog(van, "Material Delivery",    null, "123 Ayala Ave, Makati City",           d1, 12500, 12563, "completed", LocalDateTime.of(2026, 1,  9, 7, 30));
+        VehicleLog vl2 = vehicleLog(van, "Personnel Transport",  null, "ABC Corporation, Makati City",          d2, 12563, 12598, "completed", LocalDateTime.of(2026, 1, 22, 7, 0));
+        VehicleLog vl3 = vehicleLog(van, "Material Delivery",    null, "45 Sampaguita St, Quezon City",         d1, 12598, 12671, "completed", LocalDateTime.of(2026, 2,  5, 8, 0));
+        VehicleLog vl4 = vehicleLog(van, "Personnel Transport",  null, "Santos Residence, Quezon City",         d2, 12671, 12704, "completed", LocalDateTime.of(2026, 2, 25, 7, 30));
+        VehicleLog vl5 = vehicleLog(van, "Material Delivery",    null, "Greenfield District, Mandaluyong City", d1, 12704, 12789, "completed", LocalDateTime.of(2026, 3, 11, 8, 0));
+        VehicleLog vl6 = vehicleLog(van, "Personnel Transport",  null, "ABC Corporation, Makati City",          d2, 12789, null,  "driving",   LocalDateTime.of(2026, 5, 20, 7, 0));
 
         vehicleGasLog(vl1, new BigDecimal("1500.00"), "INV-2026-VAN-001");
         vehicleGasLog(vl3, new BigDecimal("1200.00"), "INV-2026-VAN-012");
@@ -633,12 +633,12 @@ public class DataInitializer implements CommandLineRunner {
         // --- Flatbed Truck ---
         Vehicle truck = vehicle("Isuzu ELF Flatbed", "BBB 5678", LocalDateTime.of(2025, 11, 15, 8, 30));
 
-        VehicleLog vt1 = vehicleLog(truck, "Equipment Transport", p1, "123 Ayala Ave, Makati City",           d3, 45200, 45298, "completed", LocalDateTime.of(2026, 1, 10, 6, 0));
-        VehicleLog vt2 = vehicleLog(truck, "Material Delivery",   p3, "Greenfield District, Mandaluyong City", d4, 45298, 45421, "completed", LocalDateTime.of(2026, 1, 28, 6, 30));
-        VehicleLog vt3 = vehicleLog(truck, "Equipment Transport", p2, "45 Sampaguita St, Quezon City",         d3, 45421, 45489, "completed", LocalDateTime.of(2026, 2, 12, 6, 0));
-        VehicleLog vt4 = vehicleLog(truck, "Material Delivery",   p1, "ABC Corporation, Makati City",          d4, 45489, 45612, "completed", LocalDateTime.of(2026, 3,  5, 6, 30));
-        VehicleLog vt5 = vehicleLog(truck, "Equipment Transport", p3, "Greenfield District, Mandaluyong City", d3, 45612, 45778, "completed", LocalDateTime.of(2026, 4, 15, 6, 0));
-        VehicleLog vt6 = vehicleLog(truck, "Material Delivery",   p2, "Santos Residence, Quezon City",         d4, 45778, 45843, "completed", LocalDateTime.of(2026, 5, 18, 6, 30));
+        VehicleLog vt1 = vehicleLog(truck, "Equipment Transport", null, "123 Ayala Ave, Makati City",           d3, 45200, 45298, "completed", LocalDateTime.of(2026, 1, 10, 6, 0));
+        VehicleLog vt2 = vehicleLog(truck, "Material Delivery",   null, "Greenfield District, Mandaluyong City", d4, 45298, 45421, "completed", LocalDateTime.of(2026, 1, 28, 6, 30));
+        VehicleLog vt3 = vehicleLog(truck, "Equipment Transport", null, "45 Sampaguita St, Quezon City",         d3, 45421, 45489, "completed", LocalDateTime.of(2026, 2, 12, 6, 0));
+        VehicleLog vt4 = vehicleLog(truck, "Material Delivery",   null, "ABC Corporation, Makati City",          d4, 45489, 45612, "completed", LocalDateTime.of(2026, 3,  5, 6, 30));
+        VehicleLog vt5 = vehicleLog(truck, "Equipment Transport", null, "Greenfield District, Mandaluyong City", d3, 45612, 45778, "completed", LocalDateTime.of(2026, 4, 15, 6, 0));
+        VehicleLog vt6 = vehicleLog(truck, "Material Delivery",   null, "Santos Residence, Quezon City",         d4, 45778, 45843, "completed", LocalDateTime.of(2026, 5, 18, 6, 30));
 
         vehicleGasLog(vt1, new BigDecimal("3200.00"), "INV-2026-TRK-003");
         vehicleGasLog(vt3, new BigDecimal("2800.00"), "INV-2026-TRK-015");
@@ -657,14 +657,14 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /** Creates and saves a VehicleLog. */
-    private VehicleLog vehicleLog(Vehicle vehicle, String purpose, Project project,
+    private VehicleLog vehicleLog(Vehicle vehicle, String purpose, ServiceSchedule schedule,
                                   String destination, Employee driver,
                                   Integer odoStart, Integer odoEnd,
                                   String status, LocalDateTime addedOn) {
         VehicleLog vl = new VehicleLog();
         vl.setVehicle(vehicle);
         vl.setPurpose(purpose);
-        vl.setProject(project);
+        vl.setServiceSchedule(schedule);
         vl.setDestination(destination);
         vl.setDriverEmployee(driver);
         vl.setOdometerStart(odoStart);
@@ -772,42 +772,42 @@ public class DataInitializer implements CommandLineRunner {
         PurchaseOrder po1 = null, po2 = null, po3 = null, po4 = null, po5 = null, po6 = null;
 
         if (!p1Reports.isEmpty()) {
-            po1 = po("PO-2026-001", projects.get(0), p1Reports.get(0),
+            po1 = po("PO-2026-001", p1Reports.get(0),
                     "Repair Parts", "net30",
                     "123 Ayala Avenue, Makati City, Metro Manila",
                     "Urgently needed for capacitor and refrigerant replacement.", "cash", null,
                     LocalDateTime.of(2026, 1, 6, 9, 0));
         }
         if (p1Reports.size() >= 3) {
-            po2 = po("PO-2026-002", projects.get(0), p1Reports.get(2),
+            po2 = po("PO-2026-002", p1Reports.get(2),
                     "Maintenance Supplies", "net60",
                     "123 Ayala Avenue, Makati City, Metro Manila",
                     "Drain line cleaner and air filter stock.", "check", null,
                     LocalDateTime.of(2026, 2, 10, 9, 0));
         }
         if (!p2Reports.isEmpty()) {
-            po3 = po("PO-2026-003", projects.get(1), p2Reports.get(0),
+            po3 = po("PO-2026-003", p2Reports.get(0),
                     "Replacement Parts", "cod",
                     "45 Sampaguita St., Quezon City, Metro Manila",
                     "PCB fuse and circuit breaker replacement.", "cash", null,
                     LocalDateTime.of(2026, 1, 12, 10, 0));
         }
         if (p2Reports.size() >= 3) {
-            po4 = po("PO-2026-004", projects.get(1), p2Reports.get(2),
+            po4 = po("PO-2026-004", p2Reports.get(2),
                     "Cleaning Supplies", "net15",
                     "45 Sampaguita St., Quezon City, Metro Manila",
                     null, "gcash", "Paid via GCash business wallet.",
                     LocalDateTime.of(2026, 2, 23, 11, 0));
         }
         if (!p3Reports.isEmpty()) {
-            po5 = po("PO-2026-005", projects.get(2), p3Reports.get(0),
+            po5 = po("PO-2026-005", p3Reports.get(0),
                     "Equipment Parts", "net30",
                     "Greenfield District, Mandaluyong City, Metro Manila",
                     "Circuit breakers and panel load redistribution parts.", "check", null,
                     LocalDateTime.of(2026, 1, 5, 8, 0));
         }
         if (p3Reports.size() >= 4) {
-            po6 = po("PO-2026-006", projects.get(2), p3Reports.get(3),
+            po6 = po("PO-2026-006", p3Reports.get(3),
                     "AC Components", "net60",
                     "Greenfield District, Mandaluyong City, Metro Manila",
                     "AHU fan motor and capacitor for basement unit.", "cash", null,
@@ -864,13 +864,12 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /** Creates and saves a PurchaseOrder. */
-    private PurchaseOrder po(String poNum, Project project, ServiceReport serviceReport,
+    private PurchaseOrder po(String poNum, ServiceReport serviceReport,
                              String purpose, String terms, String deliveryAddress,
                              String remarks, String paymentMethod, String paymentDetails,
                              LocalDateTime addedOn) {
         PurchaseOrder po = new PurchaseOrder();
         po.setPoNum(poNum);
-        po.setProject(project);
         po.setServiceReport(serviceReport);
         po.setPurpose(purpose);
         po.setTerms(terms);

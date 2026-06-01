@@ -4,7 +4,7 @@ import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
 import ManageMenu from './ManageMenu'
-import ProjectPickerModal from './ProjectPickerModal'
+import AnySchedulePickerModal from './AnySchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
@@ -17,7 +17,8 @@ const LOG_MENU_ITEMS = [
 
 const EMPTY_FORM = {
   purpose: '',
-  projNum: '',
+  schedId: '',
+  _scheduleDisplay: '',
   destination: '',
   driverEmployeeId: '',
   odometerStart: '',
@@ -201,13 +202,11 @@ export default function VehicleLogs() {
   const [editSubmitting, setEditSubmitting] = useState(false)
 
   // Picker state — shared between add and edit, pickerFor tracks which form is active
-  const [pickerFor, setPickerFor]                   = useState(null) // 'add' | 'edit'
-  const [projectPickerOpen, setProjectPickerOpen]   = useState(false)
-  const [driverPickerOpen, setDriverPickerOpen]     = useState(false)
-  const [addProjectLabel, setAddProjectLabel]       = useState('')
-  const [addDriverLabel, setAddDriverLabel]         = useState('')
-  const [editProjectLabel, setEditProjectLabel]     = useState('')
-  const [editDriverLabel, setEditDriverLabel]       = useState('')
+  const [pickerFor, setPickerFor]               = useState(null) // 'add' | 'edit'
+  const [schedulePickerOpen, setSchedulePickerOpen] = useState(false)
+  const [driverPickerOpen, setDriverPickerOpen] = useState(false)
+  const [addDriverLabel, setAddDriverLabel]     = useState('')
+  const [editDriverLabel, setEditDriverLabel]   = useState('')
 
   // Manage Gas Logs modal
   const [manageGasLogsOpen, setManageGasLogsOpen]       = useState(false)
@@ -245,9 +244,9 @@ export default function VehicleLogs() {
   const canEdit     = hasRole('ADMIN', 'STAFF', 'CREW')
   const canManageDocs = hasRole('ADMIN', 'STAFF')
 
-  function openProjectPicker(forForm) {
+  function openSchedulePicker(forForm) {
     setPickerFor(forForm)
-    setProjectPickerOpen(true)
+    setSchedulePickerOpen(true)
   }
 
   function openDriverPicker(forForm) {
@@ -255,14 +254,13 @@ export default function VehicleLogs() {
     setDriverPickerOpen(true)
   }
 
-  function handleProjectSelect(project) {
-    setProjectPickerOpen(false)
+  function handleScheduleSelect(schedule) {
+    setSchedulePickerOpen(false)
+    const display = `Sched #${schedule.schedId} · Project #${schedule.projNum} · ${schedule.date ?? '—'}`
     if (pickerFor === 'add') {
-      setForm(prev => ({ ...prev, projNum: String(project.projNum) }))
-      setAddProjectLabel(project.name)
+      setForm(prev => ({ ...prev, schedId: String(schedule.schedId), _scheduleDisplay: display }))
     } else {
-      setEditForm(prev => ({ ...prev, projNum: String(project.projNum) }))
-      setEditProjectLabel(project.name)
+      setEditForm(prev => ({ ...prev, schedId: String(schedule.schedId), _scheduleDisplay: display }))
     }
   }
 
@@ -281,7 +279,6 @@ export default function VehicleLogs() {
   function openModal() {
     setForm(EMPTY_FORM)
     setFormError({})
-    setAddProjectLabel('')
     setAddDriverLabel('')
     setModalOpen(true)
   }
@@ -290,22 +287,24 @@ export default function VehicleLogs() {
     setModalOpen(false)
     setForm(EMPTY_FORM)
     setFormError({})
-    setAddProjectLabel('')
     setAddDriverLabel('')
   }
 
   /** Opens the edit modal pre-populated with the given log's data. */
   function openEditModal(log) {
+    const schedDisplay = log.schedId
+      ? `Sched #${log.schedId}`
+      : ''
     setEditForm({
       purpose:          log.purpose,
-      projNum:          String(log.projNum),
+      schedId:          log.schedId != null ? String(log.schedId) : '',
+      _scheduleDisplay: schedDisplay,
       destination:      log.destination,
       driverEmployeeId: String(log.driverEmployeeId),
       odometerStart:    String(log.odometerStart),
       odometerEnd:      log.odometerEnd != null ? String(log.odometerEnd) : '',
       status:           log.status,
     })
-    setEditProjectLabel(log.projectName)
     setEditDriverLabel(log.driverName)
     setEditingLog(log)
     setEditFormError({})
@@ -317,7 +316,6 @@ export default function VehicleLogs() {
     setEditingLog(null)
     setEditForm(EMPTY_FORM)
     setEditFormError({})
-    setEditProjectLabel('')
     setEditDriverLabel('')
   }
 
@@ -442,7 +440,7 @@ export default function VehicleLogs() {
     return (
       String(l.vehicleLogId).includes(q) ||
       l.purpose.toLowerCase().includes(q) ||
-      l.projectName.toLowerCase().includes(q) ||
+      (l.schedId != null && String(l.schedId).includes(q)) ||
       l.destination.toLowerCase().includes(q)
     )
   })
@@ -452,7 +450,7 @@ export default function VehicleLogs() {
     return {
       vehiclesId:       vehiclesIdInt,
       purpose:          f.purpose,
-      projNum:          f.projNum ? Number(f.projNum) : null,
+      schedId:          f.schedId ? Number(f.schedId) : null,
       destination:      f.destination,
       driverEmployeeId: f.driverEmployeeId ? Number(f.driverEmployeeId) : null,
       odometerStart:    f.odometerStart !== '' ? Number(f.odometerStart) : null,
@@ -675,7 +673,7 @@ export default function VehicleLogs() {
           <input
             type="text"
             className="input input-bordered w-full pl-9"
-            placeholder="Search by log #, purpose, project, or destination..."
+            placeholder="Search by log #, purpose, schedule #, or destination..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -717,7 +715,7 @@ export default function VehicleLogs() {
                   <tr>
                     <th>Log #</th>
                     <th>Vehicle</th>
-                    <th>Project</th>
+                    <th>Schedule</th>
                     <th>Purpose</th>
                     <th>Date</th>
                     <th>Action</th>
@@ -734,7 +732,7 @@ export default function VehicleLogs() {
                           <span className="font-mono">{l.vehiclePlateNum}</span>
                         </p>
                       </td>
-                      <td className="max-w-[180px] truncate">{l.projectName}</td>
+                      <td className="max-w-[120px] font-mono text-sm">{l.schedId != null ? `#${l.schedId}` : '—'}</td>
                       <td>{l.purpose}</td>
                       <td className="text-sm text-base-content/70">{formatDate(l.addedOn)}</td>
                       <td>
@@ -776,7 +774,7 @@ export default function VehicleLogs() {
         item={selectedLog}
         details={selectedLog ? [
           { label: 'Vehicle',        value: `${selectedLog.vehicleModel} (${selectedLog.vehiclePlateNum})` },
-          { label: 'Project',        value: selectedLog.projectName },
+          { label: 'Schedule',       value: selectedLog.schedId != null ? `Sched #${selectedLog.schedId}` : '—' },
           { label: 'Purpose',        value: selectedLog.purpose },
           { label: 'Driver',         value: selectedLog.driverName },
           { label: 'Status',         value: selectedLog.status.charAt(0).toUpperCase() + selectedLog.status.slice(1) },
@@ -1157,9 +1155,9 @@ export default function VehicleLogs() {
             form={form}
             formError={formError}
             onChange={handleFormChange}
-            projectLabel={addProjectLabel}
+            onSetForm={setForm}
             driverLabel={addDriverLabel}
-            onOpenProjectPicker={() => openProjectPicker('add')}
+            onOpenSchedulePicker={() => openSchedulePicker('add')}
             onOpenDriverPicker={() => openDriverPicker('add')}
           />
         </form>
@@ -1190,19 +1188,19 @@ export default function VehicleLogs() {
             form={editForm}
             formError={editFormError}
             onChange={handleEditFormChange}
-            projectLabel={editProjectLabel}
+            onSetForm={setEditForm}
             driverLabel={editDriverLabel}
-            onOpenProjectPicker={() => openProjectPicker('edit')}
+            onOpenSchedulePicker={() => openSchedulePicker('edit')}
             onOpenDriverPicker={() => openDriverPicker('edit')}
           />
         </form>
       </Modal>
 
-      {/* Project Picker */}
-      <ProjectPickerModal
-        isOpen={projectPickerOpen}
-        onClose={() => setProjectPickerOpen(false)}
-        onSelect={handleProjectSelect}
+      {/* Schedule Picker */}
+      <AnySchedulePickerModal
+        isOpen={schedulePickerOpen}
+        onClose={() => setSchedulePickerOpen(false)}
+        onSelect={handleScheduleSelect}
       />
 
       {/* Driver Picker */}
@@ -1216,7 +1214,7 @@ export default function VehicleLogs() {
 }
 
 /** Shared form fields used by both the add and edit modals. */
-function LogFormFields({ form, formError, onChange, projectLabel, driverLabel, onOpenProjectPicker, onOpenDriverPicker }) {
+function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, onOpenSchedulePicker, onOpenDriverPicker }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -1236,20 +1234,31 @@ function LogFormFields({ form, formError, onChange, projectLabel, driverLabel, o
       </div>
 
       <div className="sm:col-span-2 flex flex-col gap-1">
-        <label className="label-text font-medium">Project <span className="text-error">*</span></label>
-        <div className={`input input-bordered w-full flex items-center justify-between gap-2${formError.projNum ? ' is-invalid' : ''}`}>
-          <span className={`text-sm truncate ${projectLabel ? '' : 'text-base-content/40'}`}>
-            {projectLabel || 'No project selected'}
+        <label className="label-text font-medium">Schedule <span className="text-base-content/40 font-normal">(optional)</span></label>
+        <div className={`input input-bordered w-full flex items-center justify-between gap-2${formError.schedId ? ' is-invalid' : ''}`}>
+          <span className={`text-sm truncate ${form._scheduleDisplay ? '' : 'text-base-content/40'}`}>
+            {form._scheduleDisplay || 'No schedule linked'}
           </span>
-          <button
-            type="button"
-            className="btn btn-sm btn-secondary shrink-0"
-            onClick={onOpenProjectPicker}
-          >
-            {projectLabel ? 'Change' : 'Select'}
-          </button>
+          <div className="flex gap-1 shrink-0">
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              onClick={onOpenSchedulePicker}
+            >
+              {form._scheduleDisplay ? 'Change' : 'Select'}
+            </button>
+            {form._scheduleDisplay && (
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => onSetForm(prev => ({ ...prev, schedId: '', _scheduleDisplay: '' }))}
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
-        {formError.projNum && <span className="helper-text">{formError.projNum}</span>}
+        {formError.schedId && <span className="helper-text">{formError.schedId}</span>}
       </div>
 
       <div className="sm:col-span-2 flex flex-col gap-1">

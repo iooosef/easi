@@ -332,7 +332,6 @@ export default function PurchaseOrders() {
   const navigate = useNavigate()
   const srNumberInt = Number(srNumber)
   const projectName = location.state?.projectName ?? '...'
-  const projNum = location.state?.projNum ?? null
 
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
 
@@ -395,7 +394,6 @@ export default function PurchaseOrders() {
         body: JSON.stringify({
           ...editForm,
           poNum:   editingPO.poNum,
-          projNum: editingPO.projNum,
           srNum:   editingPO.srNum,
         }),
       })
@@ -707,7 +705,7 @@ export default function PurchaseOrders() {
       const res = await apiFetch('/api/purchase-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, srNum: srNumberInt, projNum }),
+        body: JSON.stringify({ ...form, srNum: srNumberInt }),
       })
       if (!res.ok) {
         setFormError(await parseApiError(res))

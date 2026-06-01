@@ -16,12 +16,6 @@ public class PurchaseOrder {
     @Setter
     private String poNum;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "proj_num", nullable = false)
-    @Getter
-    @Setter
-    private Project project;
-
     @Column(name = "purpose", length = 30, nullable = false)
     @Getter
     @Setter

@@ -3,11 +3,11 @@ package dev.tjj.easi.service;
 import dev.tjj.easi.dto.VehicleLogRequest;
 import dev.tjj.easi.dto.VehicleLogResponse;
 import dev.tjj.easi.entity.Employee;
-import dev.tjj.easi.entity.Project;
+import dev.tjj.easi.entity.ServiceSchedule;
 import dev.tjj.easi.entity.Vehicle;
 import dev.tjj.easi.entity.VehicleLog;
 import dev.tjj.easi.repository.EmployeeRepository;
-import dev.tjj.easi.repository.ProjectRepository;
+import dev.tjj.easi.repository.ServiceScheduleRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.VehicleRepository;
 import dev.tjj.easi.entity.LogSeverity;
@@ -27,18 +27,18 @@ public class VehicleLogService {
 
     private final VehicleLogRepository vehicleLogRepository;
     private final VehicleRepository vehicleRepository;
-    private final ProjectRepository projectRepository;
+    private final ServiceScheduleRepository serviceScheduleRepository;
     private final EmployeeRepository employeeRepository;
     private final LogService logService;
 
     public VehicleLogService(VehicleLogRepository vehicleLogRepository,
                               VehicleRepository vehicleRepository,
-                              ProjectRepository projectRepository,
+                              ServiceScheduleRepository serviceScheduleRepository,
                               EmployeeRepository employeeRepository,
                               LogService logService) {
         this.vehicleLogRepository = vehicleLogRepository;
         this.vehicleRepository = vehicleRepository;
-        this.projectRepository = projectRepository;
+        this.serviceScheduleRepository = serviceScheduleRepository;
         this.employeeRepository = employeeRepository;
         this.logService = logService;
     }
@@ -89,14 +89,20 @@ public class VehicleLogService {
     private void applyRequest(VehicleLog log, VehicleLogRequest request) {
         Vehicle vehicle = vehicleRepository.findById(request.vehiclesId())
                 .orElseThrow(() -> new IllegalArgumentException("Vehicle not found."));
-        Project project = projectRepository.findById(request.projNum())
-                .orElseThrow(() -> new IllegalArgumentException("Project not found."));
         Employee driver = employeeRepository.findById(request.driverEmployeeId())
                 .orElseThrow(() -> new IllegalArgumentException("Driver employee not found."));
 
         log.setVehicle(vehicle);
         log.setPurpose(request.purpose());
-        log.setProject(project);
+
+        if (request.schedId() != null) {
+            ServiceSchedule schedule = serviceScheduleRepository.findById(request.schedId())
+                    .orElseThrow(() -> new IllegalArgumentException("Service schedule not found."));
+            log.setServiceSchedule(schedule);
+        } else {
+            log.setServiceSchedule(null);
+        }
+
         log.setDestination(request.destination());
         log.setDriverEmployee(driver);
         log.setOdometerStart(request.odometerStart());
@@ -115,8 +121,7 @@ public class VehicleLogService {
                 l.getVehicle().getVehicleModel(),
                 l.getVehicle().getVehiclePlateNum(),
                 l.getPurpose(),
-                l.getProject().getProjNum(),
-                l.getProject().getName(),
+                l.getServiceSchedule() != null ? l.getServiceSchedule().getSchedId() : null,
                 l.getDestination(),
                 l.getDriverEmployee().getEmployeeId(),
                 driverName,

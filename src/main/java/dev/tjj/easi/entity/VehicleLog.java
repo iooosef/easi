@@ -29,10 +29,10 @@ public class VehicleLog {
     private String purpose;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "proj_num", nullable = false)
+    @JoinColumn(name = "sched_id")
     @Getter
     @Setter
-    private Project project;
+    private ServiceSchedule serviceSchedule;
 
     @Column(name = "destination", length = 255, nullable = false)
     @Getter
