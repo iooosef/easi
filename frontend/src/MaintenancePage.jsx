@@ -285,7 +285,7 @@ export default function MaintenancePage() {
                           title="Delete"
                           onClick={() => setDeleteTarget(b.filename)}
                         >
-                          <span className="icon-[tabler--trash] size-4"></span>
+                          <span className="icon-[tabler--x] size-4"></span>
                         </button>
                       </div>
                     </div>
@@ -510,7 +510,7 @@ export default function MaintenancePage() {
             <button className="btn btn-error" onClick={handleDeleteBackup} disabled={deleting}>
               {deleting
                 ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--trash] size-4"></span>
+                : <span className="icon-[tabler--x] size-4"></span>
               }
               Delete
             </button>

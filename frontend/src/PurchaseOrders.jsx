@@ -1276,9 +1276,8 @@ export default function PurchaseOrders() {
                             >
                               {deletingPartId === p.partId
                                 ? <span className="loading loading-spinner loading-xs"></span>
-                                : <span className="icon-[tabler--trash] size-3"></span>
+                                : <span className="icon-[tabler--x] size-3"></span>
                               }
-                              Delete
                             </button>
                           </div>
                         </td>
@@ -1512,9 +1511,8 @@ export default function PurchaseOrders() {
                             >
                               {deletingContactId === c.poContactNum
                                 ? <span className="loading loading-spinner loading-xs"></span>
-                                : <span className="icon-[tabler--trash] size-3"></span>
+                                : <span className="icon-[tabler--x] size-3"></span>
                               }
-                              Delete
                             </button>
                           </div>
                         </td>

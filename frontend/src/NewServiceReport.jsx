@@ -17,6 +17,7 @@ const STEPS = [
   { number: 2, label: 'Findings (Optional)' },
   { number: 3, label: 'Purchase Orders (Optional)' },
   { number: 4, label: 'Billing (Optional)' },
+  { number: 5, label: 'Document (Optional)' },
 ]
 
 const ACCEPTED_DOC_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
@@ -163,6 +164,14 @@ export default function NewServiceReport() {
       if (!reportForm.workDone.trim()) errors.workDone = 'Work done is required.'
       if (Object.keys(errors).length > 0) { setReportFormError(errors); return }
     }
+    if (step === 2 && addFindingOpen) {
+      notyfError('Please add or cancel the finding form before proceeding.')
+      return
+    }
+    if (step === 3 && addPoOpen) {
+      notyfError('Please add or cancel the purchase order form before proceeding.')
+      return
+    }
     setStep(s => s + 1)
   }
 
@@ -299,6 +308,10 @@ export default function NewServiceReport() {
    * each finding and purchase order using the returned srNumber.
    */
   async function handleFinalSubmit() {
+    if (addBillingOpen) {
+      notyfError('Please add or cancel the billing item form before submitting.')
+      return
+    }
     setSubmitError({})
     setSubmitting(true)
     try {
@@ -354,6 +367,7 @@ export default function NewServiceReport() {
           }),
         })
         if (!fRes.ok) {
+          console.error('[NewServiceReport] Finding save failed:', fRes.status, await fRes.text().catch(() => ''))
           notyfError('A finding could not be saved and was skipped.')
         }
       }
@@ -375,6 +389,7 @@ export default function NewServiceReport() {
           }),
         })
         if (!poRes.ok) {
+          console.error('[NewServiceReport] PO save failed:', poRes.status, await poRes.text().catch(() => ''))
           notyfError('A purchase order could not be saved and was skipped.')
           continue
         }
@@ -390,6 +405,7 @@ export default function NewServiceReport() {
             }),
           })
           if (!cRes.ok) {
+            console.error('[NewServiceReport] Contact save failed:', cRes.status, await cRes.text().catch(() => ''))
             notyfError('A delivery contact could not be saved and was skipped.')
           }
         }
@@ -408,6 +424,7 @@ export default function NewServiceReport() {
             }),
           })
           if (!pRes.ok) {
+            console.error('[NewServiceReport] Part save failed:', pRes.status, await pRes.text().catch(() => ''))
             notyfError('A part could not be saved and was skipped.')
           }
         }
@@ -426,6 +443,7 @@ export default function NewServiceReport() {
           }),
         })
         if (!bRes.ok) {
+          console.error('[NewServiceReport] Billing item save failed:', bRes.status, await bRes.text().catch(() => ''))
           notyfError('A billing item could not be saved and was skipped.')
         }
       }
@@ -433,6 +451,7 @@ export default function NewServiceReport() {
       notyfSuccess(`Service Report #${srNumber} created successfully.`)
       navigate('/service-report')
     } catch (err) {
+      console.error('[NewServiceReport] handleFinalSubmit error:', err)
       setSubmitError({ _general: err.message })
     } finally {
       setSubmitting(false)
@@ -562,57 +581,6 @@ export default function NewServiceReport() {
                     }))}
                     className="sm:col-span-2"
                   />
-
-                  <div className="sm:col-span-2 flex flex-col gap-1">
-                    <label className="label-text font-medium">Attach Document <span className="text-base-content/40 font-normal">(optional)</span></label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        className={`input input-bordered flex-1 bg-base-200 cursor-default${docFileError ? ' is-invalid' : ''}`}
-                        value={docFile ? docFile.name : ''}
-                        placeholder="No file chosen"
-                      />
-                      <button
-                        type="button"
-                        className="btn btn-soft btn-secondary shrink-0"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <span className="icon-[tabler--upload] size-4"></span>
-                        Browse
-                      </button>
-                      {docFile && (
-                        <button
-                          type="button"
-                          className="btn btn-soft btn-error btn-square shrink-0"
-                          title="Remove file"
-                          onClick={() => { setDocFile(null); setDocFileError(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
-                        >
-                          <span className="icon-[tabler--x] size-4"></span>
-                        </button>
-                      )}
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
-                      accept={ACCEPTED_DOC_EXTENSIONS}
-                      onChange={e => {
-                        const file = e.target.files?.[0] ?? null
-                        if (file && !ACCEPTED_DOC_TYPES.includes(file.type)) {
-                          setDocFileError('Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.')
-                          setDocFile(null)
-                          return
-                        }
-                        setDocFileError('')
-                        setDocFile(file)
-                      }}
-                    />
-                    {docFileError
-                      ? <span className="helper-text">{docFileError}</span>
-                      : <span className="text-xs text-base-content/40">Accepted: JPEG, PNG, GIF, WebP, PDF</span>
-                    }
-                  </div>
 
                   {reportFormError._general && (
                     <div className="sm:col-span-2 alert alert-error py-2">
@@ -1189,6 +1157,81 @@ export default function NewServiceReport() {
                     </table>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── Step 5: Document ────────────────────────────────────── */}
+            {step === 5 && (
+              <div className="flex flex-col gap-4">
+                <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">
+                  Step 5 — Document (Optional)
+                </p>
+                <p className="text-sm text-base-content/60">
+                  Attach a supporting document to this service report, or skip to finish.
+                </p>
+
+                <div className="flex flex-col gap-2">
+                  <label className="label-text font-medium">
+                    File <span className="text-base-content/40 font-normal">(optional)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      className={`input input-bordered flex-1 bg-base-200 cursor-default${docFileError ? ' is-invalid' : ''}`}
+                      value={docFile ? docFile.name : ''}
+                      placeholder="No file chosen"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-secondary shrink-0"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <span className="icon-[tabler--upload] size-4"></span>
+                      Browse
+                    </button>
+                    {docFile && (
+                      <button
+                        type="button"
+                        className="btn btn-soft btn-error btn-square shrink-0"
+                        title="Remove file"
+                        onClick={() => { setDocFile(null); setDocFileError(''); if (fileInputRef.current) fileInputRef.current.value = '' }}
+                      >
+                        <span className="icon-[tabler--x] size-4"></span>
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept={ACCEPTED_DOC_EXTENSIONS}
+                    onChange={e => {
+                      const file = e.target.files?.[0] ?? null
+                      if (file && !ACCEPTED_DOC_TYPES.includes(file.type)) {
+                        setDocFileError('Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.')
+                        setDocFile(null)
+                        return
+                      }
+                      setDocFileError('')
+                      setDocFile(file)
+                    }}
+                  />
+                  {docFileError
+                    ? <span className="helper-text">{docFileError}</span>
+                    : <span className="text-xs text-base-content/40">Accepted: JPEG, PNG, GIF, WebP, PDF</span>
+                  }
+
+                  {docFile && (
+                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-box border border-base-300 bg-base-100 mt-1">
+                      <span className="icon-[tabler--file] size-5 text-primary shrink-0"></span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{docFile.name}</p>
+                        <p className="text-xs text-base-content/50">{(docFile.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {submitError._general && (
                   <div className="alert alert-error py-2">
