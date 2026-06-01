@@ -24,6 +24,8 @@ import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.VehicleRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
+import dev.tjj.easi.entity.Equipment;
+import dev.tjj.easi.entity.EquipmentUsage;
 import dev.tjj.easi.entity.Part;
 import dev.tjj.easi.entity.PartUsage;
 import dev.tjj.easi.entity.PurchaseOrder;
@@ -31,6 +33,8 @@ import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
 import dev.tjj.easi.entity.PaymentLog;
 import dev.tjj.easi.entity.ServiceReportBillingItem;
 import dev.tjj.easi.entity.Supplier;
+import dev.tjj.easi.repository.EquipmentRepository;
+import dev.tjj.easi.repository.EquipmentUsageRepository;
 import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.PartUsageRepository;
 import dev.tjj.easi.repository.PaymentLogRepository;
@@ -75,6 +79,8 @@ public class DataInitializer implements CommandLineRunner {
     private final PurchaseOrderDeliveryContactRepository poDeliveryContactRepository;
     private final ServiceReportBillingItemRepository billingItemRepository;
     private final PaymentLogRepository paymentLogRepository;
+    private final EquipmentRepository equipmentRepository;
+    private final EquipmentUsageRepository equipmentUsageRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -91,6 +97,7 @@ public class DataInitializer implements CommandLineRunner {
         seedBillingItems();
         seedPaymentLogs();
         seedPartUsages();
+        seedEquipment();
     }
 
     private void createAdminUser() {
@@ -1248,6 +1255,100 @@ public class DataInitializer implements CommandLineRunner {
         u.setNotes(notes);
         u.setUsedOn(sr.getAddedOn().plusHours(1));
         partUsageRepository.save(u);
+    }
+
+    /**
+     * Seeds sample equipment (durables and consumables) and deployment records if none exist.
+     * Three durables represent reusable tools; three consumables represent bulk supplies.
+     */
+    private void seedEquipment() {
+        if (equipmentRepository.count() > 0) {
+            log.info("Equipment data already exists, skipping.");
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // --- Durables ---
+        Equipment vacuumPump = equipment("Industrial Vacuum Pump", "durable",
+                "VP-300X", "SN-VP-001", "High-pressure vacuum pump for refrigerant evacuation",
+                "active", 1, new BigDecimal("12500.00"), now);
+        Equipment manifoldGauge = equipment("Manifold Gauge Set", "durable",
+                "MG-2P-Pro", "SN-MG-001", "2-port manifold gauge set for refrigerant pressure checks",
+                "active", 1, new BigDecimal("3800.00"), now);
+        Equipment leakDetector = equipment("Electronic Leak Detector", "durable",
+                "LD-900", "SN-LD-001", "Halogen leak detector for refrigerant leak testing",
+                "under_maintenance", 1, new BigDecimal("7200.00"), now);
+
+        // --- Consumables ---
+        Equipment wireTape = equipment("Electrical Insulation Tape", "consumable",
+                null, null, "General-purpose PVC electrical tape for wiring work",
+                "active", 30, new BigDecimal("45.00"), now);
+        Equipment teflonTape = equipment("Teflon Thread Seal Tape", "consumable",
+                null, null, "PTFE tape for sealing refrigerant pipe fittings",
+                "active", 50, new BigDecimal("25.00"), now);
+        Equipment gloves = equipment("Disposable Nitrile Gloves (Box)", "consumable",
+                null, null, "100-piece box of nitrile gloves for technician protection",
+                "active", 10, new BigDecimal("350.00"), now);
+
+        // --- Seed some deployment records ---
+        var schedules = serviceScheduleRepository.findAll(
+                org.springframework.data.domain.Sort.by("schedId").ascending());
+
+        int usageCount = 0;
+        if (schedules.size() >= 3) {
+            ServiceSchedule s1 = schedules.get(0);
+            ServiceSchedule s2 = schedules.get(1);
+            ServiceSchedule s3 = schedules.get(2);
+
+            // Vacuum pump deployed to s1 (durable — only one per day)
+            equipmentUsage(vacuumPump, s1, "Brought for refrigerant evacuation", now);
+            usageCount++;
+
+            // Manifold gauge deployed to s1 and s2 (different days — OK for durable)
+            equipmentUsage(manifoldGauge, s1, "Pressure readings on split unit", now);
+            usageCount++;
+            if (!s2.getDate().equals(s1.getDate())) {
+                equipmentUsage(manifoldGauge, s2, "Follow-up pressure check", now);
+                usageCount++;
+            }
+
+            // Consumables can appear on the same day — seed to s1, s2, s3
+            equipmentUsage(wireTape, s1, null, now);
+            equipmentUsage(teflonTape, s2, null, now);
+            equipmentUsage(gloves, s3, "New box opened on site", now);
+            usageCount += 3;
+        }
+
+        log.info("Equipment seed completed: 6 equipment records, {} usage records created.", usageCount);
+    }
+
+    /** Creates and saves an Equipment record. */
+    private Equipment equipment(String name, String type, String model, String serialNumber,
+                                 String description, String status, int stock,
+                                 BigDecimal acquisitionCost, LocalDateTime addedOn) {
+        Equipment e = new Equipment();
+        e.setName(name);
+        e.setType(type);
+        e.setModel(model);
+        e.setSerialNumber(serialNumber);
+        e.setDescription(description);
+        e.setStatus(status);
+        e.setStock(stock);
+        e.setAcquisitionCost(acquisitionCost);
+        e.setAddedOn(addedOn);
+        return equipmentRepository.save(e);
+    }
+
+    /** Creates and saves an EquipmentUsage record. */
+    private void equipmentUsage(Equipment equipment, ServiceSchedule schedule, String notes,
+                                 LocalDateTime loggedOn) {
+        EquipmentUsage u = new EquipmentUsage();
+        u.setEquipment(equipment);
+        u.setServiceSchedule(schedule);
+        u.setNotes(notes);
+        u.setLoggedOn(loggedOn);
+        equipmentUsageRepository.save(u);
     }
 
 }
