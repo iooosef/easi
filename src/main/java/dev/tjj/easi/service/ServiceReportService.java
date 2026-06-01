@@ -5,6 +5,7 @@ import dev.tjj.easi.dto.ServiceReportResponse;
 import dev.tjj.easi.entity.*;
 import dev.tjj.easi.repository.DocumentRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
+import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
@@ -34,6 +35,7 @@ public class ServiceReportService {
     private final DocumentRepository documentRepository;
     private final ServiceReportBillingItemRepository billingItemRepository;
     private final PaymentLogRepository paymentLogRepository;
+    private final PartRepository partRepository;
     private final LogService logService;
 
     public ServiceReportService(ServiceReportRepository serviceReportRepository,
@@ -42,6 +44,7 @@ public class ServiceReportService {
                                 DocumentRepository documentRepository,
                                 ServiceReportBillingItemRepository billingItemRepository,
                                 PaymentLogRepository paymentLogRepository,
+                                PartRepository partRepository,
                                 LogService logService) {
         this.serviceReportRepository = serviceReportRepository;
         this.employeeRepository = employeeRepository;
@@ -49,6 +52,7 @@ public class ServiceReportService {
         this.documentRepository = documentRepository;
         this.billingItemRepository = billingItemRepository;
         this.paymentLogRepository = paymentLogRepository;
+        this.partRepository = partRepository;
         this.logService = logService;
     }
 
@@ -90,6 +94,14 @@ public class ServiceReportService {
                 .stream().collect(Collectors.toMap(
                         row -> (Integer) row[0],
                         row -> new BigDecimal(row[1].toString())));
+
+        // Add parts cost (from POs linked to each SR) to the billed map
+        partRepository.sumTotalCostBySrNumbers(srNums)
+                .forEach(row -> {
+                    Integer srNum = (Integer) row[0];
+                    BigDecimal partsCost = new BigDecimal(row[1].toString());
+                    billedMap.merge(srNum, partsCost, BigDecimal::add);
+                });
 
         Map<Integer, BigDecimal> paidMap = paymentLogRepository.sumPaidBySrNumbers(srNums)
                 .stream().collect(Collectors.toMap(
@@ -161,9 +173,10 @@ public class ServiceReportService {
 
     }
 
-    /** Computes payment status from live billing and payment totals for a single SR. */
+    /** Computes payment status from live billing (items + parts) and payment totals for a single SR. */
     private ServiceReportResponse toResponse(ServiceReport r) {
-        BigDecimal billed = billingItemRepository.sumTotalBySrNumber(r.getSrNumber());
+        BigDecimal billed = billingItemRepository.sumTotalBySrNumber(r.getSrNumber())
+                .add(partRepository.sumTotalCostBySrNumber(r.getSrNumber()));
         BigDecimal paid = paymentLogRepository.sumPaidBySrNumber(r.getSrNumber());
         return toResponse(r, billed, paid);
     }
@@ -188,11 +201,15 @@ public class ServiceReportService {
         );
     }
 
-    /** Derives payment status from billed and paid totals. */
+    /**
+     * Derives payment status from total billed (billing items + parts) and total paid.
+     * unpaid  — nothing paid yet
+     * partial — some payment made but balance remains (paid < billed)
+     * paid    — balance is zero (paid >= billed)
+     */
     static String deriveStatus(BigDecimal billed, BigDecimal paid) {
         if (paid == null || paid.compareTo(BigDecimal.ZERO) == 0) return "unpaid";
-        if (billed != null && billed.compareTo(BigDecimal.ZERO) > 0
-                && paid.compareTo(billed) >= 0) return "paid";
+        if (billed == null || paid.compareTo(billed) >= 0) return "paid";
         return "partial";
     }
 }

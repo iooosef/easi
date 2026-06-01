@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Repository
 public interface PartRepository extends JpaRepository<Part, Integer> {
@@ -20,4 +21,15 @@ public interface PartRepository extends JpaRepository<Part, Integer> {
 
     @Query("SELECT COALESCE(SUM(p.quantityOrdered * p.unitPrice), 0) FROM Part p WHERE p.purchaseOrder.poNum = :poNum")
     BigDecimal sumTotalCostByPoNum(@Param("poNum") String poNum);
+
+    @Query("SELECT COALESCE(SUM(p.quantityOrdered * p.unitPrice), 0) FROM Part p WHERE p.purchaseOrder.serviceReport.srNumber = :srNumber")
+    BigDecimal sumTotalCostBySrNumber(@Param("srNumber") Integer srNumber);
+
+    @Query("""
+            SELECT p.purchaseOrder.serviceReport.srNumber, SUM(p.quantityOrdered * p.unitPrice)
+            FROM Part p
+            WHERE p.purchaseOrder.serviceReport.srNumber IN :srNumbers
+            GROUP BY p.purchaseOrder.serviceReport.srNumber
+            """)
+    List<Object[]> sumTotalCostBySrNumbers(@Param("srNumbers") List<Integer> srNumbers);
 }

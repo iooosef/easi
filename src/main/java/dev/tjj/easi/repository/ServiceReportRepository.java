@@ -22,15 +22,17 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
             AND (
                 :noFilter = true
                 OR (:wantUnpaid = true
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) = 0)
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) = 0)
                 OR (:wantPartial = true
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) > 0
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) <
-                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) <
+                        (SELECT COALESCE(SUM(bi.unitPrice * bi.quantity), 0) FROM ServiceReportBillingItem bi WHERE bi.serviceReport = sr)
+                        + (SELECT COALESCE(SUM(pt.unitPrice * pt.quantityOrdered), 0) FROM Part pt WHERE pt.purchaseOrder.serviceReport = sr))
                 OR (:wantPaid = true
-                    AND (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr) > 0
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) >=
-                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) >=
+                        (SELECT COALESCE(SUM(bi.unitPrice * bi.quantity), 0) FROM ServiceReportBillingItem bi WHERE bi.serviceReport = sr)
+                        + (SELECT COALESCE(SUM(pt.unitPrice * pt.quantityOrdered), 0) FROM Part pt WHERE pt.purchaseOrder.serviceReport = sr))
             )
             """,
             countQuery = """
@@ -39,15 +41,17 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
             AND (
                 :noFilter = true
                 OR (:wantUnpaid = true
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) = 0)
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) = 0)
                 OR (:wantPartial = true
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) > 0
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) <
-                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) <
+                        (SELECT COALESCE(SUM(bi.unitPrice * bi.quantity), 0) FROM ServiceReportBillingItem bi WHERE bi.serviceReport = sr)
+                        + (SELECT COALESCE(SUM(pt.unitPrice * pt.quantityOrdered), 0) FROM Part pt WHERE pt.purchaseOrder.serviceReport = sr))
                 OR (:wantPaid = true
-                    AND (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr) > 0
-                    AND (SELECT COALESCE(SUM(p.amount), 0) FROM PaymentLog p WHERE p.serviceReport = sr) >=
-                        (SELECT COALESCE(SUM(b.unitPrice * b.quantity), 0) FROM ServiceReportBillingItem b WHERE b.serviceReport = sr))
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) > 0
+                    AND (SELECT COALESCE(SUM(pl.amount), 0) FROM PaymentLog pl WHERE pl.serviceReport = sr) >=
+                        (SELECT COALESCE(SUM(bi.unitPrice * bi.quantity), 0) FROM ServiceReportBillingItem bi WHERE bi.serviceReport = sr)
+                        + (SELECT COALESCE(SUM(pt.unitPrice * pt.quantityOrdered), 0) FROM Part pt WHERE pt.purchaseOrder.serviceReport = sr))
             )
             """)
     Page<ServiceReport> findAllFiltered(

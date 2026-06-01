@@ -615,6 +615,53 @@ function formatPaymentMethod(m) {
   return map[m.toLowerCase()] ?? m
 }
 
+// ---------------------------------------------------------------------------
+// Parts billing strategies
+// Each function receives (apiFetch, srNumber) and resolves to an array of:
+//   { _key, name, qty, unitPrice }
+// To switch strategies, change the one assignment below.
+// ---------------------------------------------------------------------------
+
+/** Bills only parts that have a PartUsage record linked to this SR. */
+async function fetchPartsByUsage(apiFetch, srNumber) {
+  const res = await apiFetch(`/api/part-usages?srNumber=${encodeURIComponent(srNumber)}&size=1000`)
+  if (!res.ok) throw new Error(`Failed to load part usages (${res.status})`)
+  const data = await res.json()
+  return (data.content ?? []).map(u => ({
+    _key:      u.usageId,
+    name:      u.partName,
+    qty:       u.qtyUsed,
+    unitPrice: u.unitPrice,
+  }))
+}
+
+/** Bills all parts from Purchase Orders linked to this SR, regardless of usage. */
+async function fetchPartsByPO(apiFetch, srNumber) {
+  const poRes = await apiFetch(`/api/purchase-orders?srNum=${encodeURIComponent(srNumber)}&size=100`)
+  if (!poRes.ok) throw new Error(`Failed to load purchase orders (${poRes.status})`)
+  const poData = await poRes.json()
+  const pos = poData.content ?? []
+  if (pos.length === 0) return []
+  const pages = await Promise.all(
+    pos.map(po =>
+      apiFetch(`/api/parts?poNum=${encodeURIComponent(po.poNum)}&size=100`)
+        .then(r => r.ok ? r.json() : { content: [] })
+        .then(d => d.content ?? [])
+    )
+  )
+  return pages.flat().map(p => ({
+    _key:      p.partId,
+    name:      p.name,
+    qty:       p.quantityOrdered,
+    unitPrice: p.unitPrice,
+  }))
+}
+
+// ← swap fetchPartsByUsage ↔ fetchPartsByPO to change billing strategy
+const PARTS_BILLING_STRATEGY = fetchPartsByPO
+
+// ---------------------------------------------------------------------------
+
 /** Modal showing SR details, billing items, parts from POs, payments, and totals */
 function BillingModal({ report, apiFetch, onClose }) {
   const [billingItems, setBillingItems]     = useState([])
@@ -651,12 +698,8 @@ function BillingModal({ report, apiFetch, onClose }) {
     let active = true
     setPartsLoading(true)
     setPartsError(null)
-    apiFetch(`/api/part-usages?srNumber=${encodeURIComponent(report.srNumber)}&size=1000`)
-      .then(res => {
-        if (!res.ok) throw new Error(`Failed to load part usages (${res.status})`)
-        return res.json()
-      })
-      .then(data => { if (active) setParts(data.content ?? []) })
+    PARTS_BILLING_STRATEGY(apiFetch, report.srNumber)
+      .then(items => { if (active) setParts(items) })
       .catch(err => { if (active) setPartsError(err.message) })
       .finally(() => { if (active) setPartsLoading(false) })
     return () => { active = false }
@@ -681,7 +724,7 @@ function BillingModal({ report, apiFetch, onClose }) {
   if (!report) return null
 
   const billingSubtotal = subtotal(billingItems)
-  const partsSubtotal   = parts.reduce((sum, p) => sum + (p.qtyUsed ?? 0) * Number(p.unitPrice ?? 0), 0)
+  const partsSubtotal   = parts.reduce((sum, p) => sum + (p.qty ?? 0) * Number(p.unitPrice ?? 0), 0)
   const grandTotal      = billingSubtotal + partsSubtotal
 
   return (
@@ -784,18 +827,18 @@ function BillingModal({ report, apiFetch, onClose }) {
                     <thead>
                       <tr>
                         <th>Part</th>
-                        <th className="text-right">Qty Used</th>
+                        <th className="text-right">Qty</th>
                         <th className="text-right">Unit Price</th>
                         <th className="text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {parts.map(part => (
-                        <tr key={part.usageId}>
-                          <td className="max-w-48"><span className="line-clamp-2 text-sm" title={part.partName}>{part.partName}</span></td>
-                          <td className="text-right text-sm">{part.qtyUsed}</td>
+                        <tr key={part._key}>
+                          <td className="max-w-48"><span className="line-clamp-2 text-sm" title={part.name}>{part.name}</span></td>
+                          <td className="text-right text-sm">{part.qty}</td>
                           <td className="text-right text-sm">{formatCurrency(part.unitPrice)}</td>
-                          <td className="text-right text-sm font-medium">{formatCurrency(part.qtyUsed * Number(part.unitPrice))}</td>
+                          <td className="text-right text-sm font-medium">{formatCurrency(part.qty * Number(part.unitPrice))}</td>
                         </tr>
                       ))}
                     </tbody>
