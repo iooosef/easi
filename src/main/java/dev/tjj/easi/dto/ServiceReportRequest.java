@@ -6,9 +6,6 @@ import jakarta.validation.constraints.Size;
 
 public record ServiceReportRequest(
 
-        @NotNull(message = "Project number is required")
-        Integer projNum,
-
         @NotBlank(message = "Complaint is required")
         @Size(max = 900, message = "Complaint must not exceed 900 characters")
         String complaint,

@@ -5,7 +5,6 @@ import Layout from './Layout'
 import Modal from './Modal'
 import ManageMenu from './ManageMenu'
 import PickerInput from './PickerInput'
-import ProjectPickerModal from './ProjectPickerModal'
 import CrewPickerModal from './CrewPickerModal'
 import SchedulePickerModal from './SchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
@@ -31,7 +30,6 @@ const STATUS_OPTIONS = ['pending', 'confirmed', 'completed', 'cancelled']
 const SR_PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const SR_STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
 const EMPTY_SR_EDIT_FORM = {
-  projNum: '', _projectDisplay: '',
   schedId: '', _scheduleDisplay: '',
   engineerEmployeeId: '', _engineerDisplay: '',
   complaint: '', workDone: '', location: '',
@@ -273,8 +271,6 @@ export default function Schedules() {
   /** Opens the edit SR modal pre-populated with the given report's data */
   function openEditSr(sr) {
     setEditSrForm({
-      projNum: sr.projNum,
-      _projectDisplay: `${sr.projectName} (#${sr.projNum})`,
       schedId: sr.schedId ?? '',
       _scheduleDisplay: sr.schedId ? `Sched #${sr.schedId}` : '',
       engineerEmployeeId: sr.engineerEmployeeId ?? '',
@@ -305,7 +301,6 @@ export default function Schedules() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projNum: Number(editSrForm.projNum),
           complaint: editSrForm.complaint,
           workDone: editSrForm.workDone,
           engineerEmployeeId: editSrForm.engineerEmployeeId ? Number(editSrForm.engineerEmployeeId) : null,
@@ -601,17 +596,6 @@ export default function Schedules() {
       >
         <form id="update-schedule-form" onSubmit={handleUpdate}>
           <div className="flex flex-col gap-4">
-            <PickerInput
-              label="Project"
-              displayValue={updateForm.projName}
-              placeholder="Select a project..."
-              buttonLabel="Browse"
-              required
-              error={updateFormError.projNum}
-              Picker={ProjectPickerModal}
-              onSelect={p => setUpdateForm(f => ({ ...f, projNum: p.projNum, projName: p.name }))}
-            />
-
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
               <input
@@ -879,18 +863,6 @@ export default function Schedules() {
       >
         <form id="edit-sr-form" onSubmit={handleSrUpdate}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <PickerInput
-              label="Project"
-              displayValue={editSrForm._projectDisplay}
-              placeholder="None selected"
-              buttonLabel="Change Project"
-              required
-              error={editSrFormError.projNum}
-              Picker={ProjectPickerModal}
-              onSelect={p => setEditSrForm(f => ({ ...f, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))}
-              className="sm:col-span-2"
-            />
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Location <span className="text-error">*</span></label>

@@ -90,8 +90,8 @@ public class ReportService {
 
         return new ServiceReportSummaryRow(
                 sr.getSrNumber(),
-                sr.getProject().getProjNum(),
-                sr.getProject().getName(),
+                sr.getServiceSchedule().getProject().getProjNum(),
+                sr.getServiceSchedule().getProject().getName(),
                 sr.getComplaint(),
                 sr.getWorkDone(),
                 engineerName,

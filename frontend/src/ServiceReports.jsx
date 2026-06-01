@@ -5,7 +5,6 @@ import Layout from './Layout'
 import Modal from './Modal'
 import ManageMenu from './ManageMenu'
 import PickerInput from './PickerInput'
-import ProjectPickerModal from './ProjectPickerModal'
 import SchedulePickerModal from './SchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
@@ -23,8 +22,6 @@ const SR_MENU_ITEMS = [
 ]
 
 const EMPTY_FORM = {
-  projNum: '',
-  _projectDisplay: '',
   schedId: '',
   _scheduleDisplay: '',
   engineerEmployeeId: '',
@@ -36,8 +33,6 @@ const EMPTY_FORM = {
 }
 
 const EMPTY_EDIT_FORM = {
-  projNum: '',
-  _projectDisplay: '',
   schedId: '',
   _scheduleDisplay: '',
   engineerEmployeeId: '',
@@ -119,8 +114,6 @@ export default function ServiceReports() {
   /** Opens the edit modal pre-populated with the given report's data. */
   function openEditModal(report) {
     setEditForm({
-      projNum: report.projNum,
-      _projectDisplay: `${report.projectName} (#${report.projNum})`,
       schedId: report.schedId ?? '',
       _scheduleDisplay: report.schedId ? `Sched #${report.schedId}` : '',
       engineerEmployeeId: report.engineerEmployeeId ?? '',
@@ -157,7 +150,6 @@ export default function ServiceReports() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projNum: Number(editForm.projNum),
           complaint: editForm.complaint,
           workDone: editForm.workDone,
           engineerEmployeeId: editForm.engineerEmployeeId ? Number(editForm.engineerEmployeeId) : null,
@@ -236,7 +228,6 @@ export default function ServiceReports() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          projNum: form.projNum ? Number(form.projNum) : null,
           complaint: form.complaint,
           workDone: form.workDone,
           engineerEmployeeId: form.engineerEmployeeId ? Number(form.engineerEmployeeId) : null,
@@ -424,18 +415,6 @@ export default function ServiceReports() {
         <form id="new-report-form" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            <PickerInput
-              label="Project"
-              displayValue={form._projectDisplay}
-              placeholder="None selected"
-              buttonLabel="Select Project"
-              required
-              error={formError.projNum}
-              Picker={ProjectPickerModal}
-              onSelect={p => setForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))}
-              className="sm:col-span-2"
-            />
-
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Location <span className="text-error">*</span></label>
               <input type="text" name="location" maxLength={255}
@@ -525,18 +504,6 @@ export default function ServiceReports() {
       >
         <form id="edit-report-form" onSubmit={handleUpdate}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <PickerInput
-              label="Project"
-              displayValue={editForm._projectDisplay}
-              placeholder="None selected"
-              buttonLabel="Change Project"
-              required
-              error={editFormError.projNum}
-              Picker={ProjectPickerModal}
-              onSelect={p => setEditForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})` }))}
-              className="sm:col-span-2"
-            />
 
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Location <span className="text-error">*</span></label>

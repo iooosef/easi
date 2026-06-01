@@ -14,11 +14,11 @@ import java.util.List;
 @Repository
 public interface ServiceReportRepository extends JpaRepository<ServiceReport, Integer> {
 
-    Page<ServiceReport> findAllByProject_ProjNum(Integer projNum, Pageable pageable);
+    Page<ServiceReport> findByServiceSchedule_Project_ProjNum(Integer projNum, Pageable pageable);
 
     @Query(value = """
             SELECT sr FROM ServiceReport sr
-            WHERE (:projNum IS NULL OR sr.project.projNum = :projNum)
+            WHERE (:projNum IS NULL OR sr.serviceSchedule.project.projNum = :projNum)
             AND (
                 :noFilter = true
                 OR (:wantUnpaid = true
@@ -35,7 +35,7 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
             """,
             countQuery = """
             SELECT COUNT(sr) FROM ServiceReport sr
-            WHERE (:projNum IS NULL OR sr.project.projNum = :projNum)
+            WHERE (:projNum IS NULL OR sr.serviceSchedule.project.projNum = :projNum)
             AND (
                 :noFilter = true
                 OR (:wantUnpaid = true
@@ -60,11 +60,11 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
 
     @Query("""
             SELECT sr FROM ServiceReport sr
-            LEFT JOIN FETCH sr.project
-            LEFT JOIN FETCH sr.serviceSchedule
+            LEFT JOIN FETCH sr.serviceSchedule ss
+            LEFT JOIN FETCH ss.project
             LEFT JOIN FETCH sr.engineerEmployee
             WHERE sr.addedOn >= :start AND sr.addedOn <= :end
-            AND (:projNum IS NULL OR sr.project.projNum = :projNum)
+            AND (:projNum IS NULL OR ss.project.projNum = :projNum)
             ORDER BY sr.addedOn ASC
             """)
     List<ServiceReport> findForSummaryReport(

@@ -3,7 +3,12 @@ package dev.tjj.easi.service;
 import dev.tjj.easi.dto.ServiceReportRequest;
 import dev.tjj.easi.dto.ServiceReportResponse;
 import dev.tjj.easi.entity.*;
-import dev.tjj.easi.repository.*;
+import dev.tjj.easi.repository.DocumentRepository;
+import dev.tjj.easi.repository.EmployeeRepository;
+import dev.tjj.easi.repository.PaymentLogRepository;
+import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
+import dev.tjj.easi.repository.ServiceReportRepository;
+import dev.tjj.easi.repository.ServiceScheduleRepository;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
 import org.springframework.security.core.Authentication;
@@ -24,7 +29,6 @@ import java.util.stream.Collectors;
 public class ServiceReportService {
 
     private final ServiceReportRepository serviceReportRepository;
-    private final ProjectRepository projectRepository;
     private final EmployeeRepository employeeRepository;
     private final ServiceScheduleRepository serviceScheduleRepository;
     private final DocumentRepository documentRepository;
@@ -33,7 +37,6 @@ public class ServiceReportService {
     private final LogService logService;
 
     public ServiceReportService(ServiceReportRepository serviceReportRepository,
-                                ProjectRepository projectRepository,
                                 EmployeeRepository employeeRepository,
                                 ServiceScheduleRepository serviceScheduleRepository,
                                 DocumentRepository documentRepository,
@@ -41,7 +44,6 @@ public class ServiceReportService {
                                 PaymentLogRepository paymentLogRepository,
                                 LogService logService) {
         this.serviceReportRepository = serviceReportRepository;
-        this.projectRepository = projectRepository;
         this.employeeRepository = employeeRepository;
         this.serviceScheduleRepository = serviceScheduleRepository;
         this.documentRepository = documentRepository;
@@ -133,12 +135,9 @@ public class ServiceReportService {
 
     /** Applies request fields onto the service report entity. */
     private void applyRequest(ServiceReport report, ServiceReportRequest request) {
-        Project project = projectRepository.findById(request.projNum())
-                .orElseThrow(() -> new IllegalArgumentException("Project not found."));
         ServiceSchedule schedule = serviceScheduleRepository.findById(request.schedId())
                 .orElseThrow(() -> new IllegalArgumentException("Service schedule not found."));
 
-        report.setProject(project);
         report.setComplaint(request.complaint());
         report.setWorkDone(request.workDone());
         report.setLocation(request.location());
@@ -173,8 +172,8 @@ public class ServiceReportService {
     private ServiceReportResponse toResponse(ServiceReport r, BigDecimal billed, BigDecimal paid) {
         return new ServiceReportResponse(
                 r.getSrNumber(),
-                r.getProject().getProjNum(),
-                r.getProject().getName(),
+                r.getServiceSchedule().getProject().getProjNum(),
+                r.getServiceSchedule().getProject().getName(),
                 r.getComplaint(),
                 r.getWorkDone(),
                 r.getEngineerEmployee() != null ? r.getEngineerEmployee().getEmployeeId() : null,

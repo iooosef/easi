@@ -17,12 +17,6 @@ public class ServiceReport {
     @Setter
     private Integer srNumber;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "proj_num", nullable = false)
-    @Getter
-    @Setter
-    private Project project;
-
     @Column(name = "complaint", length = 900, nullable = false)
     @Getter
     @Setter
