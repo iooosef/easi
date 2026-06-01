@@ -1,13 +1,9 @@
+import { useCallback } from 'react'
 import PickerModal from './PickerModal'
-
-// Stable module-level references required by PickerModal's useEffect
-const fetchUrl = page =>
-  `/api/service-schedules?${new URLSearchParams({ page: String(page), size: '12', sort: 'date,desc', withoutReport: 'true' })}`
 
 const searchFilter = (s, q) =>
   q === '' ||
   String(s.schedId).includes(q) ||
-  String(s.projNum).includes(q) ||
   (s.purpose ?? '').toLowerCase().includes(q.toLowerCase())
 
 const renderCard = (s, onSelect) => (
@@ -31,8 +27,16 @@ const renderCard = (s, onSelect) => (
   </div>
 )
 
-/** Picker modal for selecting a Service Schedule. Only shows schedules without an existing service report. */
-export default function SchedulePickerModal({ isOpen, onClose, onSelect }) {
+/**
+ * Picker modal for selecting a Service Schedule filtered to a specific project.
+ * Only shows schedules without an existing service report.
+ */
+export default function SchedulePickerModal({ isOpen, onClose, onSelect, projNum }) {
+  const fetchUrl = useCallback(
+    page => `/api/service-schedules?${new URLSearchParams({ page: String(page), size: '12', sort: 'date,desc', withoutReport: 'true', projNum: String(projNum) })}`,
+    [projNum]
+  )
+
   return (
     <PickerModal
       isOpen={isOpen}
@@ -42,7 +46,7 @@ export default function SchedulePickerModal({ isOpen, onClose, onSelect }) {
       fetchUrl={fetchUrl}
       searchFilter={searchFilter}
       renderCard={renderCard}
-      searchPlaceholder="Search by sched #, project #, or purpose..."
+      searchPlaceholder="Search by sched # or purpose..."
     />
   )
 }

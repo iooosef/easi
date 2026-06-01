@@ -16,6 +16,7 @@ const STEPS = [
   { number: 1, label: 'Service Report Details' },
   { number: 2, label: 'Findings (Optional)' },
   { number: 3, label: 'Purchase Orders (Optional)' },
+  { number: 4, label: 'Billing (Optional)' },
 ]
 
 const ACCEPTED_DOC_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
@@ -47,6 +48,20 @@ const EMPTY_PO_FORM = {
   paymentDetails: '',
   deliveryAddress: '',
   remarks: '',
+}
+
+const EMPTY_CONTACT_FORM = { contactName: '', contactNumber: '' }
+
+const EMPTY_BILLING_FORM = { description: '', quantity: '', unitPrice: '' }
+
+const EMPTY_PART_FORM = {
+  name: '',
+  quantity: '',
+  quantityType: '',
+  unitPrice: '',
+  supplierId: '',
+  _supplierName: '',
+  orderDate: '',
 }
 
 /** Parses a failed API response into field-level or general error object */
@@ -91,6 +106,25 @@ export default function NewServiceReport() {
   const [poForm, setPoForm] = useState(EMPTY_PO_FORM)
   const [poFormError, setPoFormError] = useState({})
 
+  // Delivery contacts for the PO currently being composed
+  const [poContacts, setPoContacts] = useState([])
+  const [contactModalOpen, setContactModalOpen] = useState(false)
+  const [contactForm, setContactForm] = useState(EMPTY_CONTACT_FORM)
+  const [contactFormError, setContactFormError] = useState({})
+
+  // Parts for the PO currently being composed
+  const [poParts, setPoParts] = useState([])
+  const [partModalOpen, setPartModalOpen] = useState(false)
+  const [partForm, setPartForm] = useState(EMPTY_PART_FORM)
+  const [partFormError, setPartFormError] = useState({})
+  const [suppliers, setSuppliers] = useState([])
+
+  // Step 4: billing items
+  const [billingItems, setBillingItems] = useState([])
+  const [addBillingOpen, setAddBillingOpen] = useState(false)
+  const [billingForm, setBillingForm] = useState(EMPTY_BILLING_FORM)
+  const [billingFormError, setBillingFormError] = useState({})
+
   // Final submit state
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState({})
@@ -103,6 +137,14 @@ export default function NewServiceReport() {
       .then(data => setAcUnits(data.content ?? []))
       .catch(() => {})
   }, [apiFetch, reportForm.projNum])
+
+  /** Loads all suppliers once for the part form supplier select */
+  useEffect(() => {
+    apiFetch('/api/suppliers?size=200&sort=name,asc')
+      .then(res => res.json())
+      .then(data => setSuppliers(data.content ?? []))
+      .catch(() => {})
+  }, [apiFetch])
 
   function handleReportFormChange(e) {
     const { name, value } = e.target
@@ -155,17 +197,96 @@ export default function NewServiceReport() {
     setPoForm(prev => ({ ...prev, [name]: value }))
   }
 
-  /** Validates and appends a purchase order to the local list */
+  /** Validates and appends a purchase order (with its delivery contacts and parts) to the local list */
   function handleAddPo(e) {
     e.preventDefault()
     const errors = {}
     if (!poForm.purpose.trim()) errors.purpose = 'Purpose is required.'
     if (!poForm.terms.trim()) errors.terms = 'Terms are required.'
     if (Object.keys(errors).length > 0) { setPoFormError(errors); return }
-    setPurchaseOrders(list => [...list, { ...poForm, _tempId: Date.now() }])
+    setPurchaseOrders(list => [...list, { ...poForm, contacts: poContacts, parts: poParts, _tempId: Date.now() }])
     setPoForm(EMPTY_PO_FORM)
     setPoFormError({})
+    setPoContacts([])
+    setPoParts([])
     setAddPoOpen(false)
+  }
+
+  // --- Delivery contact helpers (per-PO, pre-submit) ---
+
+  function handleContactFormChange(e) {
+    const { name, value } = e.target
+    setContactForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Validates and appends a delivery contact to the current PO's contact list */
+  function handleAddContact(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!contactForm.contactName.trim()) errors.contactName = 'Contact name is required.'
+    if (!contactForm.contactNumber.trim()) errors.contactNumber = 'Contact number is required.'
+    if (Object.keys(errors).length > 0) { setContactFormError(errors); return }
+    setPoContacts(list => [...list, { ...contactForm, _tempId: Date.now() }])
+    setContactForm(EMPTY_CONTACT_FORM)
+    setContactFormError({})
+  }
+
+  /** Removes a delivery contact from the current PO's local contact list */
+  function removeContact(tempId) {
+    setPoContacts(list => list.filter(c => c._tempId !== tempId))
+  }
+
+  // --- Part helpers (per-PO, pre-submit) ---
+
+  function handlePartFormChange(e) {
+    const { name, value } = e.target
+    setPartForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Validates and appends a part to the current PO's parts list */
+  function handleAddPart(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!partForm.name.trim()) errors.name = 'Name is required.'
+    if (partForm.quantity === '' || Number(partForm.quantity) < 0) errors.quantity = 'Quantity must be 0 or greater.'
+    if (!partForm.quantityType.trim()) errors.quantityType = 'Quantity type is required.'
+    if (partForm.unitPrice === '' || Number(partForm.unitPrice) < 0) errors.unitPrice = 'Unit price must be 0 or greater.'
+    if (!partForm.supplierId) errors.supplierId = 'Please select a supplier.'
+    if (Object.keys(errors).length > 0) { setPartFormError(errors); return }
+    setPoParts(list => [...list, { ...partForm, _tempId: Date.now() }])
+    setPartForm(EMPTY_PART_FORM)
+    setPartFormError({})
+  }
+
+  /** Removes a part from the current PO's local parts list */
+  function removePart(tempId) {
+    setPoParts(list => list.filter(p => p._tempId !== tempId))
+  }
+
+  // --- Billing item helpers ---
+
+  function handleBillingFormChange(e) {
+    const { name, value } = e.target
+    setBillingForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Validates and appends a billing item to the local list */
+  function handleAddBillingItem(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!billingForm.description.trim()) errors.description = 'Description is required.'
+    if (!billingForm.quantity || Number(billingForm.quantity) < 1) errors.quantity = 'Quantity must be at least 1.'
+    if (billingForm.unitPrice === '' || Number(billingForm.unitPrice) < 0) errors.unitPrice = 'Unit price must be 0 or greater.'
+    if (Object.keys(errors).length > 0) { setBillingFormError(errors); return }
+    setBillingItems(list => [...list, { ...billingForm, _tempId: Date.now() }])
+    setBillingForm(EMPTY_BILLING_FORM)
+    setBillingFormError({})
+    setAddBillingOpen(false)
+  }
+
+  /** Removes a billing item from the local list by its temporary ID */
+  function removeBillingItem(tempId) {
+    setBillingItems(list => list.filter(b => b._tempId !== tempId))
   }
 
   /** Removes a purchase order from the local list by its temporary ID */
@@ -237,7 +358,7 @@ export default function NewServiceReport() {
         }
       }
 
-      // 5. Create each purchase order
+      // 5. Create each purchase order and its delivery contacts
       for (const po of purchaseOrders) {
         const poRes = await apiFetch('/api/purchase-orders', {
           method: 'POST',
@@ -255,6 +376,57 @@ export default function NewServiceReport() {
         })
         if (!poRes.ok) {
           notyfError('A purchase order could not be saved and was skipped.')
+          continue
+        }
+        const createdPo = await poRes.json()
+        for (const contact of po.contacts ?? []) {
+          const cRes = await apiFetch('/api/purchase-order-delivery-contacts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              poNum: createdPo.poNum,
+              contactName: contact.contactName,
+              contactNumber: contact.contactNumber,
+            }),
+          })
+          if (!cRes.ok) {
+            notyfError('A delivery contact could not be saved and was skipped.')
+          }
+        }
+        for (const part of po.parts ?? []) {
+          const pRes = await apiFetch('/api/parts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              poNum: createdPo.poNum,
+              name: part.name,
+              quantity: Number(part.quantity),
+              quantityType: part.quantityType,
+              unitPrice: Number(part.unitPrice),
+              supplierId: Number(part.supplierId),
+              orderDate: part.orderDate || null,
+            }),
+          })
+          if (!pRes.ok) {
+            notyfError('A part could not be saved and was skipped.')
+          }
+        }
+      }
+
+      // 6. Create each billing item
+      for (const b of billingItems) {
+        const bRes = await apiFetch('/api/service-report-billing-items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            srNumber,
+            description: b.description,
+            quantity: Number(b.quantity),
+            unitPrice: Number(b.unitPrice),
+          }),
+        })
+        if (!bRes.ok) {
+          notyfError('A billing item could not be saved and was skipped.')
         }
       }
 
@@ -344,11 +516,13 @@ export default function NewServiceReport() {
                   <PickerInput
                     label="Schedule"
                     displayValue={reportForm._scheduleDisplay}
-                    placeholder="None selected"
+                    placeholder={reportForm.projNum ? 'None selected' : 'Select a project first'}
                     buttonLabel="Select Schedule"
                     required
+                    disabled={!reportForm.projNum}
                     error={reportFormError.schedId}
                     Picker={SchedulePickerModal}
+                    pickerProps={{ projNum: reportForm.projNum }}
                     onSelect={s => {
                       setReportForm(prev => ({ ...prev, schedId: s.schedId, _scheduleDisplay: `Sched #${s.schedId} — ${s.purpose ?? ''}` }))
                       setReportFormError(e => ({ ...e, schedId: undefined }))
@@ -624,6 +798,8 @@ export default function NewServiceReport() {
                       onClick={() => {
                         setPoForm(EMPTY_PO_FORM)
                         setPoFormError({})
+                        setPoContacts([])
+                        setPoParts([])
                         setAddPoOpen(true)
                       }}
                     >
@@ -702,6 +878,110 @@ export default function NewServiceReport() {
                         )}
                       </div>
 
+                      {/* Delivery contacts */}
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">Delivery Contacts</span>
+                          <button
+                            type="button"
+                            className="btn btn-soft btn-accent btn-sm"
+                            onClick={() => { setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}); setContactModalOpen(true) }}
+                          >
+                            <span className="icon-[tabler--address-book] size-4"></span>
+                            Add Delivery Contact
+                          </button>
+                        </div>
+                        {poContacts.length > 0 ? (
+                          <div className="overflow-x-auto rounded-box border border-base-300">
+                            <table className="table table-sm">
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Name</th>
+                                  <th>Number</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {poContacts.map((c, i) => (
+                                  <tr key={c._tempId}>
+                                    <td className="text-base-content/40 font-mono">{i + 1}</td>
+                                    <td>{c.contactName}</td>
+                                    <td>{c.contactNumber}</td>
+                                    <td className="text-end">
+                                      <button
+                                        type="button"
+                                        className="btn btn-error btn-xs btn-square"
+                                        title="Remove contact"
+                                        onClick={() => removeContact(c._tempId)}
+                                      >
+                                        <span className="icon-[tabler--x] size-3.5"></span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-base-content/40">No delivery contacts added yet.</p>
+                        )}
+                      </div>
+
+                      {/* Parts */}
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">Parts</span>
+                          <button
+                            type="button"
+                            className="btn btn-soft btn-accent btn-sm"
+                            onClick={() => { setPartForm(EMPTY_PART_FORM); setPartFormError({}); setPartModalOpen(true) }}
+                          >
+                            <span className="icon-[tabler--package] size-4"></span>
+                            Add Part
+                          </button>
+                        </div>
+                        {poParts.length > 0 ? (
+                          <div className="overflow-x-auto rounded-box border border-base-300">
+                            <table className="table table-sm">
+                              <thead>
+                                <tr>
+                                  <th>#</th>
+                                  <th>Name</th>
+                                  <th>Qty</th>
+                                  <th>Unit Price</th>
+                                  <th>Supplier</th>
+                                  <th></th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {poParts.map((p, i) => (
+                                  <tr key={p._tempId}>
+                                    <td className="text-base-content/40 font-mono">{i + 1}</td>
+                                    <td>{p.name}</td>
+                                    <td>{p.quantity} {p.quantityType}</td>
+                                    <td>₱{Number(p.unitPrice).toFixed(2)}</td>
+                                    <td>{p._supplierName}</td>
+                                    <td className="text-end">
+                                      <button
+                                        type="button"
+                                        className="btn btn-error btn-xs btn-square"
+                                        title="Remove part"
+                                        onClick={() => removePart(p._tempId)}
+                                      >
+                                        <span className="icon-[tabler--x] size-3.5"></span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-base-content/40">No parts added yet.</p>
+                        )}
+                      </div>
+
                       <div className="flex gap-2 justify-end">
                         <button
                           type="button"
@@ -710,6 +990,8 @@ export default function NewServiceReport() {
                             setAddPoOpen(false)
                             setPoForm(EMPTY_PO_FORM)
                             setPoFormError({})
+                            setPoContacts([])
+                            setPoParts([])
                           }}
                         >
                           Cancel
@@ -758,6 +1040,153 @@ export default function NewServiceReport() {
                     <p className="text-xs text-base-content/40 text-right">
                       {purchaseOrders.length} purchase order{purchaseOrders.length !== 1 ? 's' : ''} added
                     </p>
+                  </div>
+                )}
+
+              </div>
+            )}
+
+            {/* ── Step 4: Billing ──────────────────────────────────────── */}
+            {step === 4 && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">
+                      Step 4 — Billing (Optional)
+                    </p>
+                    <p className="text-sm text-base-content/60 mt-1">
+                      Add billing items for this service report, or skip to finish.
+                    </p>
+                  </div>
+                  {!addBillingOpen && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm shrink-0"
+                      onClick={() => {
+                        setBillingForm(EMPTY_BILLING_FORM)
+                        setBillingFormError({})
+                        setAddBillingOpen(true)
+                      }}
+                    >
+                      <span className="icon-[tabler--plus] size-4"></span>
+                      Add Billing Item
+                    </button>
+                  )}
+                </div>
+
+                {/* Inline add-billing form */}
+                {addBillingOpen && (
+                  <div className="border border-base-300 rounded-box p-4 bg-base-200/40">
+                    <p className="text-sm font-semibold mb-3">New Billing Item</p>
+                    <form onSubmit={handleAddBillingItem}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+
+                        <div className="sm:col-span-2 flex flex-col gap-1">
+                          <label className="label-text font-medium">Description <span className="text-error">*</span></label>
+                          <input type="text" name="description" maxLength={255}
+                            className={`input input-bordered w-full${billingFormError.description ? ' is-invalid' : ''}`}
+                            placeholder="e.g. Labor fee, Parts replacement"
+                            value={billingForm.description} onChange={handleBillingFormChange} />
+                          {billingFormError.description && <span className="helper-text">{billingFormError.description}</span>}
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+                          <input type="number" name="quantity" min={1}
+                            className={`input input-bordered w-full${billingFormError.quantity ? ' is-invalid' : ''}`}
+                            placeholder="e.g. 1"
+                            value={billingForm.quantity} onChange={handleBillingFormChange} />
+                          {billingFormError.quantity && <span className="helper-text">{billingFormError.quantity}</span>}
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+                          <input type="number" name="unitPrice" min={0} step="0.01"
+                            className={`input input-bordered w-full${billingFormError.unitPrice ? ' is-invalid' : ''}`}
+                            placeholder="0.00"
+                            value={billingForm.unitPrice} onChange={handleBillingFormChange} />
+                          {billingFormError.unitPrice && <span className="helper-text">{billingFormError.unitPrice}</span>}
+                        </div>
+
+                        {billingFormError._general && (
+                          <div className="sm:col-span-2 alert alert-error py-2">
+                            <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                            <span className="text-sm">{billingFormError._general}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          className="btn btn-soft btn-secondary btn-sm"
+                          onClick={() => {
+                            setAddBillingOpen(false)
+                            setBillingForm(EMPTY_BILLING_FORM)
+                            setBillingFormError({})
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button type="submit" className="btn btn-primary btn-sm">
+                          <span className="icon-[tabler--plus] size-4"></span>
+                          Add Billing Item
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Billing items list */}
+                {billingItems.length === 0 && !addBillingOpen ? (
+                  <div className="text-center py-10 text-base-content/40">
+                    <span className="icon-[tabler--receipt-off] size-10 mx-auto mb-2 block"></span>
+                    <p className="text-sm">No billing items added yet. You can skip this step.</p>
+                  </div>
+                ) : billingItems.length > 0 && (
+                  <div className="overflow-x-auto rounded-box border border-base-300">
+                    <table className="table table-sm">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Description</th>
+                          <th className="text-end">Qty</th>
+                          <th className="text-end">Unit Price</th>
+                          <th className="text-end">Subtotal</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {billingItems.map((b, i) => (
+                          <tr key={b._tempId}>
+                            <td className="text-base-content/40 font-mono">{i + 1}</td>
+                            <td>{b.description}</td>
+                            <td className="text-end">{b.quantity}</td>
+                            <td className="text-end">₱{Number(b.unitPrice).toFixed(2)}</td>
+                            <td className="text-end">₱{(Number(b.quantity) * Number(b.unitPrice)).toFixed(2)}</td>
+                            <td className="text-end">
+                              <button
+                                type="button"
+                                className="btn btn-error btn-xs btn-square"
+                                title="Remove billing item"
+                                onClick={() => removeBillingItem(b._tempId)}
+                              >
+                                <span className="icon-[tabler--x] size-3.5"></span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan={4} className="text-end font-semibold text-sm">Total</td>
+                          <td className="text-end font-semibold text-sm">
+                            ₱{billingItems.reduce((sum, b) => sum + Number(b.quantity) * Number(b.unitPrice), 0).toFixed(2)}
+                          </td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 )}
 
@@ -812,6 +1241,180 @@ export default function NewServiceReport() {
           </div>
         </div>
       </div>
+      {/* ── Part Sub-Modal ─────────────────────────────────────────── */}
+      {partModalOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/70 z-[80]" onClick={() => setPartModalOpen(false)} />
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-lg">
+
+              <div className="modal-header">
+                <h3 className="modal-title">Add Part</h3>
+                <button
+                  type="button"
+                  className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                  aria-label="Close"
+                  onClick={() => setPartModalOpen(false)}
+                >
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <form onSubmit={handleAddPart}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+
+                    <div className="sm:col-span-2 flex flex-col gap-1">
+                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+                      <input type="text" name="name" maxLength={255}
+                        className={`input input-bordered w-full${partFormError.name ? ' is-invalid' : ''}`}
+                        placeholder="e.g. Capacitor 35/5 MFD"
+                        value={partForm.name} onChange={handlePartFormChange} />
+                      {partFormError.name && <span className="helper-text">{partFormError.name}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+                      <input type="number" name="quantity" min={0}
+                        className={`input input-bordered w-full${partFormError.quantity ? ' is-invalid' : ''}`}
+                        placeholder="e.g. 2"
+                        value={partForm.quantity} onChange={handlePartFormChange} />
+                      {partFormError.quantity && <span className="helper-text">{partFormError.quantity}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+                      <input type="text" name="quantityType" maxLength={30}
+                        className={`input input-bordered w-full${partFormError.quantityType ? ' is-invalid' : ''}`}
+                        placeholder="e.g. pcs, box, set"
+                        value={partForm.quantityType} onChange={handlePartFormChange} />
+                      {partFormError.quantityType && <span className="helper-text">{partFormError.quantityType}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+                      <input type="number" name="unitPrice" min={0} step="0.01"
+                        className={`input input-bordered w-full${partFormError.unitPrice ? ' is-invalid' : ''}`}
+                        placeholder="0.00"
+                        value={partForm.unitPrice} onChange={handlePartFormChange} />
+                      {partFormError.unitPrice && <span className="helper-text">{partFormError.unitPrice}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+                      <select name="supplierId"
+                        className={`select select-bordered w-full${partFormError.supplierId ? ' is-invalid' : ''}`}
+                        value={partForm.supplierId}
+                        onChange={e => {
+                          const selected = suppliers.find(s => String(s.supplierId) === e.target.value)
+                          setPartForm(prev => ({ ...prev, supplierId: e.target.value, _supplierName: selected?.name ?? '' }))
+                        }}
+                      >
+                        <option value="">Select supplier...</option>
+                        {suppliers.map(s => (
+                          <option key={s.supplierId} value={s.supplierId}>{s.name}</option>
+                        ))}
+                      </select>
+                      {partFormError.supplierId && <span className="helper-text">{partFormError.supplierId}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Order Date <span className="text-base-content/40 font-normal">(optional)</span></label>
+                      <input type="date" name="orderDate"
+                        className="input input-bordered w-full"
+                        value={partForm.orderDate} onChange={handlePartFormChange} />
+                    </div>
+
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-secondary btn-sm"
+                      onClick={() => setPartModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary btn-sm">
+                      <span className="icon-[tabler--plus] size-4"></span>
+                      Add Part
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Delivery Contact Sub-Modal ─────────────────────────────── */}
+      {contactModalOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/70 z-[80]" onClick={() => setContactModalOpen(false)} />
+          <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-lg">
+
+              <div className="modal-header">
+                <h3 className="modal-title">Delivery Contacts</h3>
+                <button
+                  type="button"
+                  className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                  aria-label="Close"
+                  onClick={() => setContactModalOpen(false)}
+                >
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+
+              <div className="modal-body">
+                <form onSubmit={handleAddContact}>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+                      <input
+                        type="text"
+                        name="contactName"
+                        maxLength={300}
+                        className={`input input-bordered w-full${contactFormError.contactName ? ' is-invalid' : ''}`}
+                        placeholder="e.g. Juan Dela Cruz"
+                        value={contactForm.contactName}
+                        onChange={handleContactFormChange}
+                      />
+                      {contactFormError.contactName && <span className="helper-text">{contactFormError.contactName}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+                      <input
+                        type="text"
+                        name="contactNumber"
+                        maxLength={16}
+                        className={`input input-bordered w-full${contactFormError.contactNumber ? ' is-invalid' : ''}`}
+                        placeholder="e.g. 09171234567"
+                        value={contactForm.contactNumber}
+                        onChange={handleContactFormChange}
+                      />
+                      {contactFormError.contactNumber && <span className="helper-text">{contactFormError.contactNumber}</span>}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-secondary btn-sm"
+                      onClick={() => setContactModalOpen(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary btn-sm">
+                      <span className="icon-[tabler--plus] size-4"></span>
+                      Add Contact
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </Layout>
   )
 }

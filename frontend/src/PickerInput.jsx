@@ -14,12 +14,13 @@ import { useState } from 'react'
  *   pickerProps  - extra props forwarded to the Picker component (e.g. { position: 'Engineer' })
  *   error        - validation error string
  *   required     - shows a red asterisk on the label when true
+ *   disabled     - disables the picker button and dims the input when true
  *   className    - extra class on the wrapper div (e.g. 'sm:col-span-2')
  */
 export default function PickerInput({
   label, displayValue, placeholder = 'None selected',
   buttonLabel, onSelect, Picker, pickerProps,
-  error, required, className = '',
+  error, required, disabled, className = '',
 }) {
   const [open, setOpen] = useState(false)
 
@@ -31,7 +32,7 @@ export default function PickerInput({
       <div className="flex gap-2">
         <input
           type="text"
-          className={`input input-bordered flex-1 bg-base-200 cursor-not-allowed${error ? ' is-invalid' : ''}`}
+          className={`input input-bordered flex-1 bg-base-200 cursor-not-allowed${error ? ' is-invalid' : ''}${disabled ? ' opacity-50' : ''}`}
           value={displayValue || placeholder}
           readOnly
         />
@@ -39,6 +40,7 @@ export default function PickerInput({
           type="button"
           className="btn btn-soft btn-secondary shrink-0"
           onClick={() => setOpen(true)}
+          disabled={disabled}
         >
           {buttonLabel}
         </button>

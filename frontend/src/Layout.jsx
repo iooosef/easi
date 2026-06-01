@@ -56,22 +56,24 @@ export default function Layout({ activePage, children }) {
               {NAV_ITEMS.map(({ page, label, icon, path, roles }) => {
                 if (roles && !hasRole(...roles)) return null
                 return (
-                  <li key={page}>
-                    <Link to={path} className={currentPage === page ? 'menu-active' : ''}>
-                      <span className={`${icon} size-5`}></span>
-                      {label}
-                    </Link>
-                  </li>
+                  <>
+                    <li key={page}>
+                      <Link to={path} className={currentPage === page ? 'menu-active' : ''}>
+                        <span className={`${icon} size-5`}></span>
+                        {label}
+                      </Link>
+                    </li>
+                    {page === 'account-settings' && (
+                      <li key="sign-out">
+                        <button className="w-full" onClick={handleLogout}>
+                          <span className="icon-[tabler--logout-2] size-5"></span>
+                          Sign Out
+                        </button>
+                      </li>
+                    )}
+                  </>
                 )
               })}
-            </ul>
-            <ul className="menu p-0 pb-4">
-              <li>
-                <button className="w-full" onClick={handleLogout}>
-                  <span className="icon-[tabler--logout-2] size-5"></span>
-                  Sign Out
-                </button>
-              </li>
             </ul>
           </div>
         </aside>
