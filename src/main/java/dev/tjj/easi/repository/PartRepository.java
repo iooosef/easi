@@ -18,6 +18,6 @@ public interface PartRepository extends JpaRepository<Part, Integer> {
     @Query("SELECT p FROM Part p WHERE (cast(:search as string) IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) OR LOWER(p.purchaseOrder.poNum) LIKE LOWER(CONCAT('%', cast(:search as string), '%'))) AND (cast(:status as string) IS NULL OR p.status = cast(:status as string))")
     Page<Part> search(@Param("search") String search, @Param("status") String status, Pageable pageable);
 
-    @Query("SELECT COALESCE(SUM(p.quantity * p.unitPrice), 0) FROM Part p WHERE p.purchaseOrder.poNum = :poNum")
+    @Query("SELECT COALESCE(SUM(p.quantityOrdered * p.unitPrice), 0) FROM Part p WHERE p.purchaseOrder.poNum = :poNum")
     BigDecimal sumTotalCostByPoNum(@Param("poNum") String poNum);
 }

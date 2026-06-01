@@ -15,9 +15,9 @@ public record PartRequest(
         @Size(max = 255, message = "Name must not exceed 255 characters")
         String name,
 
-        @NotNull(message = "Quantity is required")
-        @Min(value = 0, message = "Quantity must be zero or greater")
-        Integer quantity,
+        @NotNull(message = "Quantity ordered is required")
+        @Min(value = 0, message = "Quantity ordered must be zero or greater")
+        Integer quantityOrdered,
 
         @NotBlank(message = "Quantity type is required")
         @Size(max = 30, message = "Quantity type must not exceed 30 characters")

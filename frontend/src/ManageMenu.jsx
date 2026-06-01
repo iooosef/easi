@@ -81,14 +81,16 @@ export default function ManageMenu({ title, subtitle, details = [], item, isOpen
                 <div>
                   <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Manage</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {menuItems.filter(({ roles }) => roles === null || hasRole?.(...roles)).map(({ key, label, icon }) => (
+                    {menuItems.filter(({ roles }) => roles === null || hasRole?.(...roles)).map(({ key, label, icon, disabled, disabledTitle }) => (
                       <button
                         key={key}
                         type="button"
-                        className="group w-full"
-                        onClick={() => onMenuSelect?.(key, item)}
+                        className={`group w-full${disabled ? ' cursor-not-allowed opacity-40' : ''}`}
+                        disabled={!!disabled}
+                        title={disabled ? disabledTitle : undefined}
+                        onClick={() => !disabled && onMenuSelect?.(key, item)}
                       >
-                        <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
+                        <div className={`card bg-base-100 border border-base-300 h-full${!disabled ? ' transition-transform duration-300 group-hover:-translate-y-2' : ''}`}>
                           <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
                             <span className={`${icon} size-8 text-primary`}></span>
                             <p className="text-xs font-medium text-base-content leading-tight">{label}</p>

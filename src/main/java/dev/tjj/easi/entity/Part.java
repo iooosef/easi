@@ -24,10 +24,10 @@ public class Part {
     @Setter
     private String name;
 
-    @Column(name = "quantity", nullable = false)
+    @Column(name = "quantity_ordered", nullable = false)
     @Getter
     @Setter
-    private Integer quantity;
+    private Integer quantityOrdered;
 
     @Column(name = "quantity_type", length = 30, nullable = false)
     @Getter

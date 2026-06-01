@@ -25,12 +25,14 @@ import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.VehicleRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
 import dev.tjj.easi.entity.Part;
+import dev.tjj.easi.entity.PartUsage;
 import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.PurchaseOrderDeliveryContact;
 import dev.tjj.easi.entity.PaymentLog;
 import dev.tjj.easi.entity.ServiceReportBillingItem;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.PartRepository;
+import dev.tjj.easi.repository.PartUsageRepository;
 import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.PurchaseOrderDeliveryContactRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
@@ -69,6 +71,7 @@ public class DataInitializer implements CommandLineRunner {
     private final SupplierRepository supplierRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PartRepository partRepository;
+    private final PartUsageRepository partUsageRepository;
     private final PurchaseOrderDeliveryContactRepository poDeliveryContactRepository;
     private final ServiceReportBillingItemRepository billingItemRepository;
     private final PaymentLogRepository paymentLogRepository;
@@ -87,6 +90,7 @@ public class DataInitializer implements CommandLineRunner {
         seedPurchaseOrders();
         seedBillingItems();
         seedPaymentLogs();
+        seedPartUsages();
     }
 
     private void createAdminUser() {
@@ -814,7 +818,7 @@ public class DataInitializer implements CommandLineRunner {
                     LocalDateTime.of(2026, 3, 9, 8, 0));
         }
 
-        // Parts — 2-3 per PO
+        // Parts — 2-3 per PO (references captured for usage seeding)
         if (po1 != null) {
             part("Capacitor 35/5 MFD",        2, "pcs",  new BigDecimal("650.00"),  s1, LocalDate.of(2026, 1, 6),  po1, "delivered");
             part("R-410A Refrigerant (10 kg)", 1, "tank", new BigDecimal("3200.00"), s2, LocalDate.of(2026, 1, 6),  po1, "delivered");
@@ -881,13 +885,13 @@ public class DataInitializer implements CommandLineRunner {
         return purchaseOrderRepository.save(po);
     }
 
-    /** Creates and saves a Part linked to a PurchaseOrder and Supplier. */
-    private void part(String name, int quantity, String quantityType, BigDecimal unitPrice,
+    /** Creates, saves, and returns a Part linked to a PurchaseOrder and Supplier. */
+    private Part part(String name, int quantityOrdered, String quantityType, BigDecimal unitPrice,
                       Supplier supplier, LocalDate orderDate, PurchaseOrder purchaseOrder,
                       String status) {
         Part p = new Part();
         p.setName(name);
-        p.setQuantity(quantity);
+        p.setQuantityOrdered(quantityOrdered);
         p.setQuantityType(quantityType);
         p.setUnitPrice(unitPrice);
         p.setSupplier(supplier);
@@ -895,7 +899,7 @@ public class DataInitializer implements CommandLineRunner {
         p.setPurchaseOrder(purchaseOrder);
         p.setStatus(status);
         p.setAddedOn(purchaseOrder.getAddedOn());
-        partRepository.save(p);
+        return partRepository.save(p);
     }
 
     /** Creates and saves a PurchaseOrderDeliveryContact. */
@@ -1113,6 +1117,137 @@ public class DataInitializer implements CommandLineRunner {
         pl.setNotes(notes);
         pl.setAddedOn(receiptDate.atTime(10, 0));
         paymentLogRepository.save(pl);
+    }
+
+    /**
+     * Seeds sample part usage records demonstrating single and split-leftover consumption.
+     * Parts with "ordered" status are skipped — only delivered parts get usage records.
+     */
+    private void seedPartUsages() {
+        if (partUsageRepository.count() > 0) {
+            log.info("Part usage data already exists, skipping.");
+            return;
+        }
+
+        var allParts = partRepository.findAll(
+                org.springframework.data.domain.Sort.by("partId").ascending());
+        if (allParts.isEmpty()) {
+            log.warn("No parts found to seed part usages, skipping.");
+            return;
+        }
+
+        var allReports = serviceReportRepository.findAll(
+                org.springframework.data.domain.Sort.by("srNumber").ascending());
+        if (allReports.size() < 11) {
+            log.warn("Not enough service reports to seed part usages, skipping.");
+            return;
+        }
+
+        // Resolve SRs by position (0-based index matches seeded order)
+        ServiceReport sr1  = allReports.get(0);   // P1 — Jan 8  — capacitor & refrigerant
+        ServiceReport sr2  = allReports.get(1);   // P1 — Jan 22 — noisy compressor
+        ServiceReport sr3  = allReports.get(2);   // P1 — Feb 12 — drain & filter
+        ServiceReport sr4  = allReports.get(3);   // P1 — Mar 5  — routine PM
+        ServiceReport sr6  = allReports.get(5);   // P2 — Jan 14 — PCB fuse
+        ServiceReport sr7  = allReports.get(6);   // P2 — Feb 5  — foul smell / coil clean
+        ServiceReport sr8  = allReports.get(7);   // P2 — Feb 25 — drain pan leak
+        ServiceReport sr11 = allReports.get(10);  // P3 — Jan 7  — circuit overload
+
+        // Resolve parts by name + PO (handles duplicate names across POs)
+        Part capacitor    = findPart("Capacitor 35/5 MFD",        "PO-2026-001");
+        Part refrigerant  = findPart("R-410A Refrigerant (10 kg)", "PO-2026-001");
+        Part airFilter    = findPart("Air Filter 24-inch",          "PO-2026-002");
+        Part drainCleaner = findPart("Drain Line Cleaner (1L)",     "PO-2026-002");
+        Part antiFungal   = findPart("Anti-fungal Coil Spray",      "PO-2026-002");
+        Part pcbFuse      = findPart("PCB Fuse 15A",                "PO-2026-003");
+        Part cbPo3        = findPart("Circuit Breaker 20A",         "PO-2026-003");
+        Part coilCleaner  = findPart("Evaporator Coil Cleaner (1L)","PO-2026-004");
+        Part cbPo5        = findPart("Circuit Breaker 20A",         "PO-2026-005");
+        Part busbar       = findPart("Panel Busbar 100A",           "PO-2026-005");
+        Part cableLug     = findPart("Cable Lug 35mm²",             "PO-2026-005");
+
+        int count = 0;
+
+        // PO-2026-001 — Capacitor (qty 2): 1 used in SR1, 1 used in SR2 (fully used)
+        if (capacitor != null) {
+            partUsage(capacitor, sr1, 1, null);
+            partUsage(capacitor, sr2, 1, null);
+            count += 2;
+        }
+        // PO-2026-001 — Refrigerant (qty 1): 1 used in SR1 (fully used)
+        if (refrigerant != null) {
+            partUsage(refrigerant, sr1, 1, null);
+            count++;
+        }
+        // PO-2026-002 — Air Filter (qty 4): 2 used in SR3, 2 used in SR4 (fully used)
+        if (airFilter != null) {
+            partUsage(airFilter, sr3, 2, null);
+            partUsage(airFilter, sr4, 2, null);
+            count += 2;
+        }
+        // PO-2026-002 — Drain Line Cleaner (qty 2): 1 used in SR3 (1 leftover)
+        if (drainCleaner != null) {
+            partUsage(drainCleaner, sr3, 1, null);
+            count++;
+        }
+        // PO-2026-002 — Anti-fungal Spray (qty 2): 2 used in SR7 (fully used)
+        if (antiFungal != null) {
+            partUsage(antiFungal, sr7, 2, null);
+            count++;
+        }
+        // PO-2026-003 — PCB Fuse 15A (qty 5): 1 used in SR6 (4 leftover)
+        if (pcbFuse != null) {
+            partUsage(pcbFuse, sr6, 1, null);
+            count++;
+        }
+        // PO-2026-003 — Circuit Breaker 20A (qty 2): 1 in SR6, 1 in SR11 (fully used; split leftover example)
+        if (cbPo3 != null) {
+            partUsage(cbPo3, sr6,  1, null);
+            partUsage(cbPo3, sr11, 1, null);
+            count += 2;
+        }
+        // PO-2026-004 — Evaporator Coil Cleaner (qty 3): 1 in SR7, 1 in SR8 (1 leftover; split leftover example)
+        if (coilCleaner != null) {
+            partUsage(coilCleaner, sr7, 1, null);
+            partUsage(coilCleaner, sr8, 1, null);
+            count += 2;
+        }
+        // PO-2026-005 — Circuit Breaker 20A (qty 4): 3 used in SR11 (1 leftover)
+        if (cbPo5 != null) {
+            partUsage(cbPo5, sr11, 3, null);
+            count++;
+        }
+        // PO-2026-005 — Panel Busbar 100A (qty 1): 1 used in SR11 (fully used)
+        if (busbar != null) {
+            partUsage(busbar, sr11, 1, null);
+            count++;
+        }
+        // PO-2026-005 — Cable Lug 35mm² (qty 10): 6 used in SR11 (4 leftover)
+        if (cableLug != null) {
+            partUsage(cableLug, sr11, 6, null);
+            count++;
+        }
+
+        log.info("Part usage seed completed: {} usage records created.", count);
+    }
+
+    /** Looks up a saved part by name and PO number. Returns null if not found (seed skip-safe). */
+    private Part findPart(String name, String poNum) {
+        return partRepository.findAll().stream()
+                .filter(p -> p.getName().equals(name)
+                        && p.getPurchaseOrder().getPoNum().equals(poNum))
+                .findFirst().orElse(null);
+    }
+
+    /** Creates and saves a PartUsage record linked to a service report. */
+    private void partUsage(Part part, ServiceReport sr, int qtyUsed, String notes) {
+        PartUsage u = new PartUsage();
+        u.setPart(part);
+        u.setServiceReport(sr);
+        u.setQtyUsed(qtyUsed);
+        u.setNotes(notes);
+        u.setUsedOn(sr.getAddedOn().plusHours(1));
+        partUsageRepository.save(u);
     }
 
 }

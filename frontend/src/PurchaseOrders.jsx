@@ -59,7 +59,7 @@ function PartsTable({ parts, loading, onSelectPart }) {
 
   const totalPages = Math.ceil(parts.length / PARTS_PAGE_SIZE)
   const pageParts = parts.slice(partsPage * PARTS_PAGE_SIZE, (partsPage + 1) * PARTS_PAGE_SIZE)
-  const totalCost = parts.reduce((sum, p) => sum + (Number(p.quantity) * Number(p.unitPrice ?? 0)), 0)
+  const totalCost = parts.reduce((sum, p) => sum + (Number(p.quantityOrdered) * Number(p.unitPrice ?? 0)), 0)
 
   return (
     <div className="flex flex-col gap-2">
@@ -82,7 +82,7 @@ function PartsTable({ parts, loading, onSelectPart }) {
                 <td className="text-sm max-w-40">
                   <span className="line-clamp-1" title={p.name}>{p.name}</span>
                 </td>
-                <td className="text-sm">{p.quantity} {p.quantityType}</td>
+                <td className="text-sm">{p.quantityOrdered} {p.quantityType}</td>
                 <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
                 <td>
                   <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>
@@ -94,8 +94,8 @@ function PartsTable({ parts, loading, onSelectPart }) {
                     className="btn btn-soft btn-primary btn-xs"
                     onClick={() => onSelectPart(p)}
                   >
-                    <span className="icon-[tabler--info-circle] size-3"></span>
-                    Details
+                    <span className="icon-[tabler--settings] size-3"></span>
+                    Manage
                   </button>
                 </td>
               </tr>
@@ -248,80 +248,13 @@ function ContactDetailsModal({ contact, onClose }) {
   )
 }
 
-/** Small modal showing all details of a single part */
-function PartDetailsModal({ part, onClose }) {
-  if (!part) return null
+/** Detail field helper for the manage part sub-modal */
+function PartDetailField({ label, children }) {
   return (
-    <>
-      {/* Backdrop — higher z than ManageMenu so it doesn't close that modal */}
-      <div
-        className="fixed inset-0 bg-base-300/40 z-[55]"
-        onClick={onClose}
-      />
-      {/* Modal panel */}
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div className="modal-content w-full max-w-sm">
-          <div className="modal-header">
-            <div>
-              <h3 className="modal-title">Part #{part.partId}</h3>
-              <span className="text-sm text-base-content/50">{part.name}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-              aria-label="Close"
-              onClick={onClose}
-            >
-              <span className="icon-[tabler--x] size-4"></span>
-            </button>
-          </div>
-          <div className="modal-body">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Part ID</span>
-                <span className="text-sm font-medium font-mono">{part.partId}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Status</span>
-                <span className={`badge badge-soft ${partStatusBadge(part.status)} text-xs w-fit`}>{part.status}</span>
-              </div>
-              <div className="col-span-2 flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
-                <span className="text-sm font-medium">{part.name}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Quantity</span>
-                <span className="text-sm font-medium">{part.quantity} {part.quantityType}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Unit Price</span>
-                <span className="text-sm font-medium">{formatCurrency(part.unitPrice)}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Subtotal</span>
-                <span className="text-sm font-medium text-primary">{formatCurrency(Number(part.quantity) * Number(part.unitPrice ?? 0))}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Supplier</span>
-                <span className="text-sm font-medium">({part.supplierId}) {part.supplierName ?? '—'}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Order Date</span>
-                <span className="text-sm font-medium">{formatDate(part.orderDate)}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
-                <span className="text-sm font-medium font-mono">{part.poNum}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Added On</span>
-                <span className="text-sm font-medium">{formatDate(part.addedOn)}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-base-content/50 uppercase tracking-wide">{label}</span>
+      <span className="text-sm font-medium text-base-content">{children}</span>
+    </div>
   )
 }
 
@@ -413,7 +346,7 @@ export default function PurchaseOrders() {
   }
 
   // Manage Parts modal
-  const EMPTY_PART_FORM = { name: '', quantity: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
+  const EMPTY_PART_FORM = { name: '', quantityOrdered: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
   const [managePartsOpen, setManagePartsOpen]         = useState(false)
   const [managePartsOrder, setManagePartsOrder]       = useState(null)
   const [manageParts, setManageParts]                 = useState([])
@@ -459,7 +392,7 @@ export default function PurchaseOrders() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...partForm,
-          quantity: Number(partForm.quantity),
+          quantityOrdered: Number(partForm.quantityOrdered),
           unitPrice: Number(partForm.unitPrice),
           supplierId: Number(partForm.supplierId),
           poNum: managePartsOrder.poNum,
@@ -491,12 +424,12 @@ export default function PurchaseOrders() {
 
   function openUpdatePart(p) {
     setUpdatePartForm({
-      name:          p.name,
-      quantity:      p.quantity,
-      quantityType:  p.quantityType,
-      unitPrice:     p.unitPrice,
-      supplierId:    p.supplierId,
-      status:        p.status,
+      name:            p.name,
+      quantityOrdered: p.quantityOrdered,
+      quantityType:    p.quantityType,
+      unitPrice:       p.unitPrice,
+      supplierId:      p.supplierId,
+      status:          p.status,
     })
     setUpdateSupplierDisplay(`${p.supplierName ?? 'Supplier'} (#${p.supplierId})`)
     setUpdatingPart(p)
@@ -527,8 +460,8 @@ export default function PurchaseOrders() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...updatePartForm,
-          quantity:   Number(updatePartForm.quantity),
-          unitPrice:  Number(updatePartForm.unitPrice),
+          quantityOrdered: Number(updatePartForm.quantityOrdered),
+          unitPrice:       Number(updatePartForm.unitPrice),
           supplierId: Number(updatePartForm.supplierId),
           poNum:      updatingPart.poNum,
           orderDate:  updatingPart.orderDate,
@@ -566,6 +499,21 @@ export default function PurchaseOrders() {
       setDeletingPartId(null)
     }
   }
+
+  // Part usage history (for the manage-part sub-modal)
+  const EMPTY_USAGE_FORM = { srNumber: '', qtyUsed: '', notes: '' }
+  const [partUsageHistory, setPartUsageHistory]   = useState([])
+  const [partUsageLoading, setPartUsageLoading]   = useState(false)
+  const [partUsageRefresh, setPartUsageRefresh]   = useState(0)
+  const [logUsageOpen, setLogUsageOpen]           = useState(false)
+  const [logUsageForm, setLogUsageForm]           = useState(EMPTY_USAGE_FORM)
+  const [logUsageFormError, setLogUsageFormError] = useState({})
+  const [logUsageSubmitting, setLogUsageSubmitting] = useState(false)
+  const [editUsageOpen, setEditUsageOpen]           = useState(false)
+  const [editingUsage, setEditingUsage]             = useState(null)
+  const [editUsageForm, setEditUsageForm]           = useState({})
+  const [editUsageFormError, setEditUsageFormError] = useState({})
+  const [editUsageSubmitting, setEditUsageSubmitting] = useState(false)
 
   // Manage Delivery Contacts modal
   const EMPTY_CONTACT_FORM = { contactName: '', contactNumber: '' }
@@ -736,6 +684,7 @@ export default function PurchaseOrders() {
   const [selectedOrder, setSelectedOrder]     = useState(null)
   const [parts, setParts]                     = useState([])
   const [partsLoading, setPartsLoading]       = useState(false)
+  const [partsRefreshKey, setPartsRefreshKey] = useState(0)
   const [selectedPart, setSelectedPart]       = useState(null)
   const [contacts, setContacts]               = useState([])
   const [contactsLoading, setContactsLoading] = useState(false)
@@ -768,7 +717,7 @@ export default function PurchaseOrders() {
     return () => { active = false }
   }, [apiFetch, page, srNumberInt, refreshKey])
 
-  /** Fetches parts whenever a PO is selected. */
+  /** Fetches parts whenever a PO is selected or partsRefreshKey changes. */
   useEffect(() => {
     if (!selectedOrder) {
       setParts([])
@@ -787,7 +736,21 @@ export default function PurchaseOrders() {
       .catch(() => { if (active) setParts([]) })
       .finally(() => { if (active) setPartsLoading(false) })
     return () => { active = false }
-  }, [apiFetch, selectedOrder])
+  }, [apiFetch, selectedOrder, partsRefreshKey])
+
+  /** Fetches usage history whenever a part is selected in the sub-modal. */
+  useEffect(() => {
+    if (!selectedPart) { setPartUsageHistory([]); return }
+    let active = true
+    setPartUsageLoading(true)
+    const params = new URLSearchParams({ partId: selectedPart.partId, size: '100', sort: 'usedOn,desc' })
+    apiFetch(`/api/part-usages?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setPartUsageHistory(data.content ?? []) })
+      .catch(() => { if (active) setPartUsageHistory([]) })
+      .finally(() => { if (active) setPartUsageLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, selectedPart, partUsageRefresh])
 
   /** Fetches delivery contacts whenever a PO is selected. */
   useEffect(() => {
@@ -809,6 +772,89 @@ export default function PurchaseOrders() {
       .finally(() => { if (active) setContactsLoading(false) })
     return () => { active = false }
   }, [apiFetch, selectedOrder])
+
+  /** Opens the log usage overlay for the selected part. */
+  function openLogUsage() { setLogUsageForm(EMPTY_USAGE_FORM); setLogUsageFormError({}); setLogUsageOpen(true) }
+  function closeLogUsage() { setLogUsageOpen(false); setLogUsageForm(EMPTY_USAGE_FORM); setLogUsageFormError({}) }
+
+  /** Submits a new part usage record. */
+  async function handleLogUsageSubmit(e) {
+    e.preventDefault()
+    setLogUsageFormError({})
+    setLogUsageSubmitting(true)
+    try {
+      const res = await apiFetch('/api/part-usages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partId:    selectedPart.partId,
+          srNumber:  logUsageForm.srNumber ? Number(logUsageForm.srNumber) : null,
+          qtyUsed:   Number(logUsageForm.qtyUsed),
+          notes:     logUsageForm.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        setLogUsageFormError(await parseApiError(res))
+        notyfError('Log usage failed')
+        return
+      }
+      closeLogUsage()
+      notyfSuccess('Usage logged successfully.')
+      setPartUsageRefresh(k => k + 1)
+      setPartsRefreshKey(k => k + 1)
+      setManagePartsRefresh(k => k + 1)
+    } catch (err) {
+      setLogUsageFormError({ _general: err.message })
+    } finally {
+      setLogUsageSubmitting(false)
+    }
+  }
+
+  /** Opens the edit usage overlay for a specific usage record. */
+  function openEditUsage(u) {
+    setEditUsageForm({ srNumber: u.srNumber ?? '', qtyUsed: u.qtyUsed, notes: u.notes ?? '' })
+    setEditingUsage(u)
+    setEditUsageFormError({})
+    setEditUsageOpen(true)
+  }
+  function closeEditUsage() { setEditUsageOpen(false); setEditingUsage(null); setEditUsageForm({}); setEditUsageFormError({}) }
+
+  /** Submits an update to an existing part usage record. */
+  async function handleEditUsageSubmit(e) {
+    e.preventDefault()
+    setEditUsageFormError({})
+    setEditUsageSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/part-usages/${editingUsage.usageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber: editUsageForm.srNumber ? Number(editUsageForm.srNumber) : null,
+          qtyUsed:  Number(editUsageForm.qtyUsed),
+          notes:    editUsageForm.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        setEditUsageFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      closeEditUsage()
+      notyfSuccess(`Usage #${editingUsage.usageId} updated.`)
+      setPartUsageRefresh(k => k + 1)
+      setPartsRefreshKey(k => k + 1)
+      setManagePartsRefresh(k => k + 1)
+    } catch (err) {
+      setEditUsageFormError({ _general: err.message })
+    } finally {
+      setEditUsageSubmitting(false)
+    }
+  }
+
+  /** Computed available qty for the currently selected part using live usage history. */
+  const computedAvailableQty = selectedPart
+    ? (selectedPart.quantityOrdered ?? 0) - partUsageHistory.reduce((s, u) => s + u.qtyUsed, 0)
+    : 0
 
   const filtered = orders.filter(o => {
     if (search === '') return true
@@ -1011,8 +1057,269 @@ export default function PurchaseOrders() {
         }}
       />
 
-      {/* Part Details Modal — sits above ManageMenu via higher z-index */}
-      <PartDetailsModal part={selectedPart} onClose={() => setSelectedPart(null)} />
+      {/* Manage Part sub-modal — sits above ManageMenu / Manage Parts modal via higher z-index */}
+      {selectedPart && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={() => { setSelectedPart(null); closeLogUsage(); closeEditUsage() }} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="modal-content w-full max-w-xl my-auto">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Part #{selectedPart.partId}</h3>
+                  <span className="text-sm text-base-content/50">{selectedPart.name}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                  onClick={() => { setSelectedPart(null); closeLogUsage(); closeEditUsage() }}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body flex flex-col gap-5">
+
+                {/* Part details grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                  <PartDetailField label="Part ID"><span className="font-mono">{selectedPart.partId}</span></PartDetailField>
+                  <PartDetailField label="Status">
+                    <span className={`badge badge-soft ${partStatusBadge(selectedPart.status)} text-xs`}>{selectedPart.status}</span>
+                  </PartDetailField>
+                  <PartDetailField label="PO Number"><span className="font-mono">{selectedPart.poNum}</span></PartDetailField>
+                  <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
+                    <span className="text-sm font-medium">{selectedPart.name}</span>
+                  </div>
+                  <PartDetailField label="Ordered">{selectedPart.quantityOrdered} {selectedPart.quantityType}</PartDetailField>
+                  <PartDetailField label="Available">
+                    <span className={computedAvailableQty === 0 ? 'text-error font-semibold' : 'text-success font-semibold'}>
+                      {partUsageLoading ? '…' : computedAvailableQty} {selectedPart.quantityType}
+                    </span>
+                  </PartDetailField>
+                  <PartDetailField label="Unit Price">{formatCurrency(selectedPart.unitPrice)}</PartDetailField>
+                  <PartDetailField label="Subtotal">{formatCurrency(Number(selectedPart.quantityOrdered) * Number(selectedPart.unitPrice ?? 0))}</PartDetailField>
+                  <PartDetailField label="Supplier">({selectedPart.supplierId}) {selectedPart.supplierName ?? '—'}</PartDetailField>
+                  <PartDetailField label="Order Date">{formatDate(selectedPart.orderDate)}</PartDetailField>
+                </div>
+
+                <div className="divider my-0"></div>
+
+                {/* Usage history */}
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-base-content/50 uppercase tracking-wide">Usage History</span>
+                  {partUsageLoading ? (
+                    <div className="flex justify-center py-4">
+                      <span className="loading loading-spinner loading-sm text-primary"></span>
+                    </div>
+                  ) : partUsageHistory.length === 0 ? (
+                    <div className="text-center py-4 text-base-content/40 text-sm">No usage recorded.</div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-box border border-base-300">
+                      <table className="table table-zebra table-sm w-full">
+                        <thead>
+                          <tr>
+                            <th>ID</th>
+                            <th>SR #</th>
+                            <th>Qty Used</th>
+                            <th>Used On</th>
+                            {canEdit && <th></th>}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {partUsageHistory.map(u => (
+                            <tr key={u.usageId}>
+                              <td className="font-mono text-xs">{u.usageId}</td>
+                              <td className="text-sm">{u.srNumber ?? '—'}</td>
+                              <td className="text-sm">{u.qtyUsed} {selectedPart.quantityType}</td>
+                              <td className="text-sm">{formatDate(u.usedOn)}</td>
+                              {canEdit && (
+                                <td>
+                                  <button className="btn btn-soft btn-secondary btn-xs" onClick={() => openEditUsage(u)}>
+                                    <span className="icon-[tabler--pencil] size-3"></span>
+                                    Edit
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="divider my-0"></div>
+
+                {/* Action buttons */}
+                <div>
+                  <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Manage</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {canEdit && (
+                      <button type="button" className="group w-full"
+                        onClick={() => { const p = selectedPart; setSelectedPart(null); openUpdatePart(p) }}>
+                        <div className="card bg-base-100 border border-base-300 h-full transition-transform duration-300 group-hover:-translate-y-2">
+                          <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
+                            <span className="icon-[tabler--pencil] size-8 text-primary"></span>
+                            <p className="text-xs font-medium text-base-content leading-tight">Update Details</p>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button type="button"
+                        className={`group w-full${computedAvailableQty === 0 ? ' cursor-not-allowed opacity-40' : ''}`}
+                        disabled={computedAvailableQty === 0}
+                        title={computedAvailableQty === 0 ? 'No stock available' : undefined}
+                        onClick={() => computedAvailableQty > 0 && openLogUsage()}>
+                        <div className={`card bg-base-100 border border-base-300 h-full${computedAvailableQty > 0 ? ' transition-transform duration-300 group-hover:-translate-y-2' : ''}`}>
+                          <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
+                            <span className="icon-[tabler--tool] size-8 text-primary"></span>
+                            <p className="text-xs font-medium text-base-content leading-tight">Log Usage</p>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Log Usage overlay — sits above Manage Part sub-modal */}
+      {logUsageOpen && selectedPart && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[65]" onClick={closeLogUsage} />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Log Usage — Part #{selectedPart.partId}</h3>
+                  <span className="text-sm text-base-content/50">{selectedPart.name}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeLogUsage}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="log-usage-form" onSubmit={handleLogUsageSubmit}>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">SR # <span className="text-base-content/50 font-normal">(optional)</span></label>
+                      <input type="number" name="srNumber" min={1}
+                        className={`input input-bordered w-full${logUsageFormError.srNumber ? ' is-invalid' : ''}`}
+                        placeholder="Leave blank if not tied to an SR"
+                        value={logUsageForm.srNumber}
+                        onChange={e => setLogUsageForm(p => ({ ...p, srNumber: e.target.value }))} />
+                      {logUsageFormError.srNumber && <span className="helper-text">{logUsageFormError.srNumber}</span>}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
+                      <input type="number" name="qtyUsed" min={1} max={computedAvailableQty} required
+                        className={`input input-bordered w-full${logUsageFormError.qtyUsed ? ' is-invalid' : ''}`}
+                        placeholder={`Max: ${computedAvailableQty}`}
+                        value={logUsageForm.qtyUsed}
+                        onChange={e => setLogUsageForm(p => ({ ...p, qtyUsed: e.target.value }))} />
+                      {logUsageFormError.qtyUsed && <span className="helper-text">{logUsageFormError.qtyUsed}</span>}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Notes</label>
+                      <textarea name="notes" maxLength={255} rows={2}
+                        className={`textarea textarea-bordered w-full${logUsageFormError.notes ? ' is-invalid' : ''}`}
+                        placeholder="Optional notes"
+                        value={logUsageForm.notes}
+                        onChange={e => setLogUsageForm(p => ({ ...p, notes: e.target.value }))} />
+                      {logUsageFormError.notes && <span className="helper-text">{logUsageFormError.notes}</span>}
+                    </div>
+                    {logUsageFormError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{logUsageFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeLogUsage}>Cancel</button>
+                <button type="submit" form="log-usage-form" className="btn btn-primary" disabled={logUsageSubmitting}>
+                  {logUsageSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--tool] size-4"></span>
+                  }
+                  Log Usage
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Edit Usage overlay — sits above Manage Part sub-modal */}
+      {editUsageOpen && editingUsage && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[65]" onClick={closeEditUsage} />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Edit Usage #{editingUsage.usageId}</h3>
+                  <span className="text-sm text-base-content/50">{selectedPart?.name}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeEditUsage}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <div className="modal-body">
+                <form id="edit-usage-form" onSubmit={handleEditUsageSubmit}>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">SR # <span className="text-base-content/50 font-normal">(optional)</span></label>
+                      <input type="number" name="srNumber" min={1}
+                        className={`input input-bordered w-full${editUsageFormError.srNumber ? ' is-invalid' : ''}`}
+                        placeholder="Leave blank if not tied to an SR"
+                        value={editUsageForm.srNumber}
+                        onChange={e => setEditUsageForm(p => ({ ...p, srNumber: e.target.value }))} />
+                      {editUsageFormError.srNumber && <span className="helper-text">{editUsageFormError.srNumber}</span>}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
+                      <input type="number" name="qtyUsed" min={1} required
+                        className={`input input-bordered w-full${editUsageFormError.qtyUsed ? ' is-invalid' : ''}`}
+                        value={editUsageForm.qtyUsed}
+                        onChange={e => setEditUsageForm(p => ({ ...p, qtyUsed: e.target.value }))} />
+                      {editUsageFormError.qtyUsed && <span className="helper-text">{editUsageFormError.qtyUsed}</span>}
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Notes</label>
+                      <textarea name="notes" maxLength={255} rows={2}
+                        className={`textarea textarea-bordered w-full${editUsageFormError.notes ? ' is-invalid' : ''}`}
+                        placeholder="Optional notes"
+                        value={editUsageForm.notes}
+                        onChange={e => setEditUsageForm(p => ({ ...p, notes: e.target.value }))} />
+                      {editUsageFormError.notes && <span className="helper-text">{editUsageFormError.notes}</span>}
+                    </div>
+                    {editUsageFormError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{editUsageFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditUsage}>Cancel</button>
+                <button type="submit" form="edit-usage-form" className="btn btn-primary" disabled={editUsageSubmitting}>
+                  {editUsageSubmitting
+                    ? <span className="loading loading-spinner loading-sm"></span>
+                    : <span className="icon-[tabler--device-floppy] size-4"></span>
+                  }
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Contact Details Modal — sits above ManageMenu via higher z-index */}
       <ContactDetailsModal contact={selectedContact} onClose={() => setSelectedContact(null)} />
@@ -1110,7 +1417,7 @@ export default function PurchaseOrders() {
         onClose={addPartOpen ? undefined : closeManageParts}
         hideClose={addPartOpen}
         title={`Parts — ${managePartsOrder?.poNum ?? ''}`}
-        size="max-w-3xl"
+        size="max-w-5xl"
         footer={!addPartOpen && (
           <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageParts}>
             Close
@@ -1133,11 +1440,11 @@ export default function PurchaseOrders() {
 
               <div className="flex flex-col gap-1">
                 <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
-                <input type="number" name="quantity" min={0}
-                  className={`input input-bordered w-full${partFormError.quantity ? ' is-invalid' : ''}`}
+                <input type="number" name="quantityOrdered" min={0}
+                  className={`input input-bordered w-full${partFormError.quantityOrdered ? ' is-invalid' : ''}`}
                   placeholder="e.g. 2" required
-                  value={partForm.quantity} onChange={handlePartFormChange} />
-                {partFormError.quantity && <span className="helper-text">{partFormError.quantity}</span>}
+                  value={partForm.quantityOrdered} onChange={handlePartFormChange} />
+                {partFormError.quantityOrdered && <span className="helper-text">{partFormError.quantityOrdered}</span>}
               </div>
 
               <div className="flex flex-col gap-1">
@@ -1181,7 +1488,6 @@ export default function PurchaseOrders() {
                   <option value="ordered">ordered</option>
                   <option value="received">received</option>
                   <option value="cancelled">cancelled</option>
-                  <option value="used">used</option>
                 </select>
                 {partFormError.status && <span className="helper-text">{partFormError.status}</span>}
               </div>
@@ -1233,7 +1539,8 @@ export default function PurchaseOrders() {
                     <tr>
                       <th>ID</th>
                       <th>Name</th>
-                      <th>Quantity</th>
+                      <th>QTY Ordered</th>
+                      <th>Remaining</th>
                       <th>Unit Price</th>
                       <th>Status</th>
                       <th>Action</th>
@@ -1246,7 +1553,12 @@ export default function PurchaseOrders() {
                         <td className="text-sm max-w-40">
                           <span className="line-clamp-1" title={p.name}>{p.name}</span>
                         </td>
-                        <td className="text-sm">{p.quantity} {p.quantityType}</td>
+                        <td className="text-sm">{p.quantityOrdered} {p.quantityType}</td>
+                        <td className="text-sm">
+                          <span className={p.availableQty === 0 ? 'text-error font-semibold' : 'text-success font-semibold'}>
+                            {p.availableQty} {p.quantityType}
+                          </span>
+                        </td>
                         <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
                         <td>
                           <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>
@@ -1259,15 +1571,8 @@ export default function PurchaseOrders() {
                               className="btn btn-soft btn-primary btn-xs"
                               onClick={() => setSelectedPart(p)}
                             >
-                              <span className="icon-[tabler--info-circle] size-3"></span>
-                              Details
-                            </button>
-                            <button
-                              className="btn btn-soft btn-secondary btn-xs"
-                              onClick={() => openUpdatePart(p)}
-                            >
-                              <span className="icon-[tabler--pencil] size-3"></span>
-                              Update
+                              <span className="icon-[tabler--settings] size-3"></span>
+                              Manage
                             </button>
                             <button
                               className="btn btn-soft btn-error btn-xs"
@@ -1321,10 +1626,10 @@ export default function PurchaseOrders() {
 
                     <div className="flex flex-col gap-1">
                       <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
-                      <input type="number" name="quantity" min={0}
-                        className={`input input-bordered w-full${updatePartFormError.quantity ? ' is-invalid' : ''}`}
-                        required value={updatePartForm.quantity} onChange={handleUpdatePartFormChange} />
-                      {updatePartFormError.quantity && <span className="helper-text">{updatePartFormError.quantity}</span>}
+                      <input type="number" name="quantityOrdered" min={0}
+                        className={`input input-bordered w-full${updatePartFormError.quantityOrdered ? ' is-invalid' : ''}`}
+                        required value={updatePartForm.quantityOrdered} onChange={handleUpdatePartFormChange} />
+                      {updatePartFormError.quantityOrdered && <span className="helper-text">{updatePartFormError.quantityOrdered}</span>}
                     </div>
 
                     <div className="flex flex-col gap-1">

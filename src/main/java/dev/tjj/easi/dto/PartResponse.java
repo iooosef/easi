@@ -7,7 +7,8 @@ import java.time.LocalDateTime;
 public record PartResponse(
         Integer partId,
         String name,
-        Integer quantity,
+        Integer quantityOrdered,
+        Integer availableQty,
         String quantityType,
         BigDecimal unitPrice,
         Integer supplierId,

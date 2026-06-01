@@ -6,6 +6,7 @@ import dev.tjj.easi.entity.Part;
 import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.PartRepository;
+import dev.tjj.easi.repository.PartUsageRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.SupplierRepository;
 import dev.tjj.easi.entity.LogSeverity;
@@ -26,15 +27,18 @@ public class PartService {
     private final PartRepository partRepository;
     private final SupplierRepository supplierRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final PartUsageRepository partUsageRepository;
     private final LogService logService;
 
     public PartService(PartRepository partRepository,
                        SupplierRepository supplierRepository,
                        PurchaseOrderRepository purchaseOrderRepository,
+                       PartUsageRepository partUsageRepository,
                        LogService logService) {
         this.partRepository = partRepository;
         this.supplierRepository = supplierRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
+        this.partUsageRepository = partUsageRepository;
         this.logService = logService;
     }
 
@@ -100,7 +104,7 @@ public class PartService {
                 .orElseThrow(() -> new IllegalArgumentException("Purchase order not found."));
 
         part.setName(request.name());
-        part.setQuantity(request.quantity());
+        part.setQuantityOrdered(request.quantityOrdered());
         part.setQuantityType(request.quantityType());
         part.setUnitPrice(request.unitPrice());
         part.setSupplier(supplier);
@@ -113,10 +117,13 @@ public class PartService {
     }
 
     private PartResponse toResponse(Part p) {
+        int totalUsed = partUsageRepository.sumQtyUsedByPartId(p.getPartId());
+        int availableQty = p.getQuantityOrdered() - totalUsed;
         return new PartResponse(
                 p.getPartId(),
                 p.getName(),
-                p.getQuantity(),
+                p.getQuantityOrdered(),
+                availableQty,
                 p.getQuantityType(),
                 p.getUnitPrice(),
                 p.getSupplier().getSupplierId(),
