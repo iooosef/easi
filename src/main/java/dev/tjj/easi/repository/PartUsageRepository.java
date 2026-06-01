@@ -13,6 +13,8 @@ public interface PartUsageRepository extends JpaRepository<PartUsage, Integer> {
 
     Page<PartUsage> findByPart_PartId(Integer partId, Pageable pageable);
 
+    Page<PartUsage> findByServiceReport_SrNumber(Integer srNumber, Pageable pageable);
+
     @Query("SELECT COALESCE(SUM(pu.qtyUsed), 0) FROM PartUsage pu WHERE pu.part.partId = :partId")
     Integer sumQtyUsedByPartId(@Param("partId") Integer partId);
 }

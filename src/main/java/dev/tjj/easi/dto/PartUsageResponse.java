@@ -2,6 +2,7 @@ package dev.tjj.easi.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record PartUsageResponse(
@@ -14,6 +15,9 @@ public record PartUsageResponse(
 
         @Schema(description = "Name of the part that was consumed", example = "Air Filter 24-inch")
         String partName,
+
+        @Schema(description = "Unit price of the part at time of usage", example = "150.00")
+        BigDecimal unitPrice,
 
         @Schema(description = "Service report number this usage is linked to; null if not from an SR", example = "5")
         Integer srNumber,

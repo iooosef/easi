@@ -5,6 +5,7 @@ import Modal from './Modal'
 import ManageMenu from './ManageMenu'
 import SupplierPickerModal from './SupplierPickerModal'
 import PurchaseOrderPickerModal from './PurchaseOrderPickerModal'
+import ServiceReportPickerModal from './ServiceReportPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
 /** Parses a failed API response into field-level or general errors. */
@@ -90,6 +91,8 @@ export default function Inventory() {
   const [editUsageForm, setEditUsageForm]           = useState({})
   const [editUsageFormError, setEditUsageFormError] = useState({})
   const [editUsageSubmitting, setEditUsageSubmitting] = useState(false)
+  const [editSrDisplay, setEditSrDisplay]           = useState('')
+  const [srPickerOpen, setSrPickerOpen]             = useState(false)
 
   // Update modal
   const [updateOpen, setUpdateOpen]           = useState(false)
@@ -273,6 +276,15 @@ export default function Inventory() {
     setEditUsageForm({ srNumber: u.srNumber ?? '', qtyUsed: u.qtyUsed, notes: u.notes ?? '' })
     setEditUsageFormError({})
     setEditUsageOpen(true)
+    if (u.srNumber) {
+      setEditSrDisplay(`SR #${u.srNumber}`)
+      apiFetch(`/api/service-reports/${u.srNumber}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(sr => { if (sr) setEditSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? ''}`) })
+        .catch(() => {})
+    } else {
+      setEditSrDisplay('')
+    }
   }
 
   function closeEditUsage() {
@@ -280,6 +292,7 @@ export default function Inventory() {
     setEditingUsage(null)
     setEditUsageForm({})
     setEditUsageFormError({})
+    setEditSrDisplay('')
   }
 
   async function handleEditUsageSubmit(e) {
@@ -1210,14 +1223,36 @@ export default function Inventory() {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">SR Number <span className="text-base-content/40 font-normal">(optional)</span></label>
-                      <input
-                        type="number" min={1}
-                        className={`input input-bordered w-full${editUsageFormError.srNumber ? ' is-invalid' : ''}`}
-                        placeholder="Leave blank if not from an SR"
-                        value={editUsageForm.srNumber}
-                        onChange={e => setEditUsageForm(prev => ({ ...prev, srNumber: e.target.value }))}
-                      />
+                      <label className="label-text font-medium">Service Report <span className="text-base-content/40 font-normal">(optional)</span></label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          className={`input input-bordered flex-1${editUsageFormError.srNumber ? ' is-invalid' : ''}`}
+                          placeholder="None — not linked to an SR"
+                          value={editSrDisplay}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-soft btn-secondary shrink-0"
+                          onClick={() => setSrPickerOpen(true)}
+                        >
+                          Pick
+                        </button>
+                        {editUsageForm.srNumber && (
+                          <button
+                            type="button"
+                            className="btn btn-soft btn-error shrink-0"
+                            title="Clear SR link"
+                            onClick={() => {
+                              setEditUsageForm(prev => ({ ...prev, srNumber: '' }))
+                              setEditSrDisplay('')
+                            }}
+                          >
+                            <span className="icon-[tabler--x] size-4"></span>
+                          </button>
+                        )}
+                      </div>
                       {editUsageFormError.srNumber && <span className="helper-text">{editUsageFormError.srNumber}</span>}
                     </div>
 
@@ -1258,6 +1293,17 @@ export default function Inventory() {
           </div>
         </>
       )}
+
+      {/* SR Picker — sits above Edit Usage sub-modal */}
+      <ServiceReportPickerModal
+        isOpen={srPickerOpen}
+        onClose={() => setSrPickerOpen(false)}
+        onSelect={sr => {
+          setEditUsageForm(prev => ({ ...prev, srNumber: sr.srNumber }))
+          setEditSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? sr.projectName ?? ''}`)
+          setSrPickerOpen(false)
+        }}
+      />
 
       {/* Update Supplier Sub-modal — sits above Manage Suppliers via higher z-index */}
       {updateSupplierOpen && (

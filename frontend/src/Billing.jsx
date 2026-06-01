@@ -651,25 +651,12 @@ function BillingModal({ report, apiFetch, onClose }) {
     let active = true
     setPartsLoading(true)
     setPartsError(null)
-    const poParams = new URLSearchParams({ srNum: String(report.srNumber), size: '100' })
-    apiFetch(`/api/purchase-orders?${poParams}`)
+    apiFetch(`/api/part-usages?srNumber=${encodeURIComponent(report.srNumber)}&size=1000`)
       .then(res => {
-        if (!res.ok) throw new Error(`Failed to load purchase orders (${res.status})`)
+        if (!res.ok) throw new Error(`Failed to load part usages (${res.status})`)
         return res.json()
       })
-      .then(async data => {
-        if (!active) return
-        const pos = data.content ?? []
-        if (pos.length === 0) { setParts([]); return }
-        const partPages = await Promise.all(
-          pos.map(po =>
-            apiFetch(`/api/parts?poNum=${encodeURIComponent(po.poNum)}&size=100`)
-              .then(r => r.ok ? r.json() : { content: [] })
-              .then(d => d.content ?? [])
-          )
-        )
-        if (active) setParts(partPages.flat())
-      })
+      .then(data => { if (active) setParts(data.content ?? []) })
       .catch(err => { if (active) setPartsError(err.message) })
       .finally(() => { if (active) setPartsLoading(false) })
     return () => { active = false }
@@ -694,7 +681,7 @@ function BillingModal({ report, apiFetch, onClose }) {
   if (!report) return null
 
   const billingSubtotal = subtotal(billingItems)
-  const partsSubtotal   = subtotal(parts)
+  const partsSubtotal   = parts.reduce((sum, p) => sum + (p.qtyUsed ?? 0) * Number(p.unitPrice ?? 0), 0)
   const grandTotal      = billingSubtotal + partsSubtotal
 
   return (
@@ -796,27 +783,25 @@ function BillingModal({ report, apiFetch, onClose }) {
                   <table className="table table-zebra table-sm w-full">
                     <thead>
                       <tr>
-                        <th>PO #</th>
                         <th>Part</th>
-                        <th className="text-right">Qty</th>
+                        <th className="text-right">Qty Used</th>
                         <th className="text-right">Unit Price</th>
                         <th className="text-right">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {parts.map(part => (
-                        <tr key={part.partId}>
-                          <td className="font-mono text-xs">{part.poNum}</td>
-                          <td className="max-w-48"><span className="line-clamp-2 text-sm" title={part.name}>{part.name}</span></td>
-                          <td className="text-right text-sm">{part.quantity} {part.quantityType}</td>
+                        <tr key={part.usageId}>
+                          <td className="max-w-48"><span className="line-clamp-2 text-sm" title={part.partName}>{part.partName}</span></td>
+                          <td className="text-right text-sm">{part.qtyUsed}</td>
                           <td className="text-right text-sm">{formatCurrency(part.unitPrice)}</td>
-                          <td className="text-right text-sm font-medium">{formatCurrency(part.quantity * Number(part.unitPrice))}</td>
+                          <td className="text-right text-sm font-medium">{formatCurrency(part.qtyUsed * Number(part.unitPrice))}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colSpan={4} className="text-right text-sm font-semibold">Parts Subtotal</td>
+                        <td colSpan={3} className="text-right text-sm font-semibold">Parts Subtotal</td>
                         <td className="text-right text-sm font-semibold">{formatCurrency(partsSubtotal)}</td>
                       </tr>
                     </tfoot>

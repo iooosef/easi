@@ -120,6 +120,14 @@ public class PartUsageService {
         return partUsageRepository.findByPart_PartId(partId, pageable).map(this::toResponse);
     }
 
+    /** Returns a paginated list of usage records linked to the given service report. */
+    public Page<PartUsageResponse> getBySr(Integer srNumber, Pageable pageable) {
+        if (!serviceReportRepository.existsById(srNumber)) {
+            throw new IllegalArgumentException("Service report not found.");
+        }
+        return partUsageRepository.findByServiceReport_SrNumber(srNumber, pageable).map(this::toResponse);
+    }
+
     /** Deletes a usage record by ID. */
     @Transactional
     public void delete(Integer usageId) {
@@ -141,6 +149,7 @@ public class PartUsageService {
                 u.getUsageId(),
                 u.getPart().getPartId(),
                 u.getPart().getName(),
+                u.getPart().getUnitPrice(),
                 u.getServiceReport() != null ? u.getServiceReport().getSrNumber() : null,
                 u.getQtyUsed(),
                 u.getNotes(),

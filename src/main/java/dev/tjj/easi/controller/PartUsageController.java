@@ -67,21 +67,30 @@ public class PartUsageController {
     }
 
     @Operation(
-            summary = "List usage records for a part",
-            description = "Returns a paginated list of all usage events recorded for the given part, ordered by the repository default."
+            summary = "List usage records by part or service report",
+            description = "Returns a paginated list of usage events. Provide exactly one of partId or srNumber. When srNumber is given, only parts actually used in that SR are returned."
     )
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "List returned successfully"),
+            @ApiResponse(responseCode = "400", description = "Neither or both filter params supplied"),
             @ApiResponse(responseCode = "401", description = "Unauthenticated"),
             @ApiResponse(responseCode = "403", description = "Insufficient role"),
-            @ApiResponse(responseCode = "404", description = "Part not found")
+            @ApiResponse(responseCode = "404", description = "Part or service report not found")
     })
     @GetMapping
-    public ResponseEntity<Page<PartUsageResponse>> getByPart(
+    public ResponseEntity<Page<PartUsageResponse>> getUsages(
             @Parameter(description = "ID of the part to list usage for", example = "3")
-            @RequestParam Integer partId,
+            @RequestParam(required = false) Integer partId,
+            @Parameter(description = "SR number to list used parts for", example = "7")
+            @RequestParam(required = false) Integer srNumber,
             Pageable pageable) {
-        return ResponseEntity.ok(partUsageService.getByPart(partId, pageable));
+        if (partId != null) {
+            return ResponseEntity.ok(partUsageService.getByPart(partId, pageable));
+        }
+        if (srNumber != null) {
+            return ResponseEntity.ok(partUsageService.getBySr(srNumber, pageable));
+        }
+        return ResponseEntity.badRequest().build();
     }
 
     @Operation(
