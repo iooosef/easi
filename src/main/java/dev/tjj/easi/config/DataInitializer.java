@@ -1273,12 +1273,12 @@ public class DataInitializer implements CommandLineRunner {
         Equipment vacuumPump = equipment("Industrial Vacuum Pump", "durable",
                 "VP-300X", "SN-VP-001", "High-pressure vacuum pump for refrigerant evacuation",
                 "active", 1, new BigDecimal("12500.00"), now);
-        Equipment manifoldGauge = equipment("Manifold Gauge Set", "durable",
-                "MG-2P-Pro", "SN-MG-001", "2-port manifold gauge set for refrigerant pressure checks",
-                "active", 1, new BigDecimal("3800.00"), now);
-        Equipment leakDetector = equipment("Electronic Leak Detector", "durable",
-                "LD-900", "SN-LD-001", "Halogen leak detector for refrigerant leak testing",
-                "under_maintenance", 1, new BigDecimal("7200.00"), now);
+        Equipment manifoldGauge = equipment("DeWalt Power Drill", "durable",
+                "DCD777C2", "SN-DW-001", "20V MAX cordless drill/driver for on-site installation work",
+                "active", 1, new BigDecimal("6500.00"), now);
+        Equipment leakDetector = equipment("Ladder", "durable",
+                "LDR-6FT", "SN-LDR-001", "6-foot aluminum step ladder for elevated installation access",
+                "under_maintenance", 1, new BigDecimal("2800.00"), now);
 
         // --- Consumables ---
         Equipment wireTape = equipment("Electrical Insulation Tape", "consumable",
@@ -1305,11 +1305,11 @@ public class DataInitializer implements CommandLineRunner {
             equipmentUsage(vacuumPump, s1, "Brought for refrigerant evacuation", now);
             usageCount++;
 
-            // Manifold gauge deployed to s1 and s2 (different days — OK for durable)
-            equipmentUsage(manifoldGauge, s1, "Pressure readings on split unit", now);
+            // Power drill deployed to s1 and s2 (different days — OK for durable)
+            equipmentUsage(manifoldGauge, s1, "Used for bracket installation", now);
             usageCount++;
             if (!s2.getDate().equals(s1.getDate())) {
-                equipmentUsage(manifoldGauge, s2, "Follow-up pressure check", now);
+                equipmentUsage(manifoldGauge, s2, "Follow-up installation work", now);
                 usageCount++;
             }
 

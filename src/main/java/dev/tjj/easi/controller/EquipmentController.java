@@ -117,7 +117,9 @@ public class EquipmentController {
             @RequestParam(required = false) String type,
             @Parameter(description = "Filter by status: active, under_maintenance, retired, depleted", example = "active")
             @RequestParam(required = false) String status,
+            @Parameter(description = "Filter by PO number — returns equipment linked to this PO", example = "PO-2025-001")
+            @RequestParam(required = false) String poNum,
             Pageable pageable) {
-        return ResponseEntity.ok(equipmentService.search(search, type, status, pageable));
+        return ResponseEntity.ok(equipmentService.search(search, type, status, poNum, pageable));
     }
 }

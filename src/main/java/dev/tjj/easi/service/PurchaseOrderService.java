@@ -76,12 +76,28 @@ public class PurchaseOrderService {
         return toResponse(saved);
     }
 
-    /** Returns a page of purchase order records, optionally filtered by service report number. */
-    public Page<PurchaseOrderResponse> getAll(Integer srNum, Pageable pageable) {
+    /** Returns a page of purchase orders, optionally filtered by SR number, search query, or content type (parts/equipment). */
+    public Page<PurchaseOrderResponse> getAll(Integer srNum, String search, String filterBy, Pageable pageable) {
+        String q = (search != null && !search.isBlank()) ? search.trim() : null;
         if (srNum != null) {
             return purchaseOrderRepository.findByServiceReport_SrNumber(srNum, pageable).map(this::toResponse);
         }
-        return purchaseOrderRepository.findAll(pageable).map(this::toResponse);
+        if ("parts".equalsIgnoreCase(filterBy)) {
+            return (q != null
+                    ? purchaseOrderRepository.searchWithParts(q, pageable)
+                    : purchaseOrderRepository.findWithParts(pageable)
+            ).map(this::toResponse);
+        }
+        if ("equipment".equalsIgnoreCase(filterBy)) {
+            return (q != null
+                    ? purchaseOrderRepository.searchWithEquipment(q, pageable)
+                    : purchaseOrderRepository.findWithEquipment(pageable)
+            ).map(this::toResponse);
+        }
+        return (q != null
+                ? purchaseOrderRepository.search(q, pageable)
+                : purchaseOrderRepository.findAll(pageable)
+        ).map(this::toResponse);
     }
 
     /** Returns a single purchase order record by PO number. */

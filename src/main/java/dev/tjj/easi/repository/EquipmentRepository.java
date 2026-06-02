@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface EquipmentRepository extends JpaRepository<Equipment, Integer> {
 
+    Page<Equipment> findByPurchaseOrder_PoNum(String poNum, Pageable pageable);
+
     @Query("SELECT e FROM Equipment e WHERE " +
            "(cast(:search as string) IS NULL OR LOWER(e.name) LIKE LOWER(CONCAT('%', cast(:search as string), '%')) " +
            "OR LOWER(COALESCE(e.model, '')) LIKE LOWER(CONCAT('%', cast(:search as string), '%'))) " +

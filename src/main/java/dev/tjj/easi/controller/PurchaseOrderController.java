@@ -38,12 +38,14 @@ public class PurchaseOrderController {
         return ResponseEntity.ok(purchaseOrderService.update(poNum, request));
     }
 
-    /** Returns a page of purchase order records, optionally filtered by srNum. Available to ADMIN, ACCOUNTING, and STAFF. */
+    /** Returns a page of purchase orders, optionally filtered by srNum, search query, or content type (parts/equipment). */
     @GetMapping
     public ResponseEntity<Page<PurchaseOrderResponse>> getAll(
             @RequestParam(required = false) Integer srNum,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String filterBy,
             Pageable pageable) {
-        return ResponseEntity.ok(purchaseOrderService.getAll(srNum, pageable));
+        return ResponseEntity.ok(purchaseOrderService.getAll(srNum, search, filterBy, pageable));
     }
 
     /** Returns a single purchase order record by PO number. Available to ADMIN, ACCOUNTING, and STAFF. */

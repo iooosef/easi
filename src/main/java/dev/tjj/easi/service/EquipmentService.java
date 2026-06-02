@@ -77,8 +77,11 @@ public class EquipmentService {
                 .orElseThrow(() -> new IllegalArgumentException("Equipment not found."));
     }
 
-    /** Returns a paginated, searchable list of equipment records filtered by type and status. */
-    public Page<EquipmentResponse> search(String search, String type, String status, Pageable pageable) {
+    /** Returns a paginated, searchable list of equipment records filtered by type, status, or PO number. */
+    public Page<EquipmentResponse> search(String search, String type, String status, String poNum, Pageable pageable) {
+        if (poNum != null && !poNum.isBlank()) {
+            return equipmentRepository.findByPurchaseOrder_PoNum(poNum, pageable).map(this::toResponse);
+        }
         return equipmentRepository.search(search, type, status, pageable).map(this::toResponse);
     }
 

@@ -587,9 +587,7 @@ export default function ServiceReports() {
           if (key === 'findings') navigate(`/service-report/${report.srNumber}/findings`, {
             state: { projectName: report.projectName, projNum: report.projNum },
           })
-          if (key === 'purchase-order') navigate(`/service-report/${report.srNumber}/purchase-orders`, {
-            state: { projectName: report.projectName, srNumber: report.srNumber, projNum: report.projNum },
-          })
+          if (key === 'purchase-order') navigate(`/inventory/purchase-orders?srNum=${report.srNumber}`)
           if (key === 'billing') setBillingReport(report)
           if (key === 'documents') navigate(`/service-report/${report.srNumber}/documents`, {
             state: {

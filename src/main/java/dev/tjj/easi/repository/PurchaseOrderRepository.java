@@ -17,4 +17,19 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, St
 
     @Query("SELECT p.poNum FROM PurchaseOrder p WHERE p.poNum LIKE CONCAT(:prefix, '%') ORDER BY p.poNum DESC")
     List<String> findLatestPoNumsByPrefix(@Param("prefix") String prefix, Pageable pageable);
+
+    @Query("SELECT po FROM PurchaseOrder po WHERE LOWER(po.poNum) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(po.purpose) LIKE LOWER(CONCAT('%', :q, '%'))")
+    Page<PurchaseOrder> search(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT po FROM PurchaseOrder po WHERE EXISTS (SELECT p FROM Part p WHERE p.purchaseOrder = po)")
+    Page<PurchaseOrder> findWithParts(Pageable pageable);
+
+    @Query("SELECT po FROM PurchaseOrder po WHERE EXISTS (SELECT p FROM Part p WHERE p.purchaseOrder = po) AND (LOWER(po.poNum) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(po.purpose) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<PurchaseOrder> searchWithParts(@Param("q") String q, Pageable pageable);
+
+    @Query("SELECT po FROM PurchaseOrder po WHERE EXISTS (SELECT e FROM Equipment e WHERE e.purchaseOrder = po)")
+    Page<PurchaseOrder> findWithEquipment(Pageable pageable);
+
+    @Query("SELECT po FROM PurchaseOrder po WHERE EXISTS (SELECT e FROM Equipment e WHERE e.purchaseOrder = po) AND (LOWER(po.poNum) LIKE LOWER(CONCAT('%', :q, '%')) OR LOWER(po.purpose) LIKE LOWER(CONCAT('%', :q, '%')))")
+    Page<PurchaseOrder> searchWithEquipment(@Param("q") String q, Pageable pageable);
 }

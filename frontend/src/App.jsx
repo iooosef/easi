@@ -19,9 +19,14 @@ import VehicleLogs from './VehicleLogs'
 import MaintenancePage from './MaintenancePage'
 import PurchaseOrders from './PurchaseOrders'
 import PurchaseOrderDocuments from './PurchaseOrderDocuments'
+import InventoryPurchaseOrders from './InventoryPurchaseOrders'
 import Documents from './Documents'
 import ProjectDocuments from './ProjectDocuments'
 import Inventory from './Inventory'
+import InventoryParts from './InventoryParts'
+import InventorySuppliers from './InventorySuppliers'
+import InventoryEquipment from './InventoryEquipment'
+import NewEquipmentPO from './NewEquipmentPO'
 import Billing from './Billing'
 import Reports from './Reports'
 
@@ -63,6 +68,12 @@ function App() {
       <Route path="/schedules/new" element={<Private element={<NewSchedule />} />} />
       <Route path="/schedules/project/:projNum" element={<Private element={<Schedules />} />} />
       <Route path="/inventory" element={<Private element={<Inventory />} />} />
+      <Route path="/inventory/purchase-orders" element={<Private element={<InventoryPurchaseOrders />} />} />
+      <Route path="/inventory/purchase-orders/:poNum/documents" element={<Private element={<PurchaseOrderDocuments />} />} />
+      <Route path="/inventory/parts" element={<Private element={<InventoryParts />} />} />
+      <Route path="/inventory/suppliers" element={<Private element={<InventorySuppliers />} />} />
+      <Route path="/inventory/equipment" element={<Private element={<InventoryEquipment />} />} />
+      <Route path="/inventory/equipment/new" element={<Private element={<NewEquipmentPO />} />} />
       <Route path="/billing" element={<Private element={<Billing />} />} />
       <Route path="/reports" element={<Private element={<Reports />} />} />
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />
