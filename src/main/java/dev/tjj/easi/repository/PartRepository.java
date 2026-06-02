@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -32,4 +33,22 @@ public interface PartRepository extends JpaRepository<Part, Integer> {
             GROUP BY p.purchaseOrder.serviceReport.srNumber
             """)
     List<Object[]> sumTotalCostBySrNumbers(@Param("srNumbers") List<Integer> srNumbers);
+
+    @Query("""
+            SELECT p.purchaseOrder.poNum, SUM(p.quantityOrdered * p.unitPrice)
+            FROM Part p
+            WHERE p.purchaseOrder.poNum IN :poNums
+            GROUP BY p.purchaseOrder.poNum
+            """)
+    List<Object[]> sumTotalByPoNums(@Param("poNums") List<String> poNums);
+
+    @Query("""
+            SELECT p.partId, p.name, sup.name, p.quantityOrdered, p.quantityType, p.unitPrice, p.status
+            FROM Part p
+            LEFT JOIN p.supplier sup
+            WHERE p.addedOn BETWEEN :startDate AND :endDate
+            ORDER BY p.addedOn DESC
+            """)
+    List<Object[]> findForReport(@Param("startDate") LocalDateTime startDate,
+                                 @Param("endDate") LocalDateTime endDate);
 }

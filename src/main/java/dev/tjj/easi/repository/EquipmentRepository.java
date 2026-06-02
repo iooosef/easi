@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface EquipmentRepository extends JpaRepository<Equipment, Integer> {
 
@@ -22,4 +24,12 @@ public interface EquipmentRepository extends JpaRepository<Equipment, Integer> {
                            @Param("type") String type,
                            @Param("status") String status,
                            Pageable pageable);
+
+    @Query("""
+            SELECT e.purchaseOrder.poNum, COALESCE(SUM(e.acquisitionCost), 0)
+            FROM Equipment e
+            WHERE e.purchaseOrder IS NOT NULL AND e.purchaseOrder.poNum IN :poNums
+            GROUP BY e.purchaseOrder.poNum
+            """)
+    List<Object[]> sumCostByPoNums(@Param("poNums") List<String> poNums);
 }

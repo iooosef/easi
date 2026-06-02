@@ -1,5 +1,7 @@
 package dev.tjj.easi.controller;
 
+import dev.tjj.easi.dto.report.PartReportRow;
+import dev.tjj.easi.dto.report.PurchaseOrderRow;
 import dev.tjj.easi.dto.report.ServiceReportSummaryRow;
 import dev.tjj.easi.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -60,5 +62,51 @@ public class ReportController {
 
         return ResponseEntity.ok(reportService.getServiceReportSummary(
                 startDate, endDate, projNum, status));
+    }
+
+    /** Returns a flat list of purchase order rows for the given date range. */
+    @Operation(
+            summary = "Generate purchase orders report",
+            description = "Returns all purchase orders created within the date range. " +
+                    "Each row includes the PO number, linked SR number, project name, type (parts or equipment), " +
+                    "and the computed total cost of all items in the PO."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Report rows returned"),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid date parameters"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/purchase-orders")
+    public ResponseEntity<List<PurchaseOrderRow>> getPurchaseOrderReport(
+            @Parameter(description = "Start date (inclusive)", example = "2025-01-01")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+
+            @Parameter(description = "End date (inclusive)", example = "2025-12-31")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        return ResponseEntity.ok(reportService.getPurchaseOrderReport(startDate, endDate));
+    }
+
+    /** Returns a flat list of part rows for the given date range. */
+    @Operation(
+            summary = "Generate parts report",
+            description = "Returns all parts added within the date range. " +
+                    "Each row includes the part details, supplier name, quantity ordered, " +
+                    "total quantity used across all service reports, unit price, and computed total cost."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Report rows returned"),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid date parameters"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/parts")
+    public ResponseEntity<List<PartReportRow>> getPartsReport(
+            @Parameter(description = "Start date (inclusive)", example = "2025-01-01")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+
+            @Parameter(description = "End date (inclusive)", example = "2025-12-31")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        return ResponseEntity.ok(reportService.getPartsReport(startDate, endDate));
     }
 }

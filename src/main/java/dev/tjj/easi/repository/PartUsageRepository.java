@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface PartUsageRepository extends JpaRepository<PartUsage, Integer> {
 
@@ -17,4 +19,12 @@ public interface PartUsageRepository extends JpaRepository<PartUsage, Integer> {
 
     @Query("SELECT COALESCE(SUM(pu.qtyUsed), 0) FROM PartUsage pu WHERE pu.part.partId = :partId")
     Integer sumQtyUsedByPartId(@Param("partId") Integer partId);
+
+    @Query("""
+            SELECT pu.part.partId, SUM(pu.qtyUsed)
+            FROM PartUsage pu
+            WHERE pu.part.partId IN :partIds
+            GROUP BY pu.part.partId
+            """)
+    List<Object[]> sumQtyUsedByPartIds(@Param("partIds") List<Integer> partIds);
 }
