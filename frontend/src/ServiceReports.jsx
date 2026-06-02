@@ -9,6 +9,7 @@ import SchedulePickerModal from './SchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 import { ManageBillingModal } from './Billing'
+import { ManageFindingsModal } from './ServiceReportFindings'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
@@ -95,6 +96,7 @@ export default function ServiceReports() {
 
   const [selectedReport, setSelectedReport] = useState(null)
   const [billingReport, setBillingReport] = useState(null)
+  const [findingsReport, setFindingsReport] = useState(null)
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -584,9 +586,7 @@ export default function ServiceReports() {
         onMenuSelect={(key, report) => {
           setSelectedReport(null)
           if (key === 'update') openEditModal(report)
-          if (key === 'findings') navigate(`/service-report/${report.srNumber}/findings`, {
-            state: { projectName: report.projectName, projNum: report.projNum },
-          })
+          if (key === 'findings') setFindingsReport(report)
           if (key === 'purchase-order') navigate(`/inventory/purchase-orders?srNum=${report.srNumber}`)
           if (key === 'billing') setBillingReport(report)
           if (key === 'documents') navigate(`/service-report/${report.srNumber}/documents`, {
@@ -605,6 +605,13 @@ export default function ServiceReports() {
         report={billingReport}
         apiFetch={apiFetch}
         onClose={() => setBillingReport(null)}
+      />
+
+      <ManageFindingsModal
+        report={findingsReport}
+        apiFetch={apiFetch}
+        hasRole={hasRole}
+        onClose={() => setFindingsReport(null)}
       />
     </Layout>
   )

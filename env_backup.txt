@@ -1,0 +1,13 @@
+EASI_BACKUP_DIR=D:\Documents\EASI\backups
+EASI_DB_NAME=easi_2026
+EASI_DB_PASSWORD=tungtungtungsahur
+EASI_DB_USERNAME=easi_user
+EASI_PG_DUMP=C:\Program Files\PostgreSQL\15\bin\pg_dump.exe
+EASI_PG_RESTORE=C:\Program Files\PostgreSQL\15\bin\pg_restore.exe
+EASI_UPLOAD_DIR=D:\Documents\EASI\uploads
+JAVA_HOME=C:\Program Files\Microsoft\jdk-21.0.9.10-hotspot
+JWT_SECRET=+Is23pbbYwsJQgGB2HgpbspwP6DQWOQThFEZIJfXdu6Ox1Qi05xPDHstVg6tUeHQkx897FS+UseshJj0Ebf9qA==
+MAIL_HOST=smtp.gmail.com
+MAIL_PASSWORD=sqbj brwk haxj tpmd
+MAIL_PORT=587
+MAIL_USERNAME=josence22@gmail.com
