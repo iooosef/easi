@@ -76,7 +76,7 @@ export default function Schedules() {
   const isProjectView = projNum !== null
 
   const canEdit = hasRole('ADMIN', 'STAFF')
-  const canManageCrew = hasRole('ADMIN', 'STAFF')
+  const canManageCrew = hasRole('ADMIN', 'STAFF', 'HR')
   const today = new Date()
 
   // Project name lookup map, fetched once
