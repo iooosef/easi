@@ -48,7 +48,9 @@ public class SecurityConfig {
                                                 SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(auth -> auth
                                                 .requestMatchers("/api/auth/**").permitAll()
-                                                .requestMatchers("/test").permitAll()
+                                                .requestMatchers("/", "/index.html", "/test", "/assets/**",
+                                                                "/favicon.svg", "/icons.svg", "/favicon.png")
+                                                .permitAll()
                                                 .requestMatchers(
                                                                 "/swagger-ui/**",
                                                                 "/swagger-ui.html",
