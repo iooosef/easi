@@ -340,10 +340,12 @@ export default function Employees() {
 
   // --- ManageMenu config ---
   const empMenuItems = selectedEmployee ? [
-    { key: 'update-employee', label: 'Update Employee Details', icon: 'icon-[tabler--user-edit]',    roles: ['ADMIN', 'HR'] },
+    { key: 'update-employee', label: 'Update Employee Details', icon: 'icon-[tabler--user-edit]', roles: ['ADMIN', 'HR'] },
     selectedEmployee.hasUserAccount
-      ? { key: 'update-user',   label: 'Update User Account',     icon: 'icon-[tabler--user-cog]',    roles: ['ADMIN', 'HR'] }
-      : { key: 'register-user', label: 'Register User Account',   icon: 'icon-[tabler--user-plus]',   roles: ['ADMIN', 'HR'] },
+      ? { key: 'update-user', label: 'Update User Account', icon: 'icon-[tabler--user-cog]',
+          // HR may not update the account of an ADMIN user; only ADMIN can
+          roles: selectedEmployee.userRole === 'ADMIN' ? ['ADMIN'] : ['ADMIN', 'HR'] }
+      : { key: 'register-user', label: 'Register User Account', icon: 'icon-[tabler--user-plus]', roles: ['ADMIN', 'HR'] },
   ] : []
 
   function buildDetails(emp) {
