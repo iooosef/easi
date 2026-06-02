@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -60,6 +61,10 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
+    /** When true, seeds full demo data in addition to the default admin accounts. */
+    @Value("${app.seed.full:false}")
+    private boolean fullSeed;
+
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
@@ -87,17 +92,19 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         createAdminUser();
         createJosephUser();
-        seedRoleAccounts();
-        seedCrewmateAccounts();
-        seedProjectData();
-        seedServiceAssignments();
-        seedVehicles();
-        seedSuppliers();
-        seedPurchaseOrders();
-        seedBillingItems();
-        seedPaymentLogs();
-        seedPartUsages();
-        seedEquipment();
+        if (fullSeed) {
+            seedRoleAccounts();
+            seedCrewmateAccounts();
+            seedProjectData();
+            seedServiceAssignments();
+            seedVehicles();
+            seedSuppliers();
+            seedPurchaseOrders();
+            seedBillingItems();
+            seedPaymentLogs();
+            seedPartUsages();
+            seedEquipment();
+        }
     }
 
     private void createAdminUser() {

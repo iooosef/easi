@@ -29,6 +29,7 @@ import InventoryEquipment from './InventoryEquipment'
 import NewEquipmentPO from './NewEquipmentPO'
 import Billing from './Billing'
 import Reports from './Reports'
+import Help from './Help'
 
 /** Auth guard — defined outside App so its reference is stable across re-renders */
 function Private({ element }) {
@@ -79,6 +80,7 @@ function App() {
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />
       <Route path="/vehicles/:vehiclesId/logs" element={<Private element={<VehicleLogs />} />} />
       <Route path="/employees" element={<Private element={<Employees />} />} />
+      <Route path="/help" element={<Private element={<Help />} />} />
       <Route path="/maintenance" element={<PrivateRole element={<MaintenancePage />} role="ADMIN" />} />
       <Route path="/account-settings" element={<Private element={<AccountSettings />} />} />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -68,6 +68,18 @@ node {
     nodeProjectDir = file("${project.projectDir}/frontend")
 }
 
+tasks.register('bootRunDemo', org.springframework.boot.gradle.tasks.run.BootRun) {
+    group = 'application'
+    description = 'Runs the app with full demo seed data (all sample projects, schedules, vehicles, etc.)'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = tasks.bootRun.mainClass
+    args = ['--app.seed.full=true']
+}
+
+tasks.named('bootRunDemo').configure {
+    dependsOn tasks.named('classes')
+}
+
 tasks.register('buildFrontend', com.github.gradle.node.npm.task.NpmTask) {
     dependsOn npmInstall
     args = ['run', 'build']
