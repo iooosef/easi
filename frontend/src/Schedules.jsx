@@ -6,6 +6,7 @@ import Modal from './Modal'
 import ManageMenu from './ManageMenu'
 import PickerInput from './PickerInput'
 import CrewPickerModal from './CrewPickerModal'
+import EquipmentPickerModal from './EquipmentPickerModal'
 import SchedulePickerModal from './SchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
@@ -15,6 +16,7 @@ import { ManageBillingModal } from './Billing'
 const SCHEDULE_MENU_ITEMS = [
   { key: 'update',          label: 'Update Schedule',        icon: 'icon-[tabler--pencil]',       roles: ['ADMIN', 'STAFF'] },
   { key: 'crew',            label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',         roles: null },
+  { key: 'equipment',       label: 'Equipment Used',         icon: 'icon-[tabler--tool]',          roles: null },
   { key: 'service-report',  label: 'Manage Service Report',  icon: 'icon-[tabler--file-report]',  roles: null },
 ]
 
@@ -132,6 +134,26 @@ export default function Schedules() {
   const [crewLoading, setCrewLoading] = useState(false)
   const [crewSaving, setCrewSaving] = useState(false)
   const [crewPickerOpen, setCrewPickerOpen] = useState(false)
+
+  // Equipment Used modal
+  const [equipUsedOpen, setEquipUsedOpen]           = useState(false)
+  const [equipUsedSched, setEquipUsedSched]         = useState(null)
+  const [equipUsages, setEquipUsages]               = useState([])
+  const [equipUsagesLoading, setEquipUsagesLoading] = useState(false)
+  const [equipUsagesRefresh, setEquipUsagesRefresh] = useState(0)
+  const [addEquipOpen, setAddEquipOpen]             = useState(false)
+  const [addEquipForm, setAddEquipForm]             = useState({ equipmentId: '', equipmentName: '', notes: '' })
+  const [addEquipFormError, setAddEquipFormError]   = useState({})
+  const [addEquipSubmitting, setAddEquipSubmitting] = useState(false)
+  const [deletingUsageId, setDeletingUsageId]       = useState(null)
+  const [equipPickerOpen, setEquipPickerOpen]       = useState(false)
+
+  // Update usage notes sub-modal
+  const [updateUsageOpen, setUpdateUsageOpen]           = useState(false)
+  const [updatingUsage, setUpdatingUsage]               = useState(null)
+  const [updateUsageNotes, setUpdateUsageNotes]         = useState('')
+  const [updateUsageFormError, setUpdateUsageFormError] = useState({})
+  const [updateUsageSubmitting, setUpdateUsageSubmitting] = useState(false)
 
   /** Fetches project names once for the lookup map */
   async function fetchProjects() {
@@ -399,6 +421,120 @@ export default function Schedules() {
       notyfError('Update failed')
     } finally {
       setCrewSaving(false)
+    }
+  }
+
+  // Fetch equipment usages whenever the Equipment Used modal opens or refreshes
+  useEffect(() => {
+    if (!equipUsedOpen || !equipUsedSched) { setEquipUsages([]); return }
+    let active = true
+    setEquipUsagesLoading(true)
+    apiFetch(`/api/equipment-usages?schedId=${equipUsedSched.schedId}&size=100&sort=usageId,asc`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { if (active) setEquipUsages(data.content ?? []) })
+      .catch(() => { if (active) setEquipUsages([]) })
+      .finally(() => { if (active) setEquipUsagesLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, equipUsedOpen, equipUsedSched, equipUsagesRefresh])
+
+  function openEquipUsed(sched) {
+    setEquipUsedSched(sched)
+    setEquipUsedOpen(true)
+    setAddEquipOpen(false)
+    setAddEquipForm({ equipmentId: '', equipmentName: '', notes: '' })
+    setAddEquipFormError({})
+  }
+
+  function closeEquipUsed() {
+    setEquipUsedOpen(false)
+    setEquipUsedSched(null)
+    setEquipUsages([])
+    setAddEquipOpen(false)
+    setAddEquipForm({ equipmentId: '', equipmentName: '', notes: '' })
+    setAddEquipFormError({})
+  }
+
+  /** Submits a new equipment usage record for the current schedule */
+  async function handleAddEquipUsage(e) {
+    e.preventDefault()
+    setAddEquipFormError({})
+    if (!addEquipForm.equipmentId) { setAddEquipFormError({ equipmentId: 'Please select an equipment.' }); return }
+    setAddEquipSubmitting(true)
+    try {
+      const res = await apiFetch('/api/equipment-usages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          equipmentId: Number(addEquipForm.equipmentId),
+          schedId: equipUsedSched.schedId,
+          notes: addEquipForm.notes || null,
+        }),
+      })
+      if (!res.ok) { setAddEquipFormError(await parseApiError(res)); notyfError('Add failed'); return }
+      setAddEquipOpen(false)
+      setAddEquipForm({ equipmentId: '', equipmentName: '', notes: '' })
+      setAddEquipFormError({})
+      notyfSuccess('Equipment usage logged.')
+      setEquipUsagesRefresh(k => k + 1)
+    } catch (err) {
+      setAddEquipFormError({ _general: err.message })
+    } finally {
+      setAddEquipSubmitting(false)
+    }
+  }
+
+  /** Deletes an equipment usage record */
+  async function handleDeleteEquipUsage(usageId) {
+    setDeletingUsageId(usageId)
+    try {
+      const res = await apiFetch(`/api/equipment-usages/${usageId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        notyfError(data.error ?? data.message ?? 'Delete failed')
+        return
+      }
+      notyfSuccess(`Usage #${usageId} deleted.`)
+      setEquipUsagesRefresh(k => k + 1)
+    } catch {
+      notyfError('Delete failed — server error')
+    } finally {
+      setDeletingUsageId(null)
+    }
+  }
+
+  function openUpdateUsage(usage) {
+    setUpdatingUsage(usage)
+    setUpdateUsageNotes(usage.notes ?? '')
+    setUpdateUsageFormError({})
+    setUpdateUsageOpen(true)
+  }
+
+  function closeUpdateUsage() {
+    setUpdateUsageOpen(false)
+    setUpdatingUsage(null)
+    setUpdateUsageNotes('')
+    setUpdateUsageFormError({})
+  }
+
+  /** Submits updated notes for an equipment usage record */
+  async function handleUpdateUsageSubmit(e) {
+    e.preventDefault()
+    setUpdateUsageFormError({})
+    setUpdateUsageSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/equipment-usages/${updatingUsage.usageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ schedId: updatingUsage.schedId, notes: updateUsageNotes || null }),
+      })
+      if (!res.ok) { setUpdateUsageFormError(await parseApiError(res)); notyfError('Update failed'); return }
+      closeUpdateUsage()
+      notyfSuccess(`Usage #${updatingUsage.usageId} updated.`)
+      setEquipUsagesRefresh(k => k + 1)
+    } catch (err) {
+      setUpdateUsageFormError({ _general: err.message })
+    } finally {
+      setUpdateUsageSubmitting(false)
     }
   }
 
@@ -735,6 +871,221 @@ export default function Schedules() {
         </div>
       </Modal>
 
+      {/* Equipment Used Modal */}
+      <Modal
+        isOpen={equipUsedOpen}
+        onClose={addEquipOpen ? undefined : closeEquipUsed}
+        hideClose={addEquipOpen}
+        title={`Equipment Used — Schedule #${equipUsedSched?.schedId ?? ''}`}
+        size="max-w-4xl"
+        footer={!addEquipOpen && (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={closeEquipUsed}>
+            Close
+          </button>
+        )}
+      >
+        {addEquipOpen ? (
+          <form onSubmit={handleAddEquipUsage}>
+            <div className="flex flex-col gap-4 mb-4">
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Equipment <span className="text-error">*</span></label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    className={`input input-bordered flex-1${addEquipFormError.equipmentId ? ' is-invalid' : ''}`}
+                    placeholder="No equipment selected"
+                    value={addEquipForm.equipmentName}
+                  />
+                  <button type="button" className="btn btn-soft btn-secondary shrink-0" onClick={() => setEquipPickerOpen(true)}>
+                    Pick
+                  </button>
+                </div>
+                {addEquipFormError.equipmentId && <span className="helper-text">{addEquipFormError.equipmentId}</span>}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Notes</label>
+                <input
+                  type="text"
+                  className="input input-bordered w-full"
+                  placeholder="Optional notes about this deployment"
+                  maxLength={255}
+                  value={addEquipForm.notes}
+                  onChange={e => setAddEquipForm(f => ({ ...f, notes: e.target.value }))}
+                />
+              </div>
+
+              {addEquipFormError._general && (
+                <div className="alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{addEquipFormError._general}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button type="button" className="btn btn-soft btn-secondary btn-sm"
+                onClick={() => { setAddEquipOpen(false); setAddEquipForm({ equipmentId: '', equipmentName: '', notes: '' }); setAddEquipFormError({}) }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={addEquipSubmitting}>
+                {addEquipSubmitting
+                  ? <span className="loading loading-spinner loading-xs"></span>
+                  : <span className="icon-[tabler--plus] size-4"></span>
+                }
+                Log Equipment
+              </button>
+            </div>
+          </form>
+        ) : (
+          <>
+            <div className="flex justify-end mb-3">
+              <button type="button" className="btn btn-primary btn-sm"
+                onClick={() => { setAddEquipForm({ equipmentId: '', equipmentName: '', notes: '' }); setAddEquipFormError({}); setAddEquipOpen(true) }}>
+                <span className="icon-[tabler--plus] size-4"></span>
+                Add Equipment
+              </button>
+            </div>
+
+            {equipUsagesLoading ? (
+              <div className="flex justify-center py-6">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+              </div>
+            ) : equipUsages.length === 0 ? (
+              <div className="text-center py-8 text-base-content/40">
+                <span className="icon-[tabler--tool-off] size-10 mx-auto mb-2 block"></span>
+                <p className="text-sm">No equipment logged for this schedule.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-box border border-base-300">
+                <table className="table table-zebra table-sm w-full">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Equipment</th>
+                      <th>Type</th>
+                      <th>Notes</th>
+                      <th>Logged On</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {equipUsages.map(u => (
+                      <tr key={u.usageId}>
+                        <td className="font-mono text-xs">{u.usageId}</td>
+                        <td className="text-sm max-w-48">
+                          <span className="line-clamp-1" title={u.equipmentName}>{u.equipmentName}</span>
+                          <span className="text-xs text-base-content/40">#{u.equipmentId}</span>
+                        </td>
+                        <td>
+                          <span className={`badge badge-soft text-xs ${u.equipmentType === 'durable' ? 'badge-info' : 'badge-warning'}`}>
+                            {u.equipmentType}
+                          </span>
+                        </td>
+                        <td className="text-sm text-base-content/60 max-w-40">
+                          <span className="line-clamp-2">{u.notes || '—'}</span>
+                        </td>
+                        <td className="text-xs text-base-content/50 whitespace-nowrap">
+                          {formatDateTime(u.loggedOn)}
+                        </td>
+                        <td>
+                          <div className="flex gap-1">
+                            <button
+                              className="btn btn-soft btn-primary btn-xs"
+                              onClick={() => openUpdateUsage(u)}
+                            >
+                              <span className="icon-[tabler--pencil] size-3"></span>
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-soft btn-error btn-xs"
+                              disabled={deletingUsageId === u.usageId}
+                              onClick={() => handleDeleteEquipUsage(u.usageId)}
+                            >
+                              {deletingUsageId === u.usageId
+                                ? <span className="loading loading-spinner loading-xs"></span>
+                                : <span className="icon-[tabler--x] size-3"></span>
+                              }
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </Modal>
+
+      {/* Update Usage Notes sub-modal — sits above Equipment Used modal */}
+      {updateUsageOpen && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdateUsage} />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Edit Usage #{updatingUsage?.usageId}</h3>
+                  <span className="text-sm text-base-content/50">{updatingUsage?.equipmentName}</span>
+                </div>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdateUsage}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
+              </div>
+              <form onSubmit={handleUpdateUsageSubmit}>
+                <div className="modal-body flex flex-col gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label className="label-text font-medium">Notes</label>
+                    <input
+                      type="text"
+                      className={`input input-bordered w-full${updateUsageFormError.notes ? ' is-invalid' : ''}`}
+                      placeholder="Optional notes about this deployment"
+                      maxLength={255}
+                      value={updateUsageNotes}
+                      onChange={e => setUpdateUsageNotes(e.target.value)}
+                    />
+                    {updateUsageFormError.notes && <span className="helper-text">{updateUsageFormError.notes}</span>}
+                  </div>
+                  {updateUsageFormError._general && (
+                    <div className="alert alert-error py-2">
+                      <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                      <span className="text-sm">{updateUsageFormError._general}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-soft btn-secondary btn-sm" onClick={closeUpdateUsage}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={updateUsageSubmitting}>
+                    {updateUsageSubmitting
+                      ? <span className="loading loading-spinner loading-xs"></span>
+                      : <span className="icon-[tabler--device-floppy] size-4"></span>
+                    }
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Equipment picker for logging new usage — excludes already-logged equipment */}
+      <EquipmentPickerModal
+        isOpen={equipPickerOpen}
+        onClose={() => setEquipPickerOpen(false)}
+        onSelect={eq => {
+          setAddEquipForm(f => ({ ...f, equipmentId: eq.equipmentId, equipmentName: eq.name }))
+          setAddEquipFormError(err => ({ ...err, equipmentId: undefined }))
+          setEquipPickerOpen(false)
+        }}
+        excludeIds={new Set(equipUsages.map(u => u.equipmentId))}
+      />
+
       {/* Employee picker for adding crew — excludes already-assigned members */}
       <CrewPickerModal
         isOpen={crewPickerOpen}
@@ -762,6 +1113,9 @@ export default function Schedules() {
           } else if (key === 'crew') {
             setSelectedSched(null)
             openCrew(sched)
+          } else if (key === 'equipment') {
+            setSelectedSched(null)
+            openEquipUsed(sched)
           } else if (key === 'service-report') {
             setSelectedSched(null)
             setSrForSched(selectedSchedSr || null)

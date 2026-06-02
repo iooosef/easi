@@ -6,6 +6,7 @@ import Layout from './Layout'
 import PickerInput from './PickerInput'
 import ProjectPickerModal from './ProjectPickerModal'
 import CrewPickerModal from './CrewPickerModal'
+import EquipmentPickerModal from './EquipmentPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
 const EMPTY_FORM = { projNum: '', projName: '', purpose: '', date: '' }
@@ -14,6 +15,7 @@ const STEPS = [
   { number: 1, label: 'Project & Purpose' },
   { number: 2, label: 'Select Date' },
   { number: 3, label: 'Select Crew Members' },
+  { number: 4, label: 'Select Equipment' },
 ]
 
 /** Parses a failed API response into field-level or general error object */
@@ -36,6 +38,14 @@ export default function NewSchedule() {
   // Crew selection
   const [crewList, setCrewList] = useState([])
   const [crewPickerOpen, setCrewPickerOpen] = useState(false)
+
+  // Equipment selection
+  const [equipmentList, setEquipmentList] = useState([])
+  const [equipmentPickerOpen, setEquipmentPickerOpen] = useState(false)
+
+  // Durable equipment IDs already deployed on the selected date (cannot be added again)
+  const [busyDurableIds, setBusyDurableIds] = useState(new Set())
+  const [loadingEquipment, setLoadingEquipment] = useState(false)
 
   // Server-side conflict flag: true when this project already has a schedule on the selected date
   const [projectConflict, setProjectConflict] = useState(false)
@@ -62,6 +72,12 @@ export default function NewSchedule() {
   const excludeIdsForPicker = useMemo(
     () => new Set([...busyEmployeeIds, ...crewList.map(c => c.employeeId)]),
     [busyEmployeeIds, crewList]
+  )
+
+  /** IDs excluded from the equipment picker: already in the list + durable equipment busy on the selected date */
+  const excludeEquipmentIds = useMemo(
+    () => new Set([...equipmentList.map(e => e.equipmentId), ...busyDurableIds]),
+    [equipmentList, busyDurableIds]
   )
 
   /** Dates in the viewed month where all crew are already assigned */
@@ -145,6 +161,46 @@ export default function NewSchedule() {
     return () => { cancelled = true }
   }, [form.date, apiFetch])
 
+  /**
+   * When date changes, fetch all schedules on that date and collect the IDs of
+   * durable equipment already deployed to any of them. Used to block double-booking.
+   */
+  useEffect(() => {
+    if (!form.date) {
+      setBusyDurableIds(new Set())
+      return
+    }
+    let cancelled = false
+    async function fetchEquipmentAvailability() {
+      setLoadingEquipment(true)
+      try {
+        const res = await apiFetch(`/api/service-schedules/calendar?dateFrom=${form.date}&dateTo=${form.date}`)
+        if (!res.ok || cancelled) return
+        const schedules = await res.json()
+        if (cancelled) return
+        const usageResults = await Promise.all(
+          schedules.map(s =>
+            apiFetch(`/api/equipment-usages?schedId=${s.schedId}&size=100`)
+              .then(r => r.ok ? r.json() : { content: [] })
+              .catch(() => ({ content: [] }))
+          )
+        )
+        if (cancelled) return
+        const ids = new Set()
+        for (const page of usageResults)
+          for (const u of page.content)
+            if (u.equipmentType === 'durable') ids.add(u.equipmentId)
+        setBusyDurableIds(ids)
+      } catch (_) {
+        if (!cancelled) setBusyDurableIds(new Set())
+      } finally {
+        if (!cancelled) setLoadingEquipment(false)
+      }
+    }
+    fetchEquipmentAvailability()
+    return () => { cancelled = true }
+  }, [form.date, apiFetch])
+
   /** Fetches the total count of CREW employees once on mount */
   useEffect(() => {
     apiFetch('/api/crew-employees?size=1')
@@ -206,6 +262,30 @@ export default function NewSchedule() {
     setCrewPickerOpen(false)
   }
 
+  function removeEquipment(equipmentId) {
+    setEquipmentList(list => list.filter(e => e.equipmentId !== equipmentId))
+  }
+
+  function addEquipmentFromPicker(eq) {
+    if (equipmentList.some(e => e.equipmentId === eq.equipmentId)) {
+      setEquipmentPickerOpen(false)
+      return
+    }
+    setEquipmentList(list => [...list, {
+      equipmentId: eq.equipmentId,
+      name: eq.name,
+      type: eq.type,
+      model: eq.model,
+      serialNumber: eq.serialNumber,
+      notes: '',
+    }])
+    setEquipmentPickerOpen(false)
+  }
+
+  function updateEquipmentNotes(equipmentId, notes) {
+    setEquipmentList(list => list.map(e => e.equipmentId === equipmentId ? { ...e, notes } : e))
+  }
+
   /** Validates the current step and advances if valid */
   function handleNext() {
     setFormError({})
@@ -221,6 +301,9 @@ export default function NewSchedule() {
       if (noCrewOnDate) { setFormError({ date: 'No crew members are available on this date.' }); return }
       if (projectConflict) { setFormError({ date: 'This project already has a schedule on the selected date.' }); return }
       setStep(3)
+    } else if (step === 3) {
+      if (crewList.length === 0) { setFormError({ _general: 'At least one crew member must be selected.' }); return }
+      setStep(4)
     }
   }
 
@@ -278,9 +361,30 @@ export default function NewSchedule() {
           crewFailures.push(err._general ?? `Employee #${c.employeeId} could not be assigned.`)
         }
       }
+
+      const equipmentFailures = []
+      for (const eq of equipmentList) {
+        const eqRes = await apiFetch('/api/equipment-usages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            equipmentId: eq.equipmentId,
+            schedId: created.schedId,
+            notes: eq.notes || null,
+          }),
+        })
+        if (!eqRes.ok) {
+          const err = await parseApiError(eqRes)
+          equipmentFailures.push(err._general ?? `Equipment #${eq.equipmentId} could not be logged.`)
+        }
+      }
+
       notyfSuccess('Schedule added successfully.')
       if (crewFailures.length > 0) {
         crewFailures.forEach(msg => notyfError(msg))
+      }
+      if (equipmentFailures.length > 0) {
+        equipmentFailures.forEach(msg => notyfError(msg))
       }
       navigate('/schedules')
     } catch (err) {
@@ -479,6 +583,94 @@ export default function NewSchedule() {
               </div>
             )}
 
+            {/* Step 4: Select Equipment */}
+            {step === 4 && (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide mb-3">Step 4 — Select Equipment to Bring</p>
+                  <div className="flex flex-col gap-1 text-sm text-base-content/60 bg-base-200 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="icon-[tabler--folder] size-4 shrink-0"></span>
+                      <span className="line-clamp-1">{form.projName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="icon-[tabler--calendar] size-4 shrink-0"></span>
+                      <span>{form.date}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="label-text font-medium">Equipment</label>
+                  <p className="text-xs text-base-content/40">Optional — add equipment that will be brought to this schedule.</p>
+
+                  {equipmentList.length === 0 ? (
+                    <p className="text-sm text-base-content/40">No equipment added yet.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {equipmentList.map(eq => (
+                        <div key={eq.equipmentId} className="card bg-base-100 border border-base-300">
+                          <div className="card-body py-2 px-3 gap-1.5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm line-clamp-1">{eq.name}</p>
+                                <p className="text-xs text-base-content/50">
+                                  #{eq.equipmentId} · {eq.type}{eq.model ? ` · ${eq.model}` : ''}
+                                </p>
+                                {eq.serialNumber && (
+                                  <p className="text-xs text-base-content/40">SN: {eq.serialNumber}</p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-error btn-xs btn-square shrink-0"
+                                title="Remove equipment"
+                                onClick={() => removeEquipment(eq.equipmentId)}
+                              >
+                                <span className="icon-[tabler--x] size-3.5"></span>
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              className="input input-bordered input-sm w-full"
+                              placeholder="Notes (optional)"
+                              maxLength={255}
+                              value={eq.notes}
+                              onChange={e => updateEquipmentNotes(eq.equipmentId, e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {loadingEquipment ? (
+                    <span className="text-xs text-base-content/50 flex items-center gap-1">
+                      <span className="loading loading-spinner loading-xs"></span>
+                      Checking equipment availability...
+                    </span>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="btn btn-soft btn-primary btn-sm w-full"
+                    disabled={loadingEquipment}
+                    onClick={() => setEquipmentPickerOpen(true)}
+                  >
+                    <span className="icon-[tabler--tool] size-4"></span>
+                    Add Equipment
+                  </button>
+                </div>
+
+                {formError._general && (
+                  <div className="alert alert-error py-2">
+                    <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                    <span className="text-sm">{formError._general}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Navigation buttons */}
             <div className="flex gap-2 justify-between mt-2">
               {step > 1 && (
@@ -491,7 +683,7 @@ export default function NewSchedule() {
                 </button>
               )}
 
-              {step < 3 ? (
+              {step < 4 ? (
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -558,6 +750,13 @@ export default function NewSchedule() {
         onClose={() => setCrewPickerOpen(false)}
         onSelect={addCrewFromPicker}
         excludeIds={excludeIdsForPicker}
+      />
+
+      <EquipmentPickerModal
+        isOpen={equipmentPickerOpen}
+        onClose={() => setEquipmentPickerOpen(false)}
+        onSelect={addEquipmentFromPicker}
+        excludeIds={excludeEquipmentIds}
       />
     </Layout>
   )
