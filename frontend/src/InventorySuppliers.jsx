@@ -155,7 +155,7 @@ export default function InventorySuppliers() {
           <h1 className="text-3xl font-semibold">Suppliers</h1>
           <p className="text-base-content/60 mt-1">Manage supplier records used across purchase orders</p>
         </div>
-        {canEdit && !addOpen && (
+        {canEdit && (
           <button
             type="button"
             className="btn btn-primary h-full min-h-0"
@@ -167,56 +167,67 @@ export default function InventorySuppliers() {
         )}
       </div>
 
-      {/* Inline Add Supplier Form */}
+      {/* Add Supplier Modal */}
       {addOpen && (
-        <div className="card bg-base-100 border border-base-300 mb-6">
-          <div className="card-body">
-            <h2 className="card-title text-base mb-2">New Supplier</h2>
-            <form onSubmit={handleAddSubmit}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-                  <input type="text" name="name"
-                    className={`input input-bordered w-full${supplierFormError.name ? ' is-invalid' : ''}`}
-                    placeholder="e.g. ABC Industrial Supply" maxLength={120} required
-                    value={supplierForm.name} onChange={handleSupplierFormChange} />
-                  {supplierFormError.name && <span className="helper-text">{supplierFormError.name}</span>}
-                </div>
-
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-                  <textarea name="address"
-                    className={`textarea textarea-bordered w-full${supplierFormError.address ? ' is-invalid' : ''}`}
-                    placeholder="Full address" maxLength={600} rows={3} required
-                    value={supplierForm.address} onChange={handleSupplierFormChange} />
-                  {supplierFormError.address && <span className="helper-text">{supplierFormError.address}</span>}
-                </div>
-
-                {supplierFormError._general && (
-                  <div className="sm:col-span-2 alert alert-error py-2">
-                    <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                    <span className="text-sm">{supplierFormError._general}</span>
-                  </div>
-                )}
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-40"
+            onClick={() => { setAddOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-md shadow-xl">
+              <div className="modal-header">
+                <h3 className="modal-title">Add Supplier</h3>
+                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+                  onClick={() => { setAddOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }}>
+                  <span className="icon-[tabler--x] size-4"></span>
+                </button>
               </div>
+              <div className="modal-body">
+                <form id="supplier-add-form" onSubmit={handleAddSubmit}>
+                  <div className="flex flex-col gap-4">
 
-              <div className="flex gap-2 justify-end">
-                <button type="button" className="btn btn-soft btn-secondary btn-sm"
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+                      <input type="text" name="name"
+                        className={`input input-bordered w-full${supplierFormError.name ? ' is-invalid' : ''}`}
+                        placeholder="e.g. ABC Industrial Supply" maxLength={120} required
+                        value={supplierForm.name} onChange={handleSupplierFormChange} />
+                      {supplierFormError.name && <span className="helper-text">{supplierFormError.name}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+                      <textarea name="address"
+                        className={`textarea textarea-bordered w-full${supplierFormError.address ? ' is-invalid' : ''}`}
+                        placeholder="Full address" maxLength={600} rows={3} required
+                        value={supplierForm.address} onChange={handleSupplierFormChange} />
+                      {supplierFormError.address && <span className="helper-text">{supplierFormError.address}</span>}
+                    </div>
+
+                    {supplierFormError._general && (
+                      <div className="alert alert-error py-2">
+                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                        <span className="text-sm">{supplierFormError._general}</span>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-soft btn-secondary"
                   onClick={() => { setAddOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary btn-sm" disabled={supplierFormSubmitting}>
+                <button type="submit" form="supplier-add-form" className="btn btn-primary" disabled={supplierFormSubmitting}>
                   {supplierFormSubmitting
-                    ? <span className="loading loading-spinner loading-xs"></span>
+                    ? <span className="loading loading-spinner loading-sm"></span>
                     : <span className="icon-[tabler--plus] size-4"></span>
                   }
                   Add Supplier
                 </button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Loading */}
