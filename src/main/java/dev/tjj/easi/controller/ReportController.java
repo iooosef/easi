@@ -2,7 +2,10 @@ package dev.tjj.easi.controller;
 
 import dev.tjj.easi.dto.report.PartReportRow;
 import dev.tjj.easi.dto.report.PurchaseOrderRow;
+import dev.tjj.easi.dto.report.ServiceReportBillingRow;
 import dev.tjj.easi.dto.report.ServiceReportSummaryRow;
+import dev.tjj.easi.dto.report.VehicleGasLogRow;
+import dev.tjj.easi.dto.report.VehicleLogRow;
 import dev.tjj.easi.service.ReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -108,5 +111,79 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
         return ResponseEntity.ok(reportService.getPartsReport(startDate, endDate));
+    }
+
+    /** Returns one billing summary row per service report within the given date range. */
+    @Operation(
+            summary = "Generate service report billing report",
+            description = "Returns one row per service report added within the date range. " +
+                    "Each row includes services/labor cost from billing items, parts cost from linked POs, " +
+                    "subtotal, total payments received, and computed balance."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Report rows returned"),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid date parameters"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/service-report-billing")
+    public ResponseEntity<List<ServiceReportBillingRow>> getServiceReportBillingReport(
+            @Parameter(description = "Start date (inclusive)", example = "2025-01-01")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+
+            @Parameter(description = "End date (inclusive)", example = "2025-12-31")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        return ResponseEntity.ok(reportService.getServiceReportBillingReport(startDate, endDate));
+    }
+
+    /** Returns vehicle log rows within the given date range, optionally filtered by vehicle. */
+    @Operation(
+            summary = "Generate vehicle logs report",
+            description = "Returns vehicle log entries added within the date range. " +
+                    "Pass vehicleId to filter by a specific vehicle; omit it to include all vehicles. " +
+                    "Distance is null for trips that have not yet ended."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Report rows returned"),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid date parameters"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/vehicle-logs")
+    public ResponseEntity<List<VehicleLogRow>> getVehicleLogReport(
+            @Parameter(description = "Start date (inclusive)", example = "2025-01-01")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+
+            @Parameter(description = "End date (inclusive)", example = "2025-12-31")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+
+            @Parameter(description = "Filter by vehicle ID; omit to include all vehicles", example = "3")
+            @RequestParam(required = false) Integer vehicleId) {
+
+        return ResponseEntity.ok(reportService.getVehicleLogReport(startDate, endDate, vehicleId));
+    }
+
+    /** Returns vehicle gas log rows within the given date range, optionally filtered by vehicle. */
+    @Operation(
+            summary = "Generate vehicle gas logs report",
+            description = "Returns vehicle gas log entries within the date range, keyed by the linked vehicle log's addedOn date. " +
+                    "Pass vehicleId to filter by a specific vehicle; omit it to include all vehicles."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Report rows returned"),
+            @ApiResponse(responseCode = "400", description = "Missing or invalid date parameters"),
+            @ApiResponse(responseCode = "403", description = "Forbidden")
+    })
+    @GetMapping("/vehicle-gas-logs")
+    public ResponseEntity<List<VehicleGasLogRow>> getVehicleGasLogReport(
+            @Parameter(description = "Start date (inclusive)", example = "2025-01-01")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+
+            @Parameter(description = "End date (inclusive)", example = "2025-12-31")
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+
+            @Parameter(description = "Filter by vehicle ID; omit to include all vehicles", example = "3")
+            @RequestParam(required = false) Integer vehicleId) {
+
+        return ResponseEntity.ok(reportService.getVehicleGasLogReport(startDate, endDate, vehicleId));
     }
 }

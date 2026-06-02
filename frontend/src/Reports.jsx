@@ -9,6 +9,10 @@ const REPORT_NAV_ITEMS = [
   { key: 'individual-po',       label: 'Individual Purchase Order for Parts',     icon: 'icon-[tabler--file-invoice]' },
   { key: 'individual-equip-po', label: 'Individual Purchase Order for Equipment', icon: 'icon-[tabler--tool]' },
   { key: 'po-summary',          label: 'Purchase Orders',                         icon: 'icon-[tabler--shopping-cart]' },
+  { key: 'parts-summary',       label: 'Parts',                                   icon: 'icon-[tabler--packages]' },
+  { key: 'sr-billing',          label: 'Service Report Billing',                  icon: 'icon-[tabler--report-money]' },
+  { key: 'vehicle-logs',        label: 'Vehicle Logs',                            icon: 'icon-[tabler--truck]' },
+  { key: 'vehicle-gas-logs',    label: 'Vehicle Gas Logs',                        icon: 'icon-[tabler--gas-station]' },
 ]
 
 /** Preset options for the date range bar. */
@@ -169,6 +173,124 @@ function Td({ children, right, bold }) {
     <td className={`border border-gray-300 px-3 py-1 text-gray-900${right ? ' text-right' : ''}${bold ? ' font-semibold' : ''}`}>
       {children ?? '—'}
     </td>
+  )
+}
+
+/** Simple SVG pie chart with a legend. data: [{ label, value, color }] */
+function PieChart({ data, size = 160 }) {
+  const total = data.reduce((s, d) => s + d.value, 0)
+  if (total === 0) return <p className="text-sm text-gray-400 text-center">No data</p>
+
+  const cx = size / 2, cy = size / 2, r = size / 2 - 8
+  let angle = -Math.PI / 2
+
+  const slices = data.map(d => {
+    const sweep = (d.value / total) * 2 * Math.PI
+    const x1 = cx + r * Math.cos(angle)
+    const y1 = cy + r * Math.sin(angle)
+    angle += sweep
+    const x2 = cx + r * Math.cos(angle)
+    const y2 = cy + r * Math.sin(angle)
+    const large = sweep > Math.PI ? 1 : 0
+    return { ...d, path: `M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z` }
+  })
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {slices.map((s, i) => (
+          <path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth="1.5" />
+        ))}
+      </svg>
+      <div className="flex flex-col gap-1 w-full text-xs">
+        {slices.map((s, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: s.color }} />
+            <span className="text-gray-700 truncate">{s.label}</span>
+            <span className="ml-auto font-semibold text-gray-900 shrink-0">{s.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Vehicle picker modal ─────────────────────────────────────────────────────
+
+/** Step-1 modal: pick "All Vehicles" or a specific vehicle before generating the report. */
+function VehiclePickerModal({ isOpen, onClose, onSelect }) {
+  const { apiFetch } = useAuth()
+  const [vehicles, setVehicles] = useState([])
+  const [loading, setLoading]   = useState(false)
+
+  useEffect(() => {
+    if (!isOpen) return
+    let active = true
+    setLoading(true)
+    apiFetch('/api/vehicles?page=0&size=200&sort=vehicleModel,asc')
+      .then(r => r.json())
+      .then(data => { if (active) setVehicles(data.content ?? (Array.isArray(data) ? data : [])) })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [isOpen, apiFetch])
+
+  if (!isOpen) return null
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-base-300/70 z-[65]" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        <div className="modal-content w-full max-w-lg">
+          <div className="modal-header">
+            <h3 className="modal-title">Select Vehicle</h3>
+            <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={onClose}>
+              <span className="icon-[tabler--x] size-4"></span>
+            </button>
+          </div>
+
+          <div className="modal-body flex flex-col gap-3">
+            {/* All vehicles option */}
+            <button
+              type="button"
+              className="flex items-center gap-3 w-full rounded-xl border-2 border-primary bg-primary/5 px-4 py-3 text-left hover:bg-primary/10 transition-colors"
+              onClick={() => onSelect(null)}
+            >
+              <span className="icon-[tabler--truck] size-6 text-primary shrink-0"></span>
+              <div>
+                <p className="font-semibold text-primary">All Vehicles</p>
+                <p className="text-xs text-base-content/50">Include logs from every vehicle</p>
+              </div>
+            </button>
+
+            {loading ? (
+              <div className="flex justify-center py-6">
+                <span className="loading loading-spinner loading-md text-primary"></span>
+              </div>
+            ) : vehicles.length === 0 ? (
+              <p className="text-center py-6 text-base-content/40 text-sm">No vehicles found.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+                {vehicles.map(v => (
+                  <div key={v.vehiclesId} className="card bg-base-100 border border-base-300">
+                    <div className="card-body py-3 px-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm line-clamp-1">{v.vehicleModel}</p>
+                          <p className="text-xs text-base-content/50 font-mono">{v.vehiclePlateNum}</p>
+                        </div>
+                        <button type="button" className="btn btn-primary btn-sm shrink-0"
+                          onClick={() => onSelect(v)}>Select</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -756,6 +878,60 @@ function buildEquipPoPdfHtml(d, generatedAt) {
   </body></html>`
 }
 
+// ─── Parts Report: PDF HTML builder ──────────────────────────────────────────
+
+function buildPartsSummaryPdfHtml(rows, startDate, endDate, generatedAt) {
+  const fmtShortDate = iso => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—'
+
+  const totalParts = rows.length
+  const totalQty   = rows.reduce((s, r) => s + (r.quantityOrdered ?? 0), 0)
+  const totalUsed  = rows.reduce((s, r) => s + (r.quantityUsed ?? 0), 0)
+  const totalCost  = rows.reduce((s, r) => s + Number(r.total ?? 0), 0)
+
+  const tableRows = rows.map(r =>
+    `<tr>
+      <td style="font-family:monospace">${r.partId}</td>
+      <td>${r.name ?? '—'}</td>
+      <td>${r.supplierName ?? '—'}</td>
+      <td>${r.quantityOrdered != null ? `${r.quantityOrdered} ${r.quantityType ?? ''}`.trim() : '—'}</td>
+      <td class="text-right">${r.quantityUsed ?? 0}</td>
+      <td class="text-right">${fmtCurrency(r.unitPrice)}</td>
+      <td class="text-right">${fmtCurrency(r.total)}</td>
+    </tr>`
+  ).join('')
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Parts Report</title>
+    <style>${SHARED_PDF_STYLE}</style>
+  </head><body>
+    <div class="header-rule"></div>
+    <h1>EASI — Parts Report</h1>
+    <p class="sub">Date Range: ${fmtShortDate(startDate)} — ${fmtShortDate(endDate)}</p>
+    <p class="gen">Generated: ${generatedAt?.toLocaleString('en-PH')}</p>
+
+    <div class="section">Summary</div>
+    <div class="kv-grid" style="max-width:420px;margin-bottom:12px">
+      <div class="kv"><span class="kv-l">Total Parts:</span><span>${totalParts}</span></div>
+      <div class="kv"><span class="kv-l">Used / Total Units:</span><span>${totalUsed} / ${totalQty}</span></div>
+      <div class="kv"><span class="kv-l">Total Cost:</span><span>${fmtCurrency(totalCost)}</span></div>
+    </div>
+
+    <div class="section">Parts</div>
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Supplier</th><th>Quantity</th><th>Qty Used</th><th>Unit Price</th><th>Total</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td colspan="6" class="text-right">Grand Total</td>
+        <td class="text-right">${fmtCurrency(totalCost)}</td>
+      </tr></tfoot>
+    </table>
+
+    <div class="footer">EASI System — Printed ${generatedAt?.toLocaleString('en-PH')} — Parts Report</div>
+  </body></html>`
+}
+
 // ─── PO Summary Report: PDF HTML builder ─────────────────────────────────────
 
 function buildPoSummaryPdfHtml(rows, startDate, endDate, generatedAt) {
@@ -807,6 +983,181 @@ function buildPoSummaryPdfHtml(rows, startDate, endDate, generatedAt) {
   </body></html>`
 }
 
+// ─── SR Billing Report: PDF HTML builder ─────────────────────────────────────
+
+function buildSrBillingPdfHtml(rows, startDate, endDate, generatedAt) {
+  const fmtShortDate = iso => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—'
+
+  const grandBilled   = rows.reduce((s, r) => s + Number(r.subtotalBilledCost ?? 0), 0)
+  const grandPayments = rows.reduce((s, r) => s + Number(r.totalPayments ?? 0), 0)
+  const grandBalance  = rows.reduce((s, r) => s + Number(r.balance ?? 0), 0)
+
+  const fmtDate = iso => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+    : '—'
+
+  const tableRows = rows.map(r =>
+    `<tr>
+      <td>${String(r.srNumber).padStart(2, '0')}</td>
+      <td>${fmtDate(r.serviceDate)}</td>
+      <td class="text-right">${fmtCurrency(r.servicesAndLaborCost)}</td>
+      <td class="text-right">${fmtCurrency(r.partsTotalCost)}</td>
+      <td class="text-right">${fmtCurrency(r.subtotalBilledCost)}</td>
+      <td class="text-right">${fmtCurrency(r.totalPayments)}</td>
+      <td class="text-right">${fmtCurrency(r.balance)}</td>
+    </tr>`
+  ).join('')
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Service Report Billing Report</title>
+    <style>${SHARED_PDF_STYLE}</style>
+  </head><body>
+    <div class="header-rule"></div>
+    <h1>EASI — Service Report Billing Report</h1>
+    <p class="sub">Date Range: ${fmtShortDate(startDate)} — ${fmtShortDate(endDate)}</p>
+    <p class="gen">Generated: ${generatedAt?.toLocaleString('en-PH')}</p>
+
+    <div class="section">Summary</div>
+    <div class="kv-grid" style="max-width:480px;margin-bottom:12px">
+      <div class="kv"><span class="kv-l">Total Billed Amount:</span><span>${fmtCurrency(grandBilled)}</span></div>
+      <div class="kv"><span class="kv-l">Total Payments:</span><span>${fmtCurrency(grandPayments)}</span></div>
+      <div class="kv"><span class="kv-l">Total Balance:</span><span>${fmtCurrency(grandBalance)}</span></div>
+    </div>
+
+    <div class="section">Billing Details</div>
+    <table>
+      <thead><tr>
+        <th>SR No.</th><th>Date</th><th>Services &amp; Labor</th><th>Parts Cost</th>
+        <th>Subtotal Billed</th><th>Total Payments</th><th>Balance</th>
+      </tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td class="text-right"><strong>Totals</strong></td>
+        <td></td><td></td><td></td>
+        <td class="text-right">${fmtCurrency(grandBilled)}</td>
+        <td class="text-right">${fmtCurrency(grandPayments)}</td>
+        <td class="text-right">${fmtCurrency(grandBalance)}</td>
+      </tr></tfoot>
+    </table>
+
+    <div class="footer">EASI System — Printed ${generatedAt?.toLocaleString('en-PH')} — Service Report Billing Report</div>
+  </body></html>`
+}
+
+// ─── Vehicle Logs Report: PDF HTML builder ───────────────────────────────────
+
+function buildVehicleLogsPdfHtml(rows, startDate, endDate, vehicleLabel, generatedAt) {
+  const fmtShortDate = iso => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—'
+
+  const uniqueVehicles = new Set(rows.map(r => r.plateNumber)).size
+  const totalMileage   = rows.reduce((s, r) => s + (r.distance ?? 0), 0)
+
+  const tableRows = rows.map(r => {
+    const odomReading = r.odometerEnd != null
+      ? `${r.odometerStart}km — ${r.odometerEnd}km`
+      : `${r.odometerStart}km — (in progress)`
+    const dist = r.distance != null ? `${r.distance} km` : '—'
+    const dateStr = r.addedOn
+      ? new Date(r.addedOn).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+      : '—'
+    return `<tr>
+      <td>${r.vehicleModel ?? '—'}</td>
+      <td>${r.plateNumber ?? '—'}</td>
+      <td>${odomReading}</td>
+      <td class="text-right">${dist}</td>
+      <td>${dateStr}</td>
+    </tr>`
+  }).join('')
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Vehicle Logs Report</title>
+    <style>${SHARED_PDF_STYLE}</style>
+  </head><body>
+    <div class="header-rule"></div>
+    <h1>EASI — Vehicle Logs Report</h1>
+    <p class="sub">Vehicle: ${vehicleLabel} &nbsp;|&nbsp; Date Range: ${fmtShortDate(startDate)} — ${fmtShortDate(endDate)}</p>
+    <p class="gen">Generated: ${generatedAt?.toLocaleString('en-PH')}</p>
+
+    <div class="section">Summary</div>
+    <div class="kv-grid" style="max-width:480px;margin-bottom:12px">
+      <div class="kv"><span class="kv-l">Total Vehicles:</span><span>${uniqueVehicles}</span></div>
+      <div class="kv"><span class="kv-l">Total Logs:</span><span>${rows.length}</span></div>
+      <div class="kv"><span class="kv-l">Total Mileage:</span><span>${totalMileage} km</span></div>
+    </div>
+
+    <div class="section">Vehicle Logs</div>
+    <table>
+      <thead><tr><th>Vehicle</th><th>Plate Number</th><th>Odometer Reading</th><th>Distance</th><th>Date</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td colspan="3" class="text-right">Total Mileage</td>
+        <td class="text-right">${totalMileage} km</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+
+    <div class="footer">EASI System — Printed ${generatedAt?.toLocaleString('en-PH')} — Vehicle Logs Report</div>
+  </body></html>`
+}
+
+// ─── Vehicle Gas Logs Report: PDF HTML builder ───────────────────────────────
+
+function buildVehicleGasLogsPdfHtml(rows, startDate, endDate, vehicleLabel, generatedAt) {
+  const fmtShortDate = iso => iso
+    ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '—'
+
+  const uniqueVehicles = new Set(rows.map(r => r.plateNumber)).size
+  const totalCost      = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+
+  const tableRows = rows.map(r => {
+    const dateStr = r.addedOn
+      ? new Date(r.addedOn).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+      : '—'
+    return `<tr>
+      <td>${r.vehicleModel ?? '—'}</td>
+      <td>${r.plateNumber ?? '—'}</td>
+      <td style="font-family:monospace">${r.invoiceId ?? '—'}</td>
+      <td class="text-right">${fmtCurrency(r.amount)}</td>
+      <td>${dateStr}</td>
+    </tr>`
+  }).join('')
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Vehicle Gas Logs Report</title>
+    <style>${SHARED_PDF_STYLE}</style>
+  </head><body>
+    <div class="header-rule"></div>
+    <h1>EASI — Vehicle Gas Logs Report</h1>
+    <p class="sub">Vehicle: ${vehicleLabel} &nbsp;|&nbsp; Date Range: ${fmtShortDate(startDate)} — ${fmtShortDate(endDate)}</p>
+    <p class="gen">Generated: ${generatedAt?.toLocaleString('en-PH')}</p>
+
+    <div class="section">Summary</div>
+    <div class="kv-grid" style="max-width:480px;margin-bottom:12px">
+      <div class="kv"><span class="kv-l">Total Vehicles:</span><span>${uniqueVehicles}</span></div>
+      <div class="kv"><span class="kv-l">Total Logs:</span><span>${rows.length}</span></div>
+      <div class="kv"><span class="kv-l">Total Cost:</span><span>${fmtCurrency(totalCost)}</span></div>
+    </div>
+
+    <div class="section">Gas Logs</div>
+    <table>
+      <thead><tr><th>Vehicle</th><th>Plate Number</th><th>Invoice ID</th><th>Amount</th><th>Date</th></tr></thead>
+      <tbody>${tableRows}</tbody>
+      <tfoot><tr>
+        <td colspan="3" class="text-right">Total Cost</td>
+        <td class="text-right">${fmtCurrency(totalCost)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>
+
+    <div class="footer">EASI System — Printed ${generatedAt?.toLocaleString('en-PH')} — Vehicle Gas Logs Report</div>
+  </body></html>`
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Reports() {
@@ -839,6 +1190,15 @@ export default function Reports() {
   const [poSummaryError, setPoSummaryError]             = useState(null)
   const [poSummaryGeneratedAt, setPoSummaryGeneratedAt] = useState(null)
 
+  // Parts summary report
+  const [partsActive, setPartsActive]               = useState(false)
+  const [partsStart, setPartsStart]                 = useState('')
+  const [partsEnd, setPartsEnd]                     = useState('')
+  const [partsRows, setPartsRows]                   = useState(null)
+  const [partsLoading, setPartsLoading]             = useState(false)
+  const [partsError, setPartsError]                 = useState(null)
+  const [partsGeneratedAt, setPartsGeneratedAt]     = useState(null)
+
   // Auto-fetch whenever the PO summary date range changes
   useEffect(() => {
     if (!poSummaryActive || !poSummaryStart || !poSummaryEnd) return
@@ -853,9 +1213,97 @@ export default function Reports() {
     return () => { active = false }
   }, [poSummaryActive, poSummaryStart, poSummaryEnd, apiFetch])
 
-  const activeReport = srData ? 'sr' : poData ? 'po' : equipPoData ? 'equip-po' : poSummaryActive ? 'po-summary' : null
+  // Auto-fetch whenever the Parts date range changes
+  useEffect(() => {
+    if (!partsActive || !partsStart || !partsEnd) return
+    let active = true
+    setPartsLoading(true)
+    setPartsError(null)
+    apiFetch(`/api/reports/parts?startDate=${partsStart}&endDate=${partsEnd}`)
+      .then(r => { if (!r.ok) throw new Error(`Error ${r.status}`); return r.json() })
+      .then(data => { if (active) { setPartsRows(data); setPartsGeneratedAt(new Date()) } })
+      .catch(err => { if (active) setPartsError(err.message ?? 'Failed to load report.') })
+      .finally(() => { if (active) setPartsLoading(false) })
+    return () => { active = false }
+  }, [partsActive, partsStart, partsEnd, apiFetch])
 
-  function clearAllReports() { setSrData(null); setPoData(null); setEquipPoData(null); setPoSummaryActive(false) }
+  // SR Billing report
+  const [srBillingActive, setSrBillingActive]           = useState(false)
+  const [srBillingStart, setSrBillingStart]             = useState('')
+  const [srBillingEnd, setSrBillingEnd]                 = useState('')
+  const [srBillingRows, setSrBillingRows]               = useState(null)
+  const [srBillingLoading, setSrBillingLoading]         = useState(false)
+  const [srBillingError, setSrBillingError]             = useState(null)
+  const [srBillingGeneratedAt, setSrBillingGeneratedAt] = useState(null)
+
+  useEffect(() => {
+    if (!srBillingActive || !srBillingStart || !srBillingEnd) return
+    let active = true
+    setSrBillingLoading(true)
+    setSrBillingError(null)
+    apiFetch(`/api/reports/service-report-billing?startDate=${srBillingStart}&endDate=${srBillingEnd}`)
+      .then(r => { if (!r.ok) throw new Error(`Error ${r.status}`); return r.json() })
+      .then(data => { if (active) { setSrBillingRows(data); setSrBillingGeneratedAt(new Date()) } })
+      .catch(err => { if (active) setSrBillingError(err.message ?? 'Failed to load report.') })
+      .finally(() => { if (active) setSrBillingLoading(false) })
+    return () => { active = false }
+  }, [srBillingActive, srBillingStart, srBillingEnd, apiFetch])
+
+  // Vehicle Logs report
+  const [vehiclePickerOpen, setVehiclePickerOpen]       = useState(false)
+  const [vehicleLogsActive, setVehicleLogsActive]       = useState(false)
+  const [vehicleLogsVehicle, setVehicleLogsVehicle]     = useState(null)  // null = all
+  const [vehicleLogsStart, setVehicleLogsStart]         = useState('')
+  const [vehicleLogsEnd, setVehicleLogsEnd]             = useState('')
+  const [vehicleLogsRows, setVehicleLogsRows]           = useState(null)
+  const [vehicleLogsLoading, setVehicleLogsLoading]     = useState(false)
+  const [vehicleLogsError, setVehicleLogsError]         = useState(null)
+  const [vehicleLogsGeneratedAt, setVehicleLogsGeneratedAt] = useState(null)
+
+  // Vehicle Gas Logs report
+  const [vehicleGasPickerOpen, setVehicleGasPickerOpen]         = useState(false)
+  const [vehicleGasLogsActive, setVehicleGasLogsActive]         = useState(false)
+  const [vehicleGasLogsVehicle, setVehicleGasLogsVehicle]       = useState(null)  // null = all
+  const [vehicleGasLogsStart, setVehicleGasLogsStart]           = useState('')
+  const [vehicleGasLogsEnd, setVehicleGasLogsEnd]               = useState('')
+  const [vehicleGasLogsRows, setVehicleGasLogsRows]             = useState(null)
+  const [vehicleGasLogsLoading, setVehicleGasLogsLoading]       = useState(false)
+  const [vehicleGasLogsError, setVehicleGasLogsError]           = useState(null)
+  const [vehicleGasLogsGeneratedAt, setVehicleGasLogsGeneratedAt] = useState(null)
+
+  useEffect(() => {
+    if (!vehicleLogsActive || !vehicleLogsStart || !vehicleLogsEnd) return
+    let active = true
+    setVehicleLogsLoading(true)
+    setVehicleLogsError(null)
+    const vid = vehicleLogsVehicle?.vehiclesId
+    const url = `/api/reports/vehicle-logs?startDate=${vehicleLogsStart}&endDate=${vehicleLogsEnd}${vid ? `&vehicleId=${vid}` : ''}`
+    apiFetch(url)
+      .then(r => { if (!r.ok) throw new Error(`Error ${r.status}`); return r.json() })
+      .then(data => { if (active) { setVehicleLogsRows(data); setVehicleLogsGeneratedAt(new Date()) } })
+      .catch(err => { if (active) setVehicleLogsError(err.message ?? 'Failed to load report.') })
+      .finally(() => { if (active) setVehicleLogsLoading(false) })
+    return () => { active = false }
+  }, [vehicleLogsActive, vehicleLogsStart, vehicleLogsEnd, vehicleLogsVehicle, apiFetch])
+
+  useEffect(() => {
+    if (!vehicleGasLogsActive || !vehicleGasLogsStart || !vehicleGasLogsEnd) return
+    let active = true
+    setVehicleGasLogsLoading(true)
+    setVehicleGasLogsError(null)
+    const vid = vehicleGasLogsVehicle?.vehiclesId
+    const url = `/api/reports/vehicle-gas-logs?startDate=${vehicleGasLogsStart}&endDate=${vehicleGasLogsEnd}${vid ? `&vehicleId=${vid}` : ''}`
+    apiFetch(url)
+      .then(r => { if (!r.ok) throw new Error(`Error ${r.status}`); return r.json() })
+      .then(data => { if (active) { setVehicleGasLogsRows(data); setVehicleGasLogsGeneratedAt(new Date()) } })
+      .catch(err => { if (active) setVehicleGasLogsError(err.message ?? 'Failed to load report.') })
+      .finally(() => { if (active) setVehicleGasLogsLoading(false) })
+    return () => { active = false }
+  }, [vehicleGasLogsActive, vehicleGasLogsStart, vehicleGasLogsEnd, vehicleGasLogsVehicle, apiFetch])
+
+  const activeReport = srData ? 'sr' : poData ? 'po' : equipPoData ? 'equip-po' : poSummaryActive ? 'po-summary' : partsActive ? 'parts-summary' : srBillingActive ? 'sr-billing' : vehicleLogsActive ? 'vehicle-logs' : vehicleGasLogsActive ? 'vehicle-gas-logs' : null
+
+  function clearAllReports() { setSrData(null); setPoData(null); setEquipPoData(null); setPoSummaryActive(false); setPartsActive(false); setSrBillingActive(false); setVehicleLogsActive(false); setVehicleGasLogsActive(false) }
 
   function handleCardClick(key) {
     setError(null)
@@ -873,6 +1321,62 @@ export default function Reports() {
       setPoSummaryError(null)
       setPoSummaryActive(true)
     }
+    if (key === 'parts-summary') {
+      clearAllReports()
+      const today = new Date()
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(today.getDate() - 6)
+      setPartsStart(toIso(sevenDaysAgo))
+      setPartsEnd(toIso(today))
+      setPartsRows(null)
+      setPartsError(null)
+      setPartsActive(true)
+    }
+    if (key === 'sr-billing') {
+      clearAllReports()
+      const today = new Date()
+      const sevenDaysAgo = new Date()
+      sevenDaysAgo.setDate(today.getDate() - 6)
+      setSrBillingStart(toIso(sevenDaysAgo))
+      setSrBillingEnd(toIso(today))
+      setSrBillingRows(null)
+      setSrBillingError(null)
+      setSrBillingActive(true)
+    }
+    if (key === 'vehicle-logs') {
+      clearAllReports()
+      setVehiclePickerOpen(true)
+    }
+    if (key === 'vehicle-gas-logs') {
+      clearAllReports()
+      setVehicleGasPickerOpen(true)
+    }
+  }
+
+  function handleVehicleGasSelect(vehicle) {
+    setVehicleGasPickerOpen(false)
+    const today = new Date()
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(today.getDate() - 6)
+    setVehicleGasLogsVehicle(vehicle)
+    setVehicleGasLogsStart(toIso(sevenDaysAgo))
+    setVehicleGasLogsEnd(toIso(today))
+    setVehicleGasLogsRows(null)
+    setVehicleGasLogsError(null)
+    setVehicleGasLogsActive(true)
+  }
+
+  function handleVehicleSelect(vehicle) {
+    setVehiclePickerOpen(false)
+    const today = new Date()
+    const sevenDaysAgo = new Date()
+    sevenDaysAgo.setDate(today.getDate() - 6)
+    setVehicleLogsVehicle(vehicle)
+    setVehicleLogsStart(toIso(sevenDaysAgo))
+    setVehicleLogsEnd(toIso(today))
+    setVehicleLogsRows(null)
+    setVehicleLogsError(null)
+    setVehicleLogsActive(true)
   }
 
   function handleBack() { clearAllReports(); setError(null) }
@@ -1086,7 +1590,139 @@ export default function Reports() {
           </div>
         )}
 
-        {activeReport && activeReport !== 'po-summary' && (
+        {activeReport === 'parts-summary' && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <button className="btn btn-soft btn-secondary" onClick={handleBack}>
+              <span className="icon-[tabler--arrow-left] size-4"></span>
+              Back
+            </button>
+            {partsRows && partsRows.length > 0 && (
+              <>
+                <button className="btn btn-primary" onClick={handlePrint}>
+                  <span className="icon-[tabler--printer] size-4"></span>
+                  Print
+                </button>
+                <button className="btn btn-soft btn-primary" onClick={() => {
+                  if (!partsRows || partsRows.length === 0) return
+                  const win = window.open('', '_blank')
+                  win.document.open()
+                  win.document.write(buildPartsSummaryPdfHtml(partsRows, partsStart, partsEnd, partsGeneratedAt))
+                  win.document.close()
+                  win.focus()
+                  setTimeout(() => win.print(), 600)
+                }}>
+                  <span className="icon-[tabler--file-type-pdf] size-4"></span>
+                  Save as PDF
+                </button>
+              </>
+            )}
+            <h2 className="text-lg font-semibold ml-1">Parts Report</h2>
+          </div>
+        )}
+
+        {activeReport === 'sr-billing' && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <button className="btn btn-soft btn-secondary" onClick={handleBack}>
+              <span className="icon-[tabler--arrow-left] size-4"></span>
+              Back
+            </button>
+            {srBillingRows && srBillingRows.length > 0 && (
+              <>
+                <button className="btn btn-primary" onClick={handlePrint}>
+                  <span className="icon-[tabler--printer] size-4"></span>
+                  Print
+                </button>
+                <button className="btn btn-soft btn-primary" onClick={() => {
+                  if (!srBillingRows || srBillingRows.length === 0) return
+                  const win = window.open('', '_blank')
+                  win.document.open()
+                  win.document.write(buildSrBillingPdfHtml(srBillingRows, srBillingStart, srBillingEnd, srBillingGeneratedAt))
+                  win.document.close()
+                  win.focus()
+                  setTimeout(() => win.print(), 600)
+                }}>
+                  <span className="icon-[tabler--file-type-pdf] size-4"></span>
+                  Save as PDF
+                </button>
+              </>
+            )}
+            <h2 className="text-lg font-semibold ml-1">Service Report Billing Report</h2>
+          </div>
+        )}
+
+        {activeReport === 'vehicle-logs' && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <button className="btn btn-soft btn-secondary" onClick={handleBack}>
+              <span className="icon-[tabler--arrow-left] size-4"></span>
+              Back
+            </button>
+            {vehicleLogsRows && vehicleLogsRows.length > 0 && (
+              <>
+                <button className="btn btn-primary" onClick={handlePrint}>
+                  <span className="icon-[tabler--printer] size-4"></span>
+                  Print
+                </button>
+                <button className="btn btn-soft btn-primary" onClick={() => {
+                  if (!vehicleLogsRows || vehicleLogsRows.length === 0) return
+                  const label = vehicleLogsVehicle
+                    ? `${vehicleLogsVehicle.vehicleModel} (${vehicleLogsVehicle.vehiclePlateNum})`
+                    : 'All Vehicles'
+                  const win = window.open('', '_blank')
+                  win.document.open()
+                  win.document.write(buildVehicleLogsPdfHtml(vehicleLogsRows, vehicleLogsStart, vehicleLogsEnd, label, vehicleLogsGeneratedAt))
+                  win.document.close()
+                  win.focus()
+                  setTimeout(() => win.print(), 600)
+                }}>
+                  <span className="icon-[tabler--file-type-pdf] size-4"></span>
+                  Save as PDF
+                </button>
+              </>
+            )}
+            <h2 className="text-lg font-semibold ml-1">
+              Vehicle Logs Report
+              {vehicleLogsVehicle && <span className="text-base font-normal text-base-content/50 ml-2">— {vehicleLogsVehicle.vehicleModel} ({vehicleLogsVehicle.vehiclePlateNum})</span>}
+            </h2>
+          </div>
+        )}
+
+        {activeReport === 'vehicle-gas-logs' && (
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
+            <button className="btn btn-soft btn-secondary" onClick={handleBack}>
+              <span className="icon-[tabler--arrow-left] size-4"></span>
+              Back
+            </button>
+            {vehicleGasLogsRows && vehicleGasLogsRows.length > 0 && (
+              <>
+                <button className="btn btn-primary" onClick={handlePrint}>
+                  <span className="icon-[tabler--printer] size-4"></span>
+                  Print
+                </button>
+                <button className="btn btn-soft btn-primary" onClick={() => {
+                  if (!vehicleGasLogsRows || vehicleGasLogsRows.length === 0) return
+                  const label = vehicleGasLogsVehicle
+                    ? `${vehicleGasLogsVehicle.vehicleModel} (${vehicleGasLogsVehicle.vehiclePlateNum})`
+                    : 'All Vehicles'
+                  const win = window.open('', '_blank')
+                  win.document.open()
+                  win.document.write(buildVehicleGasLogsPdfHtml(vehicleGasLogsRows, vehicleGasLogsStart, vehicleGasLogsEnd, label, vehicleGasLogsGeneratedAt))
+                  win.document.close()
+                  win.focus()
+                  setTimeout(() => win.print(), 600)
+                }}>
+                  <span className="icon-[tabler--file-type-pdf] size-4"></span>
+                  Save as PDF
+                </button>
+              </>
+            )}
+            <h2 className="text-lg font-semibold ml-1">
+              Vehicle Gas Logs Report
+              {vehicleGasLogsVehicle && <span className="text-base font-normal text-base-content/50 ml-2">— {vehicleGasLogsVehicle.vehicleModel} ({vehicleGasLogsVehicle.vehiclePlateNum})</span>}
+            </h2>
+          </div>
+        )}
+
+        {activeReport && activeReport !== 'po-summary' && activeReport !== 'parts-summary' && activeReport !== 'sr-billing' && activeReport !== 'vehicle-logs' && activeReport !== 'vehicle-gas-logs' && (
           <div className="flex items-center gap-3 mb-6 flex-wrap">
             <button className="btn btn-soft btn-secondary" onClick={handleBack}>
               <span className="icon-[tabler--arrow-left] size-4"></span>
@@ -1515,10 +2151,498 @@ export default function Reports() {
         </>
       )}
 
+      {/* ─── Parts Report ─── */}
+      {partsActive && (
+        <>
+          <DateRangeBar
+            startDate={partsStart}
+            endDate={partsEnd}
+            onRange={(s, e) => { setPartsStart(s); setPartsEnd(e) }}
+          />
+
+          {partsLoading && (
+            <div className="flex justify-center py-16">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+          )}
+
+          {!partsLoading && partsError && (
+            <div className="alert alert-error mt-2 no-print">
+              <span className="icon-[tabler--alert-circle] size-5 shrink-0"></span>
+              <span>{partsError}</span>
+            </div>
+          )}
+
+          {!partsLoading && partsRows && partsRows.length === 0 && (
+            <p className="text-center text-base-content/50 py-16 no-print">
+              No data found for the selected filters.
+            </p>
+          )}
+
+          {!partsLoading && partsRows && partsRows.length > 0 && (() => {
+            const totalParts    = partsRows.length
+            const totalQty      = partsRows.reduce((s, r) => s + (r.quantityOrdered ?? 0), 0)
+            const totalUsed     = partsRows.reduce((s, r) => s + (r.quantityUsed ?? 0), 0)
+            const totalCost     = partsRows.reduce((s, r) => s + Number(r.total ?? 0), 0)
+
+            const fmtShort = iso => iso
+              ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+              : '—'
+
+            // Status pie data
+            const STATUS_COLORS = { ordered: '#6366f1', delivered: '#22c55e', used: '#94a3b8' }
+            const statusCounts = partsRows.reduce((m, r) => {
+              const k = r.status ?? 'unknown'
+              m[k] = (m[k] ?? 0) + 1
+              return m
+            }, {})
+            const PALETTE = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#a855f7','#ec4899','#84cc16']
+            const statusData = Object.entries(statusCounts).map(([label, value]) => ({
+              label: label.charAt(0).toUpperCase() + label.slice(1),
+              value,
+              color: STATUS_COLORS[label] ?? '#94a3b8',
+            }))
+
+            // Supplier pie data
+            const supplierCounts = partsRows.reduce((m, r) => {
+              const k = r.supplierName ?? 'Unknown'
+              m[k] = (m[k] ?? 0) + 1
+              return m
+            }, {})
+            const supplierData = Object.entries(supplierCounts).map(([label, value], i) => ({
+              label, value, color: PALETTE[i % PALETTE.length],
+            }))
+
+            return (
+              <div id="print-area" className="bg-white text-gray-900 rounded-xl border border-gray-200 shadow-md p-10 max-w-5xl mx-auto font-sans">
+                {/* Report header */}
+                <div className="text-center border-b-2 border-gray-800 pb-4 mb-4">
+                  <h1 className="text-xl font-bold uppercase tracking-widest text-gray-900">EASI — Parts Report</h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Date Range: {fmtShort(partsStart)} &mdash; {fmtShort(partsEnd)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Generated: {fmtDateTime(partsGeneratedAt)}</p>
+                </div>
+
+                {/* Summary dashboard (screen only) */}
+                <div className="grid grid-cols-3 gap-4 mb-6 no-print">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Parts</p>
+                    <p className="text-3xl font-bold text-gray-900">{totalParts}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Used / Total (Units)</p>
+                    <p className="text-2xl font-bold text-gray-900">{totalUsed} <span className="text-gray-400 font-normal text-lg">/ {totalQty}</span></p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Cost</p>
+                    <p className="text-2xl font-bold text-gray-900">{fmtCurrency(totalCost)}</p>
+                  </div>
+                </div>
+
+                {/* Pie charts (screen only) */}
+                <div className="grid grid-cols-2 gap-6 mb-8 no-print">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">By Status</p>
+                    <PieChart data={statusData} size={160} />
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">By Supplier</p>
+                    <PieChart data={supplierData} size={160} />
+                  </div>
+                </div>
+
+                {/* Print-only compact summary */}
+                <div className="hidden print:flex gap-8 mb-4 text-sm">
+                  <div><span className="font-semibold text-gray-700">Total Parts:</span> {totalParts}</div>
+                  <div><span className="font-semibold text-gray-700">Used / Total Units:</span> {totalUsed} / {totalQty}</div>
+                  <div><span className="font-semibold text-gray-700">Total Cost:</span> {fmtCurrency(totalCost)}</div>
+                </div>
+
+                <SectionTitle>Parts</SectionTitle>
+                <ReportTable
+                  head={['ID', 'Name', 'Supplier', 'Quantity', 'Qty Used', 'Unit Price', 'Total']}
+                  foot={
+                    <tr className="bg-gray-100">
+                      <td colSpan={6} className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-700">Grand Total</td>
+                      <td className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-900">{fmtCurrency(totalCost)}</td>
+                    </tr>
+                  }
+                >
+                  {partsRows.map(r => (
+                    <tr key={r.partId} className="even:bg-gray-50">
+                      <Td><span className="font-mono">{r.partId}</span></Td>
+                      <Td>{r.name}</Td>
+                      <Td>{r.supplierName}</Td>
+                      <Td>{r.quantityOrdered != null ? `${r.quantityOrdered} ${r.quantityType ?? ''}`.trim() : '—'}</Td>
+                      <Td right>{r.quantityUsed ?? 0}</Td>
+                      <Td right>{fmtCurrency(r.unitPrice)}</Td>
+                      <Td right>{fmtCurrency(r.total)}</Td>
+                    </tr>
+                  ))}
+                </ReportTable>
+
+                <div className="text-center text-xs text-gray-400 mt-8 border-t border-gray-200 pt-3">
+                  EASI System &nbsp;—&nbsp; Printed {fmtDateTime(partsGeneratedAt)} &nbsp;—&nbsp; Parts Report
+                </div>
+              </div>
+            )
+          })()}
+        </>
+      )}
+
+      {/* ─── SR Billing Report ─── */}
+      {srBillingActive && (
+        <>
+          <DateRangeBar
+            startDate={srBillingStart}
+            endDate={srBillingEnd}
+            onRange={(s, e) => { setSrBillingStart(s); setSrBillingEnd(e) }}
+          />
+
+          {srBillingLoading && (
+            <div className="flex justify-center py-16">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+          )}
+
+          {!srBillingLoading && srBillingError && (
+            <div className="alert alert-error mt-2 no-print">
+              <span className="icon-[tabler--alert-circle] size-5 shrink-0"></span>
+              <span>{srBillingError}</span>
+            </div>
+          )}
+
+          {!srBillingLoading && srBillingRows && srBillingRows.length === 0 && (
+            <p className="text-center text-base-content/50 py-16 no-print">
+              No data found for the selected filters.
+            </p>
+          )}
+
+          {!srBillingLoading && srBillingRows && srBillingRows.length > 0 && (() => {
+            const grandBilled   = srBillingRows.reduce((s, r) => s + Number(r.subtotalBilledCost ?? 0), 0)
+            const grandPayments = srBillingRows.reduce((s, r) => s + Number(r.totalPayments ?? 0), 0)
+            const grandBalance  = srBillingRows.reduce((s, r) => s + Number(r.balance ?? 0), 0)
+            const fmtShort = iso => iso
+              ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+              : '—'
+
+            // Payment status pie chart data
+            let paid = 0, partial = 0, unpaid = 0
+            srBillingRows.forEach(r => {
+              const bal    = Number(r.balance ?? 0)
+              const billed = Number(r.subtotalBilledCost ?? 0)
+              if (bal === 0)                    paid++
+              else if (bal > 0 && bal < billed) partial++
+              else                               unpaid++
+            })
+            const statusData = [
+              { label: 'Paid',           value: paid,    color: '#22c55e' },
+              { label: 'Partially Paid', value: partial, color: '#f59e0b' },
+              { label: 'Unpaid',         value: unpaid,  color: '#ef4444' },
+            ].filter(d => d.value > 0)
+
+            return (
+              <div id="print-area" className="bg-white text-gray-900 rounded-xl border border-gray-200 shadow-md p-10 max-w-5xl mx-auto font-sans">
+                {/* Report header */}
+                <div className="text-center border-b-2 border-gray-800 pb-4 mb-4">
+                  <h1 className="text-xl font-bold uppercase tracking-widest text-gray-900">EASI — Service Report Billing Report</h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Date Range: {fmtShort(srBillingStart)} &mdash; {fmtShort(srBillingEnd)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Generated: {fmtDateTime(srBillingGeneratedAt)}</p>
+                </div>
+
+                {/* Summary dashboard (screen only) */}
+                <div className="grid grid-cols-4 gap-4 mb-6 no-print">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Billed Amount</p>
+                    <p className="text-2xl font-bold text-gray-900">{fmtCurrency(grandBilled)}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Payments</p>
+                    <p className="text-2xl font-bold text-green-700">{fmtCurrency(grandPayments)}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Balance</p>
+                    <p className={`text-2xl font-bold ${grandBalance > 0 ? 'text-red-600' : 'text-green-700'}`}>{fmtCurrency(grandBalance)}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Service Reports</p>
+                    <p className="text-3xl font-bold text-gray-900">{srBillingRows.length}</p>
+                  </div>
+                </div>
+
+                {/* Payment status pie chart (screen only) */}
+                <div className="mb-8 no-print">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 max-w-xs">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">Payment Status</p>
+                    <PieChart data={statusData} size={160} />
+                  </div>
+                </div>
+
+                {/* Print-only compact summary */}
+                <div className="hidden print:flex gap-8 mb-4 text-sm">
+                  <div><span className="font-semibold text-gray-700">Total Billed:</span> {fmtCurrency(grandBilled)}</div>
+                  <div><span className="font-semibold text-gray-700">Total Payments:</span> {fmtCurrency(grandPayments)}</div>
+                  <div><span className="font-semibold text-gray-700">Total Balance:</span> {fmtCurrency(grandBalance)}</div>
+                </div>
+
+                <SectionTitle>Billing Details</SectionTitle>
+                <ReportTable
+                  head={['SR No.', 'Date', 'Services & Labor', 'Parts Cost', 'Subtotal Billed', 'Total Payments', 'Balance']}
+                  foot={
+                    <tr className="bg-gray-100">
+                      <td className="border border-gray-300 px-3 py-1 font-semibold text-gray-700 text-right">Totals</td>
+                      <td className="border border-gray-300 px-3 py-1" />
+                      <td className="border border-gray-300 px-3 py-1" />
+                      <td className="border border-gray-300 px-3 py-1" />
+                      <td className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-900">{fmtCurrency(grandBilled)}</td>
+                      <td className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-900">{fmtCurrency(grandPayments)}</td>
+                      <td className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-900">{fmtCurrency(grandBalance)}</td>
+                    </tr>
+                  }
+                >
+                  {srBillingRows.map(r => (
+                    <tr key={r.srNumber} className="even:bg-gray-50">
+                      <Td>{String(r.srNumber).padStart(2, '0')}</Td>
+                      <Td>{fmtDateLong(r.serviceDate)}</Td>
+                      <Td right>{fmtCurrency(r.servicesAndLaborCost)}</Td>
+                      <Td right>{fmtCurrency(r.partsTotalCost)}</Td>
+                      <Td right bold>{fmtCurrency(r.subtotalBilledCost)}</Td>
+                      <Td right>{fmtCurrency(r.totalPayments)}</Td>
+                      <Td right>
+                        <span className={Number(r.balance) > 0 ? 'text-red-600 font-semibold' : 'text-green-700 font-semibold'}>
+                          {fmtCurrency(r.balance)}
+                        </span>
+                      </Td>
+                    </tr>
+                  ))}
+                </ReportTable>
+
+                <div className="text-center text-xs text-gray-400 mt-8 border-t border-gray-200 pt-3">
+                  EASI System &nbsp;—&nbsp; Printed {fmtDateTime(srBillingGeneratedAt)} &nbsp;—&nbsp; Service Report Billing Report
+                </div>
+              </div>
+            )
+          })()}
+        </>
+      )}
+
+      {/* ─── Vehicle Logs Report ─── */}
+      {vehicleLogsActive && (
+        <>
+          <DateRangeBar
+            startDate={vehicleLogsStart}
+            endDate={vehicleLogsEnd}
+            onRange={(s, e) => { setVehicleLogsStart(s); setVehicleLogsEnd(e) }}
+          />
+
+          {vehicleLogsLoading && (
+            <div className="flex justify-center py-16">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+          )}
+
+          {!vehicleLogsLoading && vehicleLogsError && (
+            <div className="alert alert-error mt-2 no-print">
+              <span className="icon-[tabler--alert-circle] size-5 shrink-0"></span>
+              <span>{vehicleLogsError}</span>
+            </div>
+          )}
+
+          {!vehicleLogsLoading && vehicleLogsRows && vehicleLogsRows.length === 0 && (
+            <p className="text-center text-base-content/50 py-16 no-print">
+              No data found for the selected filters.
+            </p>
+          )}
+
+          {!vehicleLogsLoading && vehicleLogsRows && vehicleLogsRows.length > 0 && (() => {
+            const uniqueVehicles = new Set(vehicleLogsRows.map(r => r.plateNumber)).size
+            const totalMileage   = vehicleLogsRows.reduce((s, r) => s + (r.distance ?? 0), 0)
+            const vehicleLabel   = vehicleLogsVehicle
+              ? `${vehicleLogsVehicle.vehicleModel} (${vehicleLogsVehicle.vehiclePlateNum})`
+              : 'All Vehicles'
+            const fmtShort = iso => iso
+              ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+              : '—'
+
+            return (
+              <div id="print-area" className="bg-white text-gray-900 rounded-xl border border-gray-200 shadow-md p-10 max-w-5xl mx-auto font-sans">
+                {/* Report header */}
+                <div className="text-center border-b-2 border-gray-800 pb-4 mb-4">
+                  <h1 className="text-xl font-bold uppercase tracking-widest text-gray-900">EASI — Vehicle Logs Report</h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {vehicleLabel} &nbsp;|&nbsp; Date Range: {fmtShort(vehicleLogsStart)} &mdash; {fmtShort(vehicleLogsEnd)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Generated: {fmtDateTime(vehicleLogsGeneratedAt)}</p>
+                </div>
+
+                {/* Summary dashboard */}
+                <div className="grid grid-cols-3 gap-4 mb-8 no-print">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Vehicles</p>
+                    <p className="text-3xl font-bold text-gray-900">{uniqueVehicles}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Logs</p>
+                    <p className="text-3xl font-bold text-gray-900">{vehicleLogsRows.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Mileage</p>
+                    <p className="text-3xl font-bold text-gray-900">{totalMileage} <span className="text-lg font-normal text-gray-500">km</span></p>
+                  </div>
+                </div>
+                {/* Print-only compact summary */}
+                <div className="hidden print:flex gap-8 mb-4 text-sm">
+                  <div><span className="font-semibold text-gray-700">Total Vehicles:</span> {uniqueVehicles}</div>
+                  <div><span className="font-semibold text-gray-700">Total Logs:</span> {vehicleLogsRows.length}</div>
+                  <div><span className="font-semibold text-gray-700">Total Mileage:</span> {totalMileage} km</div>
+                </div>
+
+                <SectionTitle>Vehicle Logs</SectionTitle>
+                <ReportTable
+                  head={['Vehicle', 'Plate Number', 'Odometer Reading', 'Distance', 'Date']}
+                  foot={
+                    <tr className="bg-gray-100">
+                      <td colSpan={3} className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-700">Total Mileage</td>
+                      <td className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-900">{totalMileage} km</td>
+                      <td className="border border-gray-300 px-3 py-1" />
+                    </tr>
+                  }
+                >
+                  {vehicleLogsRows.map(r => (
+                    <tr key={r.vehicleLogId} className="even:bg-gray-50">
+                      <Td>{r.vehicleModel}</Td>
+                      <Td><span className="font-mono">{r.plateNumber}</span></Td>
+                      <Td>
+                        {r.odometerEnd != null
+                          ? `${r.odometerStart}km — ${r.odometerEnd}km`
+                          : <span>{r.odometerStart}km — <span className="text-gray-400 italic">in progress</span></span>}
+                      </Td>
+                      <Td right>{r.distance != null ? `${r.distance} km` : null}</Td>
+                      <Td>{fmtDateLong(r.addedOn)}</Td>
+                    </tr>
+                  ))}
+                </ReportTable>
+
+                <div className="text-center text-xs text-gray-400 mt-8 border-t border-gray-200 pt-3">
+                  EASI System &nbsp;—&nbsp; Printed {fmtDateTime(vehicleLogsGeneratedAt)} &nbsp;—&nbsp; Vehicle Logs Report
+                </div>
+              </div>
+            )
+          })()}
+        </>
+      )}
+
+      {/* ─── Vehicle Gas Logs Report ─── */}
+      {vehicleGasLogsActive && (
+        <>
+          <DateRangeBar
+            startDate={vehicleGasLogsStart}
+            endDate={vehicleGasLogsEnd}
+            onRange={(s, e) => { setVehicleGasLogsStart(s); setVehicleGasLogsEnd(e) }}
+          />
+
+          {vehicleGasLogsLoading && (
+            <div className="flex justify-center py-16">
+              <span className="loading loading-spinner loading-lg text-primary"></span>
+            </div>
+          )}
+
+          {!vehicleGasLogsLoading && vehicleGasLogsError && (
+            <div className="alert alert-error mt-2 no-print">
+              <span className="icon-[tabler--alert-circle] size-5 shrink-0"></span>
+              <span>{vehicleGasLogsError}</span>
+            </div>
+          )}
+
+          {!vehicleGasLogsLoading && vehicleGasLogsRows && vehicleGasLogsRows.length === 0 && (
+            <p className="text-center text-base-content/50 py-16 no-print">
+              No data found for the selected filters.
+            </p>
+          )}
+
+          {!vehicleGasLogsLoading && vehicleGasLogsRows && vehicleGasLogsRows.length > 0 && (() => {
+            const uniqueVehicles = new Set(vehicleGasLogsRows.map(r => r.plateNumber)).size
+            const totalCost      = vehicleGasLogsRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+            const vehicleLabel   = vehicleGasLogsVehicle
+              ? `${vehicleGasLogsVehicle.vehicleModel} (${vehicleGasLogsVehicle.vehiclePlateNum})`
+              : 'All Vehicles'
+            const fmtShort = iso => iso
+              ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+              : '—'
+
+            return (
+              <div id="print-area" className="bg-white text-gray-900 rounded-xl border border-gray-200 shadow-md p-10 max-w-5xl mx-auto font-sans">
+                {/* Report header */}
+                <div className="text-center border-b-2 border-gray-800 pb-4 mb-4">
+                  <h1 className="text-xl font-bold uppercase tracking-widest text-gray-900">EASI — Vehicle Gas Logs Report</h1>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {vehicleLabel} &nbsp;|&nbsp; Date Range: {fmtShort(vehicleGasLogsStart)} &mdash; {fmtShort(vehicleGasLogsEnd)}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">Generated: {fmtDateTime(vehicleGasLogsGeneratedAt)}</p>
+                </div>
+
+                {/* Summary dashboard */}
+                <div className="grid grid-cols-3 gap-4 mb-8 no-print">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Vehicles</p>
+                    <p className="text-3xl font-bold text-gray-900">{uniqueVehicles}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Logs</p>
+                    <p className="text-3xl font-bold text-gray-900">{vehicleGasLogsRows.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">Total Cost</p>
+                    <p className="text-2xl font-bold text-gray-900">{fmtCurrency(totalCost)}</p>
+                  </div>
+                </div>
+                {/* Print-only compact summary */}
+                <div className="hidden print:flex gap-8 mb-4 text-sm">
+                  <div><span className="font-semibold text-gray-700">Total Vehicles:</span> {uniqueVehicles}</div>
+                  <div><span className="font-semibold text-gray-700">Total Logs:</span> {vehicleGasLogsRows.length}</div>
+                  <div><span className="font-semibold text-gray-700">Total Cost:</span> {fmtCurrency(totalCost)}</div>
+                </div>
+
+                <SectionTitle>Gas Logs</SectionTitle>
+                <ReportTable
+                  head={['Vehicle', 'Plate Number', 'Invoice ID', 'Amount', 'Date']}
+                  foot={
+                    <tr className="bg-gray-100">
+                      <td colSpan={3} className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-700">Total Cost</td>
+                      <td className="border border-gray-300 px-3 py-1 text-right font-semibold text-gray-900">{fmtCurrency(totalCost)}</td>
+                      <td className="border border-gray-300 px-3 py-1" />
+                    </tr>
+                  }
+                >
+                  {vehicleGasLogsRows.map(r => (
+                    <tr key={r.gasLogId} className="even:bg-gray-50">
+                      <Td>{r.vehicleModel}</Td>
+                      <Td><span className="font-mono">{r.plateNumber}</span></Td>
+                      <Td><span className="font-mono">{r.invoiceId}</span></Td>
+                      <Td right>{fmtCurrency(r.amount)}</Td>
+                      <Td>{fmtDateLong(r.addedOn)}</Td>
+                    </tr>
+                  ))}
+                </ReportTable>
+
+                <div className="text-center text-xs text-gray-400 mt-8 border-t border-gray-200 pt-3">
+                  EASI System &nbsp;—&nbsp; Printed {fmtDateTime(vehicleGasLogsGeneratedAt)} &nbsp;—&nbsp; Vehicle Gas Logs Report
+                </div>
+              </div>
+            )
+          })()}
+        </>
+      )}
+
       {/* Pickers */}
       <ServiceReportPickerModal isOpen={srPickerOpen} onClose={() => setSrPickerOpen(false)} onSelect={handleSrSelect} />
       <POPickerModal isOpen={poPickerOpen} onClose={() => setPoPickerOpen(false)} onSelect={handlePoSelect} />
       <EquipPOPickerModal isOpen={equipPoPickerOpen} onClose={() => setEquipPoPickerOpen(false)} onSelect={handleEquipPoSelect} />
+      <VehiclePickerModal isOpen={vehiclePickerOpen} onClose={() => setVehiclePickerOpen(false)} onSelect={handleVehicleSelect} />
+      <VehiclePickerModal isOpen={vehicleGasPickerOpen} onClose={() => setVehicleGasPickerOpen(false)} onSelect={handleVehicleGasSelect} />
     </Layout>
   )
 }

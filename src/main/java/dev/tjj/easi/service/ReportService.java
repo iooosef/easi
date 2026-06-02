@@ -2,7 +2,10 @@ package dev.tjj.easi.service;
 
 import dev.tjj.easi.dto.report.PartReportRow;
 import dev.tjj.easi.dto.report.PurchaseOrderRow;
+import dev.tjj.easi.dto.report.ServiceReportBillingRow;
 import dev.tjj.easi.dto.report.ServiceReportSummaryRow;
+import dev.tjj.easi.dto.report.VehicleGasLogRow;
+import dev.tjj.easi.dto.report.VehicleLogRow;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.repository.EquipmentRepository;
@@ -12,6 +15,8 @@ import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
+import dev.tjj.easi.repository.VehicleGasLogRepository;
+import dev.tjj.easi.repository.VehicleLogRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -32,6 +37,8 @@ public class ReportService {
     private final PartRepository partRepository;
     private final PartUsageRepository partUsageRepository;
     private final EquipmentRepository equipmentRepository;
+    private final VehicleLogRepository vehicleLogRepository;
+    private final VehicleGasLogRepository vehicleGasLogRepository;
 
     public ReportService(ServiceReportRepository serviceReportRepository,
                          ServiceReportBillingItemRepository billingItemRepository,
@@ -39,7 +46,9 @@ public class ReportService {
                          PurchaseOrderRepository purchaseOrderRepository,
                          PartRepository partRepository,
                          PartUsageRepository partUsageRepository,
-                         EquipmentRepository equipmentRepository) {
+                         EquipmentRepository equipmentRepository,
+                         VehicleLogRepository vehicleLogRepository,
+                         VehicleGasLogRepository vehicleGasLogRepository) {
         this.serviceReportRepository = serviceReportRepository;
         this.billingItemRepository = billingItemRepository;
         this.paymentLogRepository = paymentLogRepository;
@@ -47,6 +56,8 @@ public class ReportService {
         this.partRepository = partRepository;
         this.partUsageRepository = partUsageRepository;
         this.equipmentRepository = equipmentRepository;
+        this.vehicleLogRepository = vehicleLogRepository;
+        this.vehicleGasLogRepository = vehicleGasLogRepository;
     }
 
     /**
@@ -215,6 +226,106 @@ public class ReportService {
 
             return new PartReportRow(partId, name, supplierName, qtyOrdered, qtyType,
                     qtyUsed, unitPrice, total, status);
+        }).toList();
+    }
+
+    /**
+     * Returns one billing summary row per service report within the given date range.
+     * Combines billing items (services/labor), parts cost, payments, and computed balance.
+     */
+    public List<ServiceReportBillingRow> getServiceReportBillingReport(
+            LocalDate startDate, LocalDate endDate) {
+
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(23, 59, 59);
+
+        List<ServiceReport> reports = serviceReportRepository.findForSummaryReport(start, end, null);
+        if (reports.isEmpty()) return List.of();
+
+        List<Integer> srNumbers = reports.stream()
+                .map(ServiceReport::getSrNumber)
+                .toList();
+
+        Map<Integer, BigDecimal> billingTotals = billingItemRepository
+                .sumTotalBySrNumbers(srNumbers)
+                .stream()
+                .collect(Collectors.toMap(
+                        r -> (Integer) r[0],
+                        r -> new BigDecimal(r[1].toString())
+                ));
+
+        Map<Integer, BigDecimal> paidTotals = paymentLogRepository
+                .sumPaidBySrNumbers(srNumbers)
+                .stream()
+                .collect(Collectors.toMap(
+                        r -> (Integer) r[0],
+                        r -> new BigDecimal(r[1].toString())
+                ));
+
+        Map<Integer, BigDecimal> partsTotals = partRepository
+                .sumTotalCostBySrNumbers(srNumbers)
+                .stream()
+                .collect(Collectors.toMap(
+                        r -> (Integer) r[0],
+                        r -> new BigDecimal(r[1].toString())
+                ));
+
+        return reports.stream().map(sr -> {
+            Integer srNum = sr.getSrNumber();
+            LocalDate serviceDate = sr.getServiceSchedule() != null ? sr.getServiceSchedule().getDate() : null;
+            BigDecimal billing  = billingTotals.getOrDefault(srNum, BigDecimal.ZERO);
+            BigDecimal parts    = partsTotals.getOrDefault(srNum, BigDecimal.ZERO);
+            BigDecimal paid     = paidTotals.getOrDefault(srNum, BigDecimal.ZERO);
+            BigDecimal subtotal = billing.add(parts);
+            BigDecimal balance  = subtotal.subtract(paid);
+            return new ServiceReportBillingRow(srNum, serviceDate, billing, parts, subtotal, paid, balance);
+        }).toList();
+    }
+
+    /**
+     * Returns vehicle log rows within the given date range.
+     * Pass null for vehicleId to include all vehicles.
+     * Distance is null for trips that have not yet ended (odometerEnd is null).
+     */
+    public List<VehicleLogRow> getVehicleLogReport(LocalDate startDate, LocalDate endDate,
+                                                   Integer vehicleId) {
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(23, 59, 59);
+
+        List<Object[]> rawRows = vehicleLogRepository.findForReport(start, end, vehicleId);
+
+        return rawRows.stream().map(r -> {
+            Integer logId       = ((Number) r[0]).intValue();
+            String  model       = (String) r[1];
+            String  plate       = (String) r[2];
+            Integer odomStart   = r[3] != null ? ((Number) r[3]).intValue() : null;
+            Integer odomEnd     = r[4] != null ? ((Number) r[4]).intValue() : null;
+            Integer distance    = (odomStart != null && odomEnd != null) ? odomEnd - odomStart : null;
+            LocalDateTime addedOn = (LocalDateTime) r[5];
+            return new VehicleLogRow(logId, model, plate, odomStart, odomEnd, distance, addedOn);
+        }).toList();
+    }
+
+    /**
+     * Returns vehicle gas log rows within the given date range.
+     * Date is sourced from the linked VehicleLog's addedOn timestamp.
+     * Pass null for vehicleId to include all vehicles.
+     */
+    public List<VehicleGasLogRow> getVehicleGasLogReport(LocalDate startDate, LocalDate endDate,
+                                                         Integer vehicleId) {
+        LocalDateTime start = startDate.atStartOfDay();
+        LocalDateTime end = endDate.atTime(23, 59, 59);
+
+        List<Object[]> rawRows = vehicleGasLogRepository.findForReport(start, end, vehicleId);
+
+        return rawRows.stream().map(r -> {
+            Integer gasLogId      = ((Number) r[0]).intValue();
+            String  model         = (String) r[1];
+            String  plate         = (String) r[2];
+            String  invoiceId     = (String) r[3];
+            BigDecimal amount     = r[4] != null ? new BigDecimal(r[4].toString()) : BigDecimal.ZERO;
+            LocalDateTime addedOn = (LocalDateTime) r[5];
+            return new VehicleGasLogRow(gasLogId, model, plate, invoiceId, amount, addedOn);
         }).toList();
     }
 }
