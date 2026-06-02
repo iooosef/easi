@@ -312,7 +312,7 @@ export default function ProjectDocuments() {
         <div className="text-center py-24 text-base-content/40">
           <span className="icon-[tabler--files-off] size-16 mx-auto mb-4 block"></span>
           <p className="text-lg font-medium mb-1">No documents attached</p>
-          <p className="text-sm mb-6">Upload a file to attach a document to this project.</p>
+          {canEdit && <p className="text-sm mb-6">Upload a file to attach a document to this project.</p>}
           {canEdit && (
             <button type="button" className="btn btn-primary" onClick={openAdd}>
               <span className="icon-[tabler--upload] size-4"></span>

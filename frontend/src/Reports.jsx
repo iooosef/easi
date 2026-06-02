@@ -11,8 +11,8 @@ const REPORT_NAV_ITEMS = [
   { key: 'po-summary',          label: 'Purchase Orders',                         icon: 'icon-[tabler--shopping-cart]' },
   { key: 'parts-summary',       label: 'Parts',                                   icon: 'icon-[tabler--packages]' },
   { key: 'sr-billing',          label: 'Service Report Billing',                  icon: 'icon-[tabler--report-money]' },
-  { key: 'vehicle-logs',        label: 'Vehicle Logs',                            icon: 'icon-[tabler--truck]' },
-  { key: 'vehicle-gas-logs',    label: 'Vehicle Gas Logs',                        icon: 'icon-[tabler--gas-station]' },
+  { key: 'vehicle-logs',        label: 'Vehicle Logs',                            icon: 'icon-[tabler--truck]',        roles: ['ADMIN', 'STAFF'] },
+  { key: 'vehicle-gas-logs',    label: 'Vehicle Gas Logs',                        icon: 'icon-[tabler--gas-station]',  roles: null },
 ]
 
 /** Preset options for the date range bar. */
@@ -1161,7 +1161,7 @@ function buildVehicleGasLogsPdfHtml(rows, startDate, endDate, vehicleLabel, gene
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Reports() {
-  const { apiFetch } = useAuth()
+  const { apiFetch, hasRole } = useAuth()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -1534,7 +1534,7 @@ export default function Reports() {
 
         {!activeReport && !loading && (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {REPORT_NAV_ITEMS.map(({ key, label, icon }) => (
+            {REPORT_NAV_ITEMS.filter(({ roles }) => !roles || hasRole(...roles)).map(({ key, label, icon }) => (
               <button key={key} onClick={() => handleCardClick(key)} className="group text-left">
                 <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
                   <div className="card-body items-center justify-center text-center gap-3 py-8">
@@ -1655,6 +1655,10 @@ export default function Reports() {
             <button className="btn btn-soft btn-secondary" onClick={handleBack}>
               <span className="icon-[tabler--arrow-left] size-4"></span>
               Back
+            </button>
+            <button className="btn btn-soft btn-neutral" onClick={() => setVehiclePickerOpen(true)}>
+              <span className="icon-[tabler--truck] size-4"></span>
+              Change Vehicle
             </button>
             {vehicleLogsRows && vehicleLogsRows.length > 0 && (
               <>

@@ -68,7 +68,7 @@ const ADD_STEPS = [
 
 export default function InventoryEquipment() {
   const { apiFetch, hasRole } = useAuth()
-  const canEdit = hasRole('ADMIN', 'STAFF')
+  const canEdit = hasRole('ADMIN', 'STAFF', 'ACCOUNTING')
 
   // List
   const [equipment, setEquipment]         = useState([])

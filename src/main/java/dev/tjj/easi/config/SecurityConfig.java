@@ -27,195 +27,254 @@ import org.springframework.http.HttpMethod;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final UserDetailsService userDetailsService;
+        private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final UserDetailsService userDetailsService;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, UserDetailsService userDetailsService) {
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-        this.userDetailsService = userDetailsService;
-    }
+        public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter, UserDetailsService userDetailsService) {
+                this.jwtAuthenticationFilter = jwtAuthenticationFilter;
+                this.userDetailsService = userDetailsService;
+        }
 
-    /**
-     * Configures route-level access rules; employee endpoints are ADMIN/HR-only
-     * except GET /me.
-     */
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/test").permitAll()
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/v3/api-docs/**",
-                                "/v3/api-docs.yaml")
-                        .permitAll()
-                        .requestMatchers("/api/users/forgot-password", "/api/users/verify-otp", "/api/users/reset-password").permitAll()
-                        .requestMatchers("/api/users/admin-reset-password").hasAnyRole("ADMIN", "HR")
-                        .requestMatchers("/api/users/register").hasAnyRole("ADMIN", "HR")
-                        .requestMatchers(HttpMethod.PUT, "/api/users/**").hasAnyRole("ADMIN", "HR")
-                        .requestMatchers(HttpMethod.GET, "/api/employees/me").authenticated()
-                        .requestMatchers("/api/employees").hasAnyRole("ADMIN", "HR")
-                        .requestMatchers("/api/employees/**").hasAnyRole("ADMIN", "HR")
-                        .requestMatchers(HttpMethod.POST, "/api/projects").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/projects/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/projects", "/api/projects/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/vehicles").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/vehicles/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/vehicles", "/api/vehicles/**")
-                        .hasAnyRole("ADMIN", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/suppliers").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/suppliers/**").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/suppliers", "/api/suppliers/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/service-schedules").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/service-schedules/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/service-schedules", "/api/service-schedules/**")
-                        .authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/ac-units").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/ac-units/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/ac-units", "/api/ac-units/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/service-reports").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/service-reports/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PATCH, "/api/service-reports/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/service-reports", "/api/service-reports/**")
-                        .hasAnyRole("ADMIN", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/documents").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/documents/**").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/service-report-findings")
-                        .hasAnyRole("ADMIN", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.PUT, "/api/service-report-findings/**")
-                        .hasAnyRole("ADMIN", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.GET, "/api/service-report-findings",
-                                "/api/service-report-findings/**")
-                        .hasAnyRole("ADMIN", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/service-report-billing-items")
-                        .hasAnyRole("ADMIN", "ACCOUNTING")
-                        .requestMatchers(HttpMethod.PUT, "/api/service-report-billing-items/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING")
-                        .requestMatchers(HttpMethod.GET, "/api/service-report-billing-items",
-                                "/api/service-report-billing-items/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.GET, "/api/crew-employees").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/service-assignments").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/service-assignments/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.DELETE, "/api/service-assignments/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/service-assignments", "/api/service-assignments/**")
-                        .hasAnyRole("ADMIN", "STAFF", "HR", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/purchase-orders")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/purchase-orders/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/purchase-orders", "/api/purchase-orders/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/purchase-order-delivery-contacts")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/purchase-order-delivery-contacts/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/purchase-order-delivery-contacts",
-                                "/api/purchase-order-delivery-contacts/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/parts").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/parts/**").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/parts", "/api/parts/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/part-usages").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/part-usages/**").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/part-usages", "/api/part-usages/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.DELETE, "/api/part-usages/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/purchase-order-documents")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/purchase-order-documents/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/purchase-order-documents",
-                                "/api/purchase-order-documents/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/project-documents").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.DELETE, "/api/project-documents/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/project-documents", "/api/project-documents/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/vehicle-logs").hasAnyRole("ADMIN", "CREW", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/vehicle-logs/**").hasAnyRole("ADMIN", "CREW", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/vehicle-logs", "/api/vehicle-logs/**")
-                        .hasAnyRole("ADMIN", "CREW", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/vehicle-gas-logs").hasAnyRole("ADMIN", "CREW", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/vehicle-gas-logs/**")
-                        .hasAnyRole("ADMIN", "CREW", "STAFF")
-                        .requestMatchers(HttpMethod.GET, "/api/vehicle-gas-logs", "/api/vehicle-gas-logs/**")
-                        .hasAnyRole("ADMIN", "CREW", "STAFF")
-                        .requestMatchers("/api/maintenance/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/logs").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/payment-logs").hasAnyRole("ADMIN", "ACCOUNTING")
-                        .requestMatchers(HttpMethod.PUT, "/api/payment-logs/**").hasAnyRole("ADMIN", "ACCOUNTING")
-                        .requestMatchers(HttpMethod.DELETE, "/api/payment-logs/**").hasAnyRole("ADMIN", "ACCOUNTING")
-                        .requestMatchers(HttpMethod.GET, "/api/payment-logs", "/api/payment-logs/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .requestMatchers(HttpMethod.POST, "/api/equipment").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/equipment/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.DELETE, "/api/equipment/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/equipment", "/api/equipment/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.POST, "/api/equipment-usages").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.PUT, "/api/equipment-usages/**").hasAnyRole("ADMIN", "STAFF")
-                        .requestMatchers(HttpMethod.DELETE, "/api/equipment-usages/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/equipment-usages", "/api/equipment-usages/**")
-                        .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
-                        .requestMatchers(HttpMethod.GET, "/api/reports/**").hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
-                        .anyRequest().authenticated())
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        /**
+         * Configures route-level access rules; employee endpoints are ADMIN/HR-only
+         * except GET /me.
+         */
+        @Bean
+        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                http
+                                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                                .csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session.sessionCreationPolicy(
+                                                SessionCreationPolicy.STATELESS))
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers("/api/auth/**").permitAll()
+                                                .requestMatchers("/test").permitAll()
+                                                .requestMatchers(
+                                                                "/swagger-ui/**",
+                                                                "/swagger-ui.html",
+                                                                "/v3/api-docs/**",
+                                                                "/v3/api-docs.yaml")
+                                                .permitAll()
+                                                .requestMatchers("/api/users/forgot-password", "/api/users/verify-otp",
+                                                                "/api/users/reset-password")
+                                                .permitAll()
+                                                .requestMatchers("/api/users/admin-reset-password")
+                                                .hasAnyRole("ADMIN", "HR")
+                                                .requestMatchers("/api/users/register").hasAnyRole("ADMIN", "HR")
+                                                .requestMatchers(HttpMethod.PUT, "/api/users/**")
+                                                .hasAnyRole("ADMIN", "HR")
+                                                .requestMatchers(HttpMethod.GET, "/api/employees/me").authenticated()
+                                                .requestMatchers("/api/employees").hasAnyRole("ADMIN", "HR")
+                                                .requestMatchers("/api/employees/**").hasAnyRole("ADMIN", "HR")
+                                                .requestMatchers(HttpMethod.POST, "/api/projects")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/projects/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/projects", "/api/projects/**")
+                                                .authenticated()
+                                                .requestMatchers(HttpMethod.POST, "/api/vehicles")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/vehicles/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/vehicles", "/api/vehicles/**")
+                                                .hasAnyRole("ADMIN", "STAFF", "CREW", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.POST, "/api/suppliers")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/suppliers/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/suppliers", "/api/suppliers/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.POST, "/api/service-schedules")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/service-schedules/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/service-schedules",
+                                                                "/api/service-schedules/**")
+                                                .authenticated()
+                                                .requestMatchers(HttpMethod.POST, "/api/ac-units")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/ac-units/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/ac-units", "/api/ac-units/**")
+                                                .authenticated()
+                                                .requestMatchers(HttpMethod.POST, "/api/service-reports")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/service-reports/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PATCH, "/api/service-reports/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/service-reports",
+                                                                "/api/service-reports/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.POST, "/api/documents")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/documents/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.POST, "/api/service-report-findings")
+                                                .hasAnyRole("ADMIN", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.PUT, "/api/service-report-findings/**")
+                                                .hasAnyRole("ADMIN", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.GET, "/api/service-report-findings",
+                                                                "/api/service-report-findings/**")
+                                                .hasAnyRole("ADMIN", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.POST, "/api/service-report-billing-items")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.PUT, "/api/service-report-billing-items/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.GET, "/api/service-report-billing-items",
+                                                                "/api/service-report-billing-items/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.GET, "/api/crew-employees").authenticated()
+                                                .requestMatchers(HttpMethod.POST, "/api/service-assignments")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/service-assignments/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/service-assignments/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/service-assignments",
+                                                                "/api/service-assignments/**")
+                                                .hasAnyRole("ADMIN", "STAFF", "HR", "CREW")
+                                                .requestMatchers(HttpMethod.POST, "/api/purchase-orders")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/purchase-orders/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/purchase-orders",
+                                                                "/api/purchase-orders/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.POST,
+                                                                "/api/purchase-order-delivery-contacts")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT,
+                                                                "/api/purchase-order-delivery-contacts/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET,
+                                                                "/api/purchase-order-delivery-contacts",
+                                                                "/api/purchase-order-delivery-contacts/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.POST, "/api/parts")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/parts/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/parts", "/api/parts/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.POST, "/api/part-usages")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/part-usages/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/part-usages",
+                                                                "/api/part-usages/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/part-usages/**")
+                                                .hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.POST, "/api/purchase-order-documents")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/purchase-order-documents/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/purchase-order-documents",
+                                                                "/api/purchase-order-documents/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.POST, "/api/project-documents")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/project-documents/**")
+                                                .hasAnyRole("ADMIN", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/project-documents",
+                                                                "/api/project-documents/**")
+                                                .authenticated()
+                                                .requestMatchers(HttpMethod.POST, "/api/vehicle-logs")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/vehicle-logs/**")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/vehicle-logs",
+                                                                "/api/vehicle-logs/**")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.POST, "/api/vehicle-gas-logs")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/vehicle-gas-logs/**")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/vehicle-gas-logs",
+                                                                "/api/vehicle-gas-logs/**")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers("/api/maintenance/**").hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.GET, "/api/logs").hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.POST, "/api/payment-logs")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.PUT, "/api/payment-logs/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/payment-logs/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.GET, "/api/payment-logs",
+                                                                "/api/payment-logs/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.POST, "/api/equipment")
+                                                .hasAnyRole("ADMIN", "STAFF", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.PUT, "/api/equipment/**")
+                                                .hasAnyRole("ADMIN", "STAFF", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/equipment/**")
+                                                .hasRole("ADMIN")
+                                                .requestMatchers(HttpMethod.GET, "/api/equipment", "/api/equipment/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.POST, "/api/equipment-usages")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/equipment-usages/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .requestMatchers(HttpMethod.DELETE, "/api/equipment-usages/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING")
+                                                .requestMatchers(HttpMethod.GET, "/api/equipment-usages",
+                                                                "/api/equipment-usages/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF", "CREW")
+                                                .requestMatchers(HttpMethod.GET, "/api/reports/**")
+                                                .hasAnyRole("ADMIN", "ACCOUNTING", "STAFF")
+                                                .anyRequest().authenticated())
+                                .authenticationProvider(authenticationProvider())
+                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        return http.build();
-    }
+                return http.build();
+        }
 
-    /**
-     * CORS configuration allowing requests from Hoppscotch and local dev servers.
-     */
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of(
-                "https://hoppscotch.io",
-                "http://localhost:800",
-                "http://localhost:3000",
-                "http://localhost:5173"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(true);
-        configuration.setMaxAge(3600L);
+        /**
+         * CORS configuration allowing requests from Hoppscotch and local dev servers.
+         */
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource() {
+                CorsConfiguration configuration = new CorsConfiguration();
+                configuration.setAllowedOrigins(List.of(
+                                "https://hoppscotch.io",
+                                "http://localhost:800",
+                                "http://localhost:3000",
+                                "http://localhost:5173"));
+                configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                configuration.setAllowedHeaders(List.of("*"));
+                configuration.setExposedHeaders(List.of("Authorization"));
+                configuration.setAllowCredentials(true);
+                configuration.setMaxAge(3600L);
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/**", configuration);
+                return source;
+        }
 
-    /**
-     * DAO authentication provider with email-based user lookup and BCrypt password
-     * verification.
-     */
-    @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
-        return provider;
-    }
+        /**
+         * DAO authentication provider with email-based user lookup and BCrypt password
+         * verification.
+         */
+        @Bean
+        public AuthenticationProvider authenticationProvider() {
+                DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
+                provider.setPasswordEncoder(passwordEncoder());
+                return provider;
+        }
 
-    /** Exposes the AuthenticationManager bean for use in AuthService. */
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
-    }
+        /** Exposes the AuthenticationManager bean for use in AuthService. */
+        @Bean
+        public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+                return config.getAuthenticationManager();
+        }
 
-    /** BCrypt password encoder for hashing and verifying user passwords. */
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+        /** BCrypt password encoder for hashing and verifying user passwords. */
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder();
+        }
 }

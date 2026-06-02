@@ -15,10 +15,10 @@ const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
 
 const SR_MENU_ITEMS = [
   { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF'] },
-  { key: 'findings', label: 'Add & Manage Findings', icon: 'icon-[tabler--checklist]', roles: null },
+  { key: 'findings', label: 'Add & Manage Findings', icon: 'icon-[tabler--checklist]', roles: ['ADMIN', 'STAFF', 'CREW'] },
   { key: 'billing', label: 'Add & Manage Billing Items', icon: 'icon-[tabler--receipt]', roles: null },
   { key: 'purchase-order', label: 'Add & Manage Purchase Order', icon: 'icon-[tabler--file-invoice]', roles: null },
-  { key: 'documents', label: 'Add & Manage Documents', icon: 'icon-[tabler--files]', roles: null },
+  { key: 'documents', label: 'Add & Manage Documents', icon: 'icon-[tabler--files]', roles: ['ADMIN', 'STAFF', 'CREW'] },
 ]
 
 const EMPTY_FORM = {

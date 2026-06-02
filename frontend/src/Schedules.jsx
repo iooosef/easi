@@ -76,6 +76,7 @@ export default function Schedules() {
   const isProjectView = projNum !== null
 
   const canEdit = hasRole('ADMIN', 'STAFF')
+  const canManageCrew = hasRole('ADMIN', 'STAFF')
   const today = new Date()
 
   // Project name lookup map, fetched once
@@ -794,18 +795,20 @@ export default function Schedules() {
             <button type="button" className="btn btn-soft btn-secondary" onClick={closeCrew}>
               Cancel
             </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!crewDirty || crewSaving}
-              onClick={handleCrewUpdate}
-            >
-              {crewSaving
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--users] size-4"></span>
-              }
-              Update Crew Assignment
-            </button>
+            {canManageCrew && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!crewDirty || crewSaving}
+                onClick={handleCrewUpdate}
+              >
+                {crewSaving
+                  ? <span className="loading loading-spinner loading-sm"></span>
+                  : <span className="icon-[tabler--users] size-4"></span>
+                }
+                Update Crew Assignment
+              </button>
+            )}
           </>
         }
       >
@@ -842,14 +845,16 @@ export default function Schedules() {
                               <span className="badge badge-soft badge-warning badge-xs mt-0.5">New</span>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            className="btn btn-error btn-xs btn-square shrink-0"
-                            title="Un-assign crew"
-                            onClick={() => removeCrew(c.employeeId)}
-                          >
-                            <span className="icon-[tabler--x] size-3.5"></span>
-                          </button>
+                          {canManageCrew && (
+                            <button
+                              type="button"
+                              className="btn btn-error btn-xs btn-square shrink-0"
+                              title="Un-assign crew"
+                              onClick={() => removeCrew(c.employeeId)}
+                            >
+                              <span className="icon-[tabler--x] size-3.5"></span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -858,14 +863,16 @@ export default function Schedules() {
               )}
 
               {/* Add crew button */}
-              <button
-                type="button"
-                className="btn btn-soft btn-primary btn-sm w-full"
-                onClick={() => setCrewPickerOpen(true)}
-              >
-                <span className="icon-[tabler--user-plus] size-4"></span>
-                Add Crew
-              </button>
+              {canManageCrew && (
+                <button
+                  type="button"
+                  className="btn btn-soft btn-primary btn-sm w-full"
+                  onClick={() => setCrewPickerOpen(true)}
+                >
+                  <span className="icon-[tabler--user-plus] size-4"></span>
+                  Add Crew
+                </button>
+              )}
             </>
           )}
         </div>

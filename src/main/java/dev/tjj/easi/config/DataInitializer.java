@@ -169,7 +169,15 @@ public class DataInitializer implements CommandLineRunner {
         log.info("Default admin user created: josence22@gmail.com / 1488");
     }
 
-    /** Seeds one employee+user per remaining role, plus one userless CREW employee. */
+    /**
+     * Seeds one employee+user per remaining role, plus one userless CREW employee.
+     *
+     * Seeded accounts (password: 148888):
+     *   josene22+easi_accounting@gmail.com  (ACCOUNTING)
+     *   josene22+easi_hr@gmail.com          (HR)
+     *   josene22+easi_staff@gmail.com       (STAFF)
+     *   josene22+easi_crew@gmail.com        (CREW)
+     */
     private void seedRoleAccounts() {
         record RoleSeed(String firstName, String lastName, String position, String role) {}
 

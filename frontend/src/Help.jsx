@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Layout from './Layout'
+import { useAuth } from './auth'
 
 // ---------------------------------------------------------------------------
 // Static data
@@ -34,6 +35,7 @@ const MODULES = [
       'Navigate to a project\'s service reports or schedules',
     ],
     roles: 'ADMIN, STAFF, ACCOUNTING, HR, CREW',
+    hideFor: ['HR'],
   },
   {
     icon: 'icon-[tabler--file-report]',
@@ -47,6 +49,7 @@ const MODULES = [
       'Upload supporting documents (photos, PDFs)',
     ],
     roles: 'ADMIN, STAFF, CREW',
+    hideFor: ['HR'],
   },
   {
     icon: 'icon-[tabler--calendar]',
@@ -74,6 +77,7 @@ const MODULES = [
       'Attach delivery documents to purchase orders',
     ],
     roles: 'ADMIN, STAFF, ACCOUNTING, CREW',
+    hideFor: ['HR'],
   },
   {
     icon: 'icon-[tabler--truck]',
@@ -87,6 +91,7 @@ const MODULES = [
       'View gas consumption history per vehicle',
     ],
     roles: 'ADMIN, STAFF, CREW',
+    hideFor: ['HR'],
   },
   {
     icon: 'icon-[tabler--receipt]',
@@ -99,6 +104,7 @@ const MODULES = [
       'Filter records by payment status',
     ],
     roles: 'ADMIN, ACCOUNTING',
+    hideFor: ['HR'],
   },
   {
     icon: 'icon-[tabler--users]',
@@ -111,6 +117,7 @@ const MODULES = [
       'Deactivate employees who are no longer with the company',
     ],
     roles: 'ADMIN, HR',
+    hideFor: ['ACCOUNTING'],
   },
   {
     icon: 'icon-[tabler--chart-bar]',
@@ -124,6 +131,7 @@ const MODULES = [
       'Click "Print / Save as PDF" to print or export',
     ],
     roles: 'ADMIN, STAFF, ACCOUNTING',
+    hideFor: ['HR'],
   },
   {
     icon: 'icon-[tabler--tool]',
@@ -136,6 +144,7 @@ const MODULES = [
       'View the audit log of all system changes',
     ],
     roles: 'ADMIN only',
+    hideFor: ['ACCOUNTING', 'HR'],
   },
   {
     icon: 'icon-[tabler--settings]',
@@ -220,6 +229,9 @@ function AccordionItem({ icon, title, children }) {
 
 /** Module-by-module user guide. */
 function HelpTab() {
+  const { role } = useAuth()
+  const visibleModules = MODULES.filter(m => !m.hideFor?.includes(role))
+
   return (
     <div className="space-y-4">
       {/* Getting started banner */}
@@ -237,7 +249,7 @@ function HelpTab() {
 
       {/* Per-module accordions */}
       <div className="space-y-2">
-        {MODULES.map(({ icon, title, description, actions, roles }) => (
+        {visibleModules.map(({ icon, title, description, actions }) => (
           <AccordionItem key={title} icon={icon} title={title}>
             <p>{description}</p>
             <ul className="list-disc list-inside space-y-1">
