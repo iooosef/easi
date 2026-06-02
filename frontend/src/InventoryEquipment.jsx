@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
@@ -69,6 +70,7 @@ const ADD_STEPS = [
 export default function InventoryEquipment() {
   const { apiFetch, hasRole } = useAuth()
   const canEdit = hasRole('ADMIN', 'STAFF', 'ACCOUNTING')
+  const [searchParams] = useSearchParams()
 
   // List
   const [equipment, setEquipment]         = useState([])
@@ -184,6 +186,11 @@ export default function InventoryEquipment() {
   function closeAdd() {
     setAddOpen(false)
   }
+
+  // Auto-open Add Equipment modal when ?addEquipment=1 is in the URL
+  useEffect(() => {
+    if (canEdit && searchParams.get('addEquipment') === '1') openAdd()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleAddPoChange(e) {
     const { name, value } = e.target

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
@@ -58,6 +59,7 @@ function formatDate(dt) {
 
 export default function Employees() {
   const { apiFetch, hasRole } = useAuth()
+  const [searchParams] = useSearchParams()
 
   // Table state
   const [employees, setEmployees]         = useState([])
@@ -143,6 +145,11 @@ export default function Employees() {
     setNewEmpForm(EMPTY_EMP_FORM)
     setNewEmpFormError({})
   }
+
+  // Auto-open New Employee modal when ?addEmployee=1 is in the URL
+  useEffect(() => {
+    if (searchParams.get('addEmployee') === '1') openNewEmpModal()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleNewEmpFormChange(e) {
     const { name, value } = e.target

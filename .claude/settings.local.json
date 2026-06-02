@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tail:*)",
+      "Bash(head -1026 \"D:\\\\Documents\\\\TIP\\\\CS 304 \\(Soft Eng 2\\)\\\\easi\\\\frontend\\\\src\\\\Home.jsx\")",
+      "Bash(\"D:\\\\Documents\\\\TIP\\\\CS 304 \\(Soft Eng 2\\)\\\\easi\\\\frontend\\\\src\\\\Home.jsx.tmp\")"
+    ]
+  }
+}

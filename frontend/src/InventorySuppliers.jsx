@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import { notyfSuccess, notyfError } from './notyf'
@@ -22,6 +23,7 @@ const EMPTY_SUPPLIER_FORM = { name: '', address: '' }
 export default function InventorySuppliers() {
   const { apiFetch, hasRole } = useAuth()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+  const [searchParams] = useSearchParams()
 
   const [suppliers, setSuppliers]       = useState([])
   const [loading, setLoading]           = useState(true)
@@ -43,6 +45,15 @@ export default function InventorySuppliers() {
   const [updateForm, setUpdateForm]                   = useState({})
   const [updateFormError, setUpdateFormError]         = useState({})
   const [updateSubmitting, setUpdateSubmitting]       = useState(false)
+
+  // Auto-open Add Supplier modal when ?addSupplier=1 is in the URL
+  useEffect(() => {
+    if (canEdit && searchParams.get('addSupplier') === '1') {
+      setSupplierForm(EMPTY_SUPPLIER_FORM)
+      setSupplierFormError({})
+      setAddOpen(true)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Fetches suppliers, sorted by name ascending. */
   useEffect(() => {

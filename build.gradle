@@ -73,7 +73,7 @@ tasks.register('bootRunDemo', org.springframework.boot.gradle.tasks.run.BootRun)
     description = 'Runs the app with full demo seed data (all sample projects, schedules, vehicles, etc.)'
     classpath = sourceSets.main.runtimeClasspath
     mainClass = tasks.bootRun.mainClass
-    args = ['--app.seed.full=true']
+    systemProperty 'app.seed.full', 'true'
 }
 
 tasks.named('bootRunDemo').configure {
@@ -89,6 +89,13 @@ tasks.register('buildAll') {
     group = 'build'
     description = 'Builds both the frontend and the Spring Boot backend into a single JAR'
     dependsOn buildFrontend, 'build'
+}
+
+tasks.register('runDemo', Exec) {
+    group = 'application'
+    description = 'Runs the built JAR with full demo seed data'
+    commandLine 'java', '-jar', "build/libs/easi-${version}.jar", '--app.seed.full=true'
+    dependsOn 'buildAll'
 }
 
 tasks.named('build').configure {

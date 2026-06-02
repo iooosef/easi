@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
@@ -48,6 +49,7 @@ const EMPTY_USAGE_FORM  = { srNumber: '', qtyUsed: '', notes: '' }
 export default function InventoryParts() {
   const { apiFetch, hasRole } = useAuth()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+  const [searchParams] = useSearchParams()
 
   const [parts, setParts]               = useState([])
   const [loading, setLoading]           = useState(true)
@@ -274,6 +276,11 @@ export default function InventoryParts() {
     setAddPoDisplay('')
     setAddSupplierDisplay('')
   }
+
+  // Auto-open Add Part modal when ?addPart=1 is in the URL
+  useEffect(() => {
+    if (canEdit && searchParams.get('addPart') === '1') openAdd()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleAddFormChange(e) {
     const { name, value } = e.target
