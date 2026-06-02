@@ -12,7 +12,7 @@ export const NAV_ITEMS = [
     page: 'inventory',
     label: 'Inventory',
     icon: 'icon-[tabler--package]',
-    roles: ['ADMIN','STAFF','ACCOUNTING','CREW'],
+    roles: ['ADMIN','STAFF','ACCOUNTING'],
     collapseId: 'menu-inventory-collapse',
     children: [
       { page: 'inventory-purchase-orders', label: 'Purchase Orders', icon: 'icon-[tabler--file-invoice]',  path: '/inventory/purchase-orders' },

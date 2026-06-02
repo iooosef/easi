@@ -15,7 +15,7 @@ import { ManageBillingModal } from './Billing'
 
 const SCHEDULE_MENU_ITEMS = [
   { key: 'update',          label: 'Update Schedule',        icon: 'icon-[tabler--pencil]',       roles: ['ADMIN', 'STAFF'] },
-  { key: 'crew',            label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',         roles: null },
+  { key: 'crew',            label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',         roles: ['ADMIN', 'STAFF', 'HR', 'ACCOUNTING'] },
   { key: 'equipment',       label: 'Equipment Used',         icon: 'icon-[tabler--tool]',          roles: null },
   { key: 'service-report',  label: 'Manage Service Report',  icon: 'icon-[tabler--file-report]',  roles: null },
 ]

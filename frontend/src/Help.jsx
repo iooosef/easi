@@ -77,7 +77,7 @@ const MODULES = [
       'Attach delivery documents to purchase orders',
     ],
     roles: 'ADMIN, STAFF, ACCOUNTING, CREW',
-    hideFor: ['HR'],
+    hideFor: ['HR', 'CREW'],
   },
   {
     icon: 'icon-[tabler--truck]',
@@ -104,7 +104,7 @@ const MODULES = [
       'Filter records by payment status',
     ],
     roles: 'ADMIN, ACCOUNTING',
-    hideFor: ['HR'],
+    hideFor: ['HR', 'CREW', 'STAFF'],
   },
   {
     icon: 'icon-[tabler--users]',
@@ -117,7 +117,7 @@ const MODULES = [
       'Deactivate employees who are no longer with the company',
     ],
     roles: 'ADMIN, HR',
-    hideFor: ['ACCOUNTING'],
+    hideFor: ['ACCOUNTING', 'STAFF'],
   },
   {
     icon: 'icon-[tabler--chart-bar]',
@@ -131,7 +131,7 @@ const MODULES = [
       'Click "Print / Save as PDF" to print or export',
     ],
     roles: 'ADMIN, STAFF, ACCOUNTING',
-    hideFor: ['HR'],
+    hideFor: ['HR', 'CREW'],
   },
   {
     icon: 'icon-[tabler--tool]',
@@ -144,7 +144,7 @@ const MODULES = [
       'View the audit log of all system changes',
     ],
     roles: 'ADMIN only',
-    hideFor: ['ACCOUNTING', 'HR'],
+    hideFor: ['ACCOUNTING', 'HR', 'CREW', 'STAFF'],
   },
   {
     icon: 'icon-[tabler--settings]',

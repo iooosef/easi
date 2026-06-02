@@ -372,7 +372,7 @@ export default function Documents() {
         <div className="text-center py-24 text-base-content/40">
           <span className="icon-[tabler--file-off] size-16 mx-auto mb-4 block"></span>
           <p className="text-lg font-medium mb-1">No document attached</p>
-          <p className="text-sm mb-6">Upload an image or PDF to attach a document to this {entityType.replace('-', ' ')}.</p>
+          {canEdit && <p className="text-sm mb-6">Upload an image or PDF to attach a document to this {entityType.replace('-', ' ')}.</p>}
           {canEdit && (
             <button type="button" className="btn btn-primary" onClick={openAdd}>
               <span className="icon-[tabler--upload] size-4"></span>
