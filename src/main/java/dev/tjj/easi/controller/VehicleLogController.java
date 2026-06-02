@@ -38,17 +38,29 @@ public class VehicleLogController {
         return ResponseEntity.ok(vehicleLogService.update(vehicleLogId, request));
     }
 
-    /** Returns a page of vehicle log records, optionally filtered by vehiclesId. Available to ADMIN, CREW, and STAFF. */
+    /** Returns a page of vehicle log records, optionally filtered by vehiclesId or schedId. Available to ADMIN, CREW, and STAFF. */
     @GetMapping
     public ResponseEntity<Page<VehicleLogResponse>> getAll(
             @RequestParam(required = false) Integer vehiclesId,
+            @RequestParam(required = false) Integer schedId,
             Pageable pageable) {
-        return ResponseEntity.ok(vehicleLogService.getAll(vehiclesId, pageable));
+        return ResponseEntity.ok(vehicleLogService.getAll(vehiclesId, schedId, pageable));
     }
 
     /** Returns a single vehicle log record by ID. Available to ADMIN, CREW, and STAFF. */
     @GetMapping("/{vehicleLogId}")
     public ResponseEntity<VehicleLogResponse> getById(@PathVariable Integer vehicleLogId) {
         return ResponseEntity.ok(vehicleLogService.getById(vehicleLogId));
+    }
+
+    /**
+     * Returns the most recent vehicle log with no end odometer for the given vehicle.
+     * Returns 204 No Content when no incomplete log exists.
+     */
+    @GetMapping("/latest-incomplete")
+    public ResponseEntity<VehicleLogResponse> getLatestIncomplete(@RequestParam Integer vehiclesId) {
+        return vehicleLogService.getLatestIncomplete(vehiclesId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
     }
 }

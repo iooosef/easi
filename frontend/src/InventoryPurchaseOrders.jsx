@@ -829,7 +829,7 @@ export default function InventoryPurchaseOrders() {
               <table className="table table-zebra w-full">
                 <thead>
                   <tr>
-                    <th>PO Number</th><th>Purpose</th><th>Total Cost</th><th>SR #</th><th>Added On</th><th>Actions</th>
+                    <th>PO Number</th><th>Purpose</th><th>Terms</th><th>Total Cost</th><th>SR #</th><th>Added On</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -837,6 +837,7 @@ export default function InventoryPurchaseOrders() {
                     <tr key={o.poNum}>
                       <td className="font-mono font-semibold text-sm">{o.poNum}</td>
                       <td className="max-w-48"><span className="line-clamp-1 text-sm font-medium" title={o.purpose}>{o.purpose}</span></td>
+                      <td className="text-sm">{o.terms ?? <span className="text-base-content/40">—</span>}</td>
                       <td className="text-sm font-medium">{formatCurrency(o.totalCost)}</td>
                       <td className="text-sm">
                         {o.srNum ? <span className="badge badge-soft badge-neutral text-xs">SR #{o.srNum}</span> : <span className="text-base-content/40">—</span>}

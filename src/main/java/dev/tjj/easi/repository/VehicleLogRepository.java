@@ -13,5 +13,9 @@ public interface VehicleLogRepository extends JpaRepository<VehicleLog, Integer>
 
     Page<VehicleLog> findByVehicleVehiclesId(Integer vehiclesId, Pageable pageable);
 
+    Page<VehicleLog> findByServiceScheduleSchedId(Integer schedId, Pageable pageable);
+
     Optional<VehicleLog> findTopByVehicleVehiclesIdAndOdometerEndIsNotNullOrderByAddedOnDesc(Integer vehiclesId);
+
+    Optional<VehicleLog> findTopByVehicleVehiclesIdAndOdometerEndIsNullOrderByAddedOnDesc(Integer vehiclesId);
 }

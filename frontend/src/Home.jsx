@@ -8,6 +8,7 @@ const HOME_NAV_ITEMS = [
   { page: 'new-service-report', label: 'New Service Report', icon: 'icon-[tabler--file-plus]', path: '/service-report/new', roles: ['ADMIN', 'STAFF'] },
   { page: 'new-purchase-order', label: 'New Purchase Order', icon: 'icon-[tabler--file-invoice]', path: '/inventory/purchase-orders?newPO=1', roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
   { page: 'record-payment', label: 'Record a Payment', icon: 'icon-[tabler--cash]', path: '/billing?status=unpaid,partial', roles: ['ADMIN', 'ACCOUNTING'] },
+  { page: 'add-vehicle-log', label: 'Add Vehicle Log', icon: 'icon-[tabler--truck]', path: '/vehicles?addLog=1', roles: ['ADMIN', 'STAFF', 'CREW'] },
 ]
 
 export default function Home() {

@@ -715,9 +715,9 @@ export default function VehicleLogs() {
                   <tr>
                     <th>Log #</th>
                     <th>Vehicle</th>
-                    <th>Schedule</th>
                     <th>Purpose</th>
                     <th>Date</th>
+                    <th>Status</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -732,9 +732,13 @@ export default function VehicleLogs() {
                           <span className="font-mono">{l.vehiclePlateNum}</span>
                         </p>
                       </td>
-                      <td className="max-w-[120px] font-mono text-sm">{l.schedId != null ? `#${l.schedId}` : '—'}</td>
                       <td>{l.purpose}</td>
                       <td className="text-sm text-base-content/70">{formatDate(l.addedOn)}</td>
+                      <td>
+                        <span className={`badge badge-soft ${statusBadgeClass(l.status)} text-xs`}>
+                          {l.status.charAt(0).toUpperCase() + l.status.slice(1)}
+                        </span>
+                      </td>
                       <td>
                         <button
                           className="btn btn-soft btn-primary btn-sm"

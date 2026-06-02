@@ -20,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 /** Handles vehicle log business logic: creation, updates, and retrieval. */
 @Service
@@ -65,12 +66,21 @@ public class VehicleLogService {
         return toResponse(saved);
     }
 
-    /** Returns a page of vehicle log records, optionally filtered by vehicle ID. */
-    public Page<VehicleLogResponse> getAll(Integer vehiclesId, Pageable pageable) {
+    /** Returns a page of vehicle log records, optionally filtered by vehicle ID or schedule ID. */
+    public Page<VehicleLogResponse> getAll(Integer vehiclesId, Integer schedId, Pageable pageable) {
         if (vehiclesId != null) {
             return vehicleLogRepository.findByVehicleVehiclesId(vehiclesId, pageable).map(this::toResponse);
         }
+        if (schedId != null) {
+            return vehicleLogRepository.findByServiceScheduleSchedId(schedId, pageable).map(this::toResponse);
+        }
         return vehicleLogRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    /** Returns the most recent vehicle log with no end odometer for the given vehicle, if any. */
+    public Optional<VehicleLogResponse> getLatestIncomplete(Integer vehiclesId) {
+        return vehicleLogRepository.findTopByVehicleVehiclesIdAndOdometerEndIsNullOrderByAddedOnDesc(vehiclesId)
+                .map(this::toResponse);
     }
 
     /** Returns a single vehicle log record by ID. */
