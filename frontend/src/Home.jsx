@@ -1,13 +1,23 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
+import AnySchedulePickerModal from './AnySchedulePickerModal'
+import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
-const EMPTY_GAS_FORM = { invoiceId: '', amount: '' }
-const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+const EMPTY_LOG_FORM = {
+  purpose: '',
+  schedId: '',
+  _scheduleDisplay: '',
+  destination: '',
+  driverEmployeeId: '',
+  odometerStart: '',
+  odometerEnd: '',
+  status: 'driving',
+}
+const STATUS_OPTIONS = ['driving', 'completed']
 
 const FINDING_TYPE_OPTIONS = ['GOOD', 'DEFECT', 'WORN', 'DIRTY', 'LEAK', 'FAIL']
 const EMPTY_FINDING_FORM = { findingType: 'GOOD', partModel: '', acNum: '', remarks: '' }
@@ -40,7 +50,7 @@ const HOME_NAV_ITEMS = [
 
 /** Action items that open an inline modal instead of navigating. */
 const HOME_ACTION_ITEMS = [
-  { page: 'log-refueling', label: 'Log Refueling',  icon: 'icon-[tabler--gas-station]',   action: 'refueling', roles: ['ADMIN', 'STAFF', 'CREW'] },
+  { page: 'log-refueling', label: 'Add Vehicle Log', icon: 'icon-[tabler--truck]',          action: 'refueling', roles: ['ADMIN', 'STAFF', 'CREW'] },
   { page: 'add-findings',  label: 'Add Findings',   icon: 'icon-[tabler--clipboard-list]', action: 'findings',  roles: ['CREW'] },
 ]
 
@@ -50,26 +60,25 @@ export default function Home() {
   const navCards    = HOME_NAV_ITEMS.filter(({ roles }) => roles === null || hasRole(...roles))
   const actionCards = HOME_ACTION_ITEMS.filter(({ roles }) => roles === null || hasRole(...roles))
 
-  // --- Log Refueling multi-step flow ---
-  // refuelStep: null | 'pick-vehicle' | 'pick-log' | 'add-gas-log'
+  // --- Add Vehicle Log flow ---
+  // refuelStep: null | 'pick-vehicle' | 'new-log'
   const [refuelStep, setRefuelStep] = useState(null)
 
-  // Step 1: vehicle list
-  const [vehicles, setVehicles]             = useState([])
-  const [vehiclesLoading, setVehiclesLoading] = useState(false)
-  const [selectedVehicle, setSelectedVehicle] = useState(null)
+  // Step 1: vehicle list + incomplete check
+  const [vehicles, setVehicles]                               = useState([])
+  const [vehiclesLoading, setVehiclesLoading]                 = useState(false)
+  const [selectedVehicle, setSelectedVehicle]                 = useState(null)
+  const [addLogCheckingIncomplete, setAddLogCheckingIncomplete] = useState(false)
+  const [incompleteLog, setIncompleteLog]                     = useState(null)
 
-  // Step 2: vehicle log list
-  const [vehicleLogs, setVehicleLogs]       = useState([])
-  const [logsLoading, setLogsLoading]       = useState(false)
-  const [selectedLog, setSelectedLog]       = useState(null)
-
-  // Step 3: gas log form
-  const [gasForm, setGasForm]               = useState(EMPTY_GAS_FORM)
-  const [gasFormError, setGasFormError]     = useState({})
-  const [gasSubmitting, setGasSubmitting]   = useState(false)
-  const [gasFile, setGasFile]               = useState(null)
-  const gasFileRef                          = useRef(null)
+  // Step 2: new vehicle log form
+  const [addLogForm, setAddLogForm]                 = useState(EMPTY_LOG_FORM)
+  const [addLogFormError, setAddLogFormError]       = useState({})
+  const [addLogSubmitting, setAddLogSubmitting]     = useState(false)
+  const [addLogDriverLabel, setAddLogDriverLabel]   = useState('')
+  const [addLogSchedPickerOpen, setAddLogSchedPickerOpen] = useState(false)
+  const [addLogDriverPickerOpen, setAddLogDriverPickerOpen] = useState(false)
+  const [addLogOdoStartLocked, setAddLogOdoStartLocked] = useState(false)
 
   // --- Add Findings wizard ---
   const [findingsOpen, setFindingsOpen]             = useState(false)
@@ -106,26 +115,26 @@ export default function Home() {
   const [fEditError, setFEditError]                 = useState({})
   const [fEditSubmitting, setFEditSubmitting]       = useState(false)
 
-  const canManageDocs = hasRole('ADMIN', 'STAFF')
-
-  /** Opens the refueling flow at step 1. */
+  /** Opens the add vehicle log flow at step 1. */
   function openRefueling() {
     setRefuelStep('pick-vehicle')
     setSelectedVehicle(null)
-    setSelectedLog(null)
-    setGasForm(EMPTY_GAS_FORM)
-    setGasFormError({})
-    setGasFile(null)
+    setAddLogForm(EMPTY_LOG_FORM)
+    setAddLogFormError({})
+    setAddLogDriverLabel('')
+    setIncompleteLog(null)
+    setAddLogOdoStartLocked(false)
   }
 
-  /** Closes and resets the entire refueling flow. */
+  /** Closes and resets the entire add vehicle log flow. */
   function closeRefueling() {
     setRefuelStep(null)
     setSelectedVehicle(null)
-    setSelectedLog(null)
-    setGasForm(EMPTY_GAS_FORM)
-    setGasFormError({})
-    setGasFile(null)
+    setAddLogForm(EMPTY_LOG_FORM)
+    setAddLogFormError({})
+    setAddLogDriverLabel('')
+    setIncompleteLog(null)
+    setAddLogOdoStartLocked(false)
   }
 
   /** Opens the findings wizard at step 1. */
@@ -208,91 +217,95 @@ export default function Home() {
     return () => { active = false }
   }, [apiFetch, refuelStep])
 
-  /** Fetch vehicle logs for the selected vehicle when step 2 opens. */
-  useEffect(() => {
-    if (refuelStep !== 'pick-log' || !selectedVehicle) return
-    let active = true
-    setLogsLoading(true)
-    const params = new URLSearchParams({
-      vehiclesId: String(selectedVehicle.vehiclesId),
-      size: '50',
-      sort: 'addedOn,desc',
-    })
-    apiFetch(`/api/vehicle-logs?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setVehicleLogs(data.content ?? []) })
-      .catch(() => { if (active) setVehicleLogs([]) })
-      .finally(() => { if (active) setLogsLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, refuelStep, selectedVehicle])
-
-  /** Advance to step 2 with the chosen vehicle. */
-  function handleVehicleSelect(vehicle) {
+  /**
+   * Called when the user picks a vehicle in step 1.
+   * Blocks if the vehicle has an ongoing trip (no odometerEnd).
+   * Otherwise pre-fills odometerStart from the last log's odometerEnd and advances.
+   */
+  async function handleVehicleSelect(vehicle) {
     setSelectedVehicle(vehicle)
-    setVehicleLogs([])
-    setRefuelStep('pick-log')
-  }
-
-  /** Advance to step 3 with the chosen log. */
-  function handleLogSelect(log) {
-    setSelectedLog(log)
-    setGasForm(EMPTY_GAS_FORM)
-    setGasFormError({})
-    setGasFile(null)
-    setRefuelStep('add-gas-log')
-  }
-
-  function handleGasFormChange(e) {
-    const { name, value } = e.target
-    setGasForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  /** Submits the gas log, optionally uploading a document first. */
-  async function handleGasSubmit(e) {
-    e.preventDefault()
-    setGasFormError({})
-    setGasSubmitting(true)
+    setAddLogCheckingIncomplete(true)
     try {
-      let docuId = null
-      if (gasFile) {
-        if (!ACCEPTED_TYPES.includes(gasFile.type)) {
-          setGasFormError({ file: 'File must be an image (JPG/PNG/GIF/WebP) or PDF.' })
-          notyfError('Invalid file type')
-          return
+      const res = await apiFetch(`/api/vehicle-logs/latest-incomplete?vehiclesId=${vehicle.vehiclesId}`)
+      if (res.status === 200) {
+        setIncompleteLog(await res.json())
+      } else {
+        setIncompleteLog(null)
+        let prefillOdo = ''
+        const lastRes = await apiFetch(
+          `/api/vehicle-logs?vehiclesId=${vehicle.vehiclesId}&sort=addedOn,desc&size=1`
+        )
+        if (lastRes.ok) {
+          const lastData = await lastRes.json()
+          const lastLog = lastData.content?.[0]
+          if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
         }
-        const fd = new FormData()
-        fd.append('file', gasFile)
-        const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
-        if (!uploadRes.ok) {
-          setGasFormError(await parseApiError(uploadRes))
-          notyfError('File upload failed')
-          return
-        }
-        const docData = await uploadRes.json()
-        docuId = docData.docuId
+        setAddLogOdoStartLocked(prefillOdo !== '')
+        setAddLogForm({ ...EMPTY_LOG_FORM, odometerStart: prefillOdo })
+        setAddLogFormError({})
+        setAddLogDriverLabel('')
+        setRefuelStep('new-log')
       }
+    } catch {
+      setIncompleteLog(null)
+      setAddLogForm(EMPTY_LOG_FORM)
+      setAddLogFormError({})
+      setAddLogDriverLabel('')
+      setRefuelStep('new-log')
+    } finally {
+      setAddLogCheckingIncomplete(false)
+    }
+  }
 
-      const res = await apiFetch('/api/vehicle-gas-logs', {
+  function handleAddLogFormChange(e) {
+    const { name, value } = e.target
+    setAddLogForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  function handleAddLogScheduleSelect(schedule) {
+    setAddLogSchedPickerOpen(false)
+    const display = `Sched #${schedule.schedId} · Project #${schedule.projNum} · ${schedule.date ?? '—'}`
+    setAddLogForm(prev => ({ ...prev, schedId: String(schedule.schedId), _scheduleDisplay: display }))
+  }
+
+  function handleAddLogDriverSelect(employee) {
+    setAddLogDriverPickerOpen(false)
+    setAddLogForm(prev => ({ ...prev, driverEmployeeId: String(employee.employeeId) }))
+    setAddLogDriverLabel(`${employee.firstName} ${employee.lastName} — ${employee.position}`)
+  }
+
+  /** Submits the new vehicle log for the selected vehicle. */
+  async function handleAddLogSubmit(e) {
+    e.preventDefault()
+    setAddLogFormError({})
+    setAddLogSubmitting(true)
+    try {
+      const res = await apiFetch('/api/vehicle-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          vehicleLogId: selectedLog.vehicleLogId,
-          amount:       Number(gasForm.amount),
-          invoiceId:    gasForm.invoiceId,
-          docuId,
+          vehiclesId:       selectedVehicle.vehiclesId,
+          purpose:          addLogForm.purpose,
+          schedId:          addLogForm.schedId ? Number(addLogForm.schedId) : null,
+          destination:      addLogForm.destination,
+          driverEmployeeId: addLogForm.driverEmployeeId ? Number(addLogForm.driverEmployeeId) : null,
+          odometerStart:    addLogForm.odometerStart !== '' ? Number(addLogForm.odometerStart) : null,
+          odometerEnd:      addLogForm.odometerEnd !== '' ? Number(addLogForm.odometerEnd) : null,
+          status:           addLogForm.status,
         }),
       })
       if (!res.ok) {
-        setGasFormError(await parseApiError(res))
-        notyfError('Add gas log failed')
+        setAddLogFormError(await parseApiError(res))
+        notyfError('Add failed')
         return
       }
+      const data = await res.json().catch(() => ({}))
       closeRefueling()
-      setTimeout(() => notyfSuccess('Refueling logged successfully.'), 150)
+      setTimeout(() => notyfSuccess(`Log #${data.vehicleLogId} added successfully.`), 150)
     } catch (err) {
-      setGasFormError({ _general: err.message })
+      setAddLogFormError({ _general: err.message })
     } finally {
-      setGasSubmitting(false)
+      setAddLogSubmitting(false)
     }
   }
 
@@ -445,16 +458,22 @@ export default function Home() {
       {/* Step 1: Pick Vehicle */}
       <Modal
         isOpen={refuelStep === 'pick-vehicle'}
-        onClose={closeRefueling}
-        title="Log Refueling — Step 1: Select Vehicle"
+        onClose={addLogCheckingIncomplete ? undefined : closeRefueling}
+        hideClose={addLogCheckingIncomplete}
+        title="Add Vehicle Log — Select a Vehicle"
         size="max-w-2xl"
         footer={
-          <button type="button" className="btn btn-soft btn-secondary" onClick={closeRefueling}>
+          <button type="button" className="btn btn-soft btn-secondary" onClick={closeRefueling} disabled={addLogCheckingIncomplete}>
             Cancel
           </button>
         }
       >
-        {vehiclesLoading ? (
+        {addLogCheckingIncomplete ? (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <span className="loading loading-spinner loading-md text-primary"></span>
+            <p className="text-sm text-base-content/60">Checking vehicle logs…</p>
+          </div>
+        ) : vehiclesLoading ? (
           <div className="flex justify-center py-12">
             <span className="loading loading-spinner loading-md text-primary"></span>
           </div>
@@ -489,179 +508,229 @@ export default function Home() {
         )}
       </Modal>
 
-      {/* Step 2: Pick Vehicle Log */}
+      {/* Blocking modal — vehicle is still on a trip with no end odometer */}
+      {incompleteLog && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Vehicle Still Out</h3>
+                  <span className="text-sm text-base-content/50">{selectedVehicle?.vehicleModel} · {selectedVehicle?.vehiclePlateNum}</span>
+                </div>
+              </div>
+              <div className="modal-body flex flex-col gap-4">
+                <div className="alert alert-error py-3">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">
+                    This vehicle has an ongoing trip with no end odometer recorded. Return the vehicle and log the end odometer before adding a new trip.
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Log #</span>
+                    <span className="font-medium font-mono">{incompleteLog.vehicleLogId}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Driver</span>
+                    <span className="font-medium">{incompleteLog.driverName}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Purpose</span>
+                    <span className="font-medium">{incompleteLog.purpose}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Odometer Start</span>
+                    <span className="font-medium">{incompleteLog.odometerStart?.toLocaleString()} km</span>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-primary" onClick={() => setIncompleteLog(null)}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Step 2: New Vehicle Log form */}
       <Modal
-        isOpen={refuelStep === 'pick-log'}
+        isOpen={refuelStep === 'new-log'}
         onClose={closeRefueling}
-        title={`Log Refueling — Step 2: Select Log (${selectedVehicle?.vehicleModel ?? ''})`}
+        title={`New Vehicle Log — ${selectedVehicle?.vehicleModel ?? ''}`}
         size="max-w-2xl"
         footer={
-          <div className="flex gap-2 w-full">
-            <button type="button" className="btn btn-soft btn-secondary" onClick={() => setRefuelStep('pick-vehicle')}>
-              <span className="icon-[tabler--arrow-left] size-4"></span>
-              Back
-            </button>
-            <button type="button" className="btn btn-soft btn-secondary ml-auto" onClick={closeRefueling}>
+          <>
+            <button type="button" className="btn btn-soft btn-secondary" onClick={closeRefueling}>
               Cancel
             </button>
-          </div>
-        }
-      >
-        {logsLoading ? (
-          <div className="flex justify-center py-12">
-            <span className="loading loading-spinner loading-md text-primary"></span>
-          </div>
-        ) : vehicleLogs.length === 0 ? (
-          <div className="text-center py-12 text-base-content/40">
-            <span className="icon-[tabler--road-off] size-10 mx-auto mb-2 block"></span>
-            <p>No vehicle logs found for this vehicle.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto rounded-box border border-base-300">
-            <table className="table table-zebra table-sm w-full">
-              <thead>
-                <tr>
-                  <th>Log #</th>
-                  <th>Purpose</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {vehicleLogs.map(log => (
-                  <tr key={log.vehicleLogId}>
-                    <td className="font-mono text-xs">{log.vehicleLogId}</td>
-                    <td className="text-sm">{log.purpose}</td>
-                    <td>
-                      <span className={`badge badge-soft text-xs ${log.status === 'completed' ? 'badge-success' : 'badge-info'}`}>
-                        {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="text-xs text-base-content/60">
-                      {log.addedOn ? new Date(log.addedOn).toISOString().slice(0, 10) : '—'}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-xs"
-                        onClick={() => handleLogSelect(log)}
-                      >
-                        Select
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Modal>
-
-      {/* Step 3: Add Gas Log */}
-      <Modal
-        isOpen={refuelStep === 'add-gas-log'}
-        onClose={closeRefueling}
-        title="Log Refueling — Step 3: Add Gas Log"
-        size="max-w-lg"
-        footer={
-          <div className="flex gap-2 w-full">
-            <button type="button" className="btn btn-soft btn-secondary" onClick={() => setRefuelStep('pick-log')}>
-              <span className="icon-[tabler--arrow-left] size-4"></span>
-              Back
+            <button type="submit" form="home-add-log-form" className="btn btn-primary" disabled={addLogSubmitting}>
+              {addLogSubmitting
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--plus] size-4"></span>
+              }
+              Add Log
             </button>
-            <div className="ml-auto flex gap-2">
-              <button type="button" className="btn btn-soft btn-secondary" onClick={closeRefueling}>
-                Cancel
-              </button>
-              <button type="submit" form="home-gas-log-form" className="btn btn-primary" disabled={gasSubmitting}>
-                {gasSubmitting
-                  ? <span className="loading loading-spinner loading-sm"></span>
-                  : <span className="icon-[tabler--gas-station] size-4"></span>
-                }
-                Log Refueling
-              </button>
-            </div>
-          </div>
+          </>
         }
       >
-        <div className="mb-4 p-3 rounded-box bg-base-200 text-sm flex flex-col gap-0.5">
-          <span className="text-base-content/50 text-xs uppercase tracking-wide">Vehicle</span>
-          <span className="font-medium">
-            {selectedVehicle?.vehicleModel}{' '}
-            <span className="font-mono text-xs text-base-content/50">· {selectedVehicle?.vehiclePlateNum}</span>
-          </span>
-          <span className="text-base-content/50 text-xs uppercase tracking-wide mt-1">Log</span>
-          <span className="font-medium">Log #{selectedLog?.vehicleLogId} — {selectedLog?.purpose}</span>
-        </div>
-
-        <form id="home-gas-log-form" onSubmit={handleGasSubmit}>
+        <form id="home-add-log-form" onSubmit={handleAddLogSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
               <input
                 type="text"
-                name="invoiceId"
-                className={`input input-bordered w-full${gasFormError.invoiceId ? ' is-invalid' : ''}`}
-                placeholder="e.g. INV-001"
-                maxLength={16}
+                name="purpose"
+                maxLength={30}
                 required
-                value={gasForm.invoiceId}
-                onChange={handleGasFormChange}
+                className={`input input-bordered w-full${addLogFormError.purpose ? ' is-invalid' : ''}`}
+                placeholder="e.g. Material Delivery"
+                value={addLogForm.purpose}
+                onChange={handleAddLogFormChange}
               />
-              {gasFormError.invoiceId && <span className="helper-text">{gasFormError.invoiceId}</span>}
+              {addLogFormError.purpose && <span className="helper-text">{addLogFormError.purpose}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Schedule <span className="text-base-content/40 font-normal">(optional)</span></label>
+              <div className={`input input-bordered w-full flex items-center justify-between gap-2${addLogFormError.schedId ? ' is-invalid' : ''}`}>
+                <span className={`text-sm truncate ${addLogForm._scheduleDisplay ? '' : 'text-base-content/40'}`}>
+                  {addLogForm._scheduleDisplay || 'No schedule linked'}
+                </span>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    onClick={() => setAddLogSchedPickerOpen(true)}
+                  >
+                    {addLogForm._scheduleDisplay ? 'Change' : 'Select'}
+                  </button>
+                  {addLogForm._scheduleDisplay && (
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => setAddLogForm(prev => ({ ...prev, schedId: '', _scheduleDisplay: '' }))}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              {addLogFormError.schedId && <span className="helper-text">{addLogFormError.schedId}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Destination <span className="text-error">*</span></label>
+              <input
+                type="text"
+                name="destination"
+                maxLength={255}
+                required
+                className={`input input-bordered w-full${addLogFormError.destination ? ' is-invalid' : ''}`}
+                placeholder="e.g. 123 Ayala Ave, Makati City"
+                value={addLogForm.destination}
+                onChange={handleAddLogFormChange}
+              />
+              {addLogFormError.destination && <span className="helper-text">{addLogFormError.destination}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Driver <span className="text-error">*</span></label>
+              <div className={`input input-bordered w-full flex items-center justify-between gap-2${addLogFormError.driverEmployeeId ? ' is-invalid' : ''}`}>
+                <span className={`text-sm truncate ${addLogDriverLabel ? '' : 'text-base-content/40'}`}>
+                  {addLogDriverLabel || 'No driver selected'}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary shrink-0"
+                  onClick={() => setAddLogDriverPickerOpen(true)}
+                >
+                  {addLogDriverLabel ? 'Change' : 'Select'}
+                </button>
+              </div>
+              {addLogFormError.driverEmployeeId && <span className="helper-text">{addLogFormError.driverEmployeeId}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+              <label className="label-text font-medium">
+                Odometer Start (km) <span className="text-error">*</span>
+                {addLogOdoStartLocked && (
+                  <span className="ml-2 text-xs font-normal text-base-content/40">
+                    <span className="icon-[tabler--lock] size-3 inline-block align-middle mr-0.5"></span>
+                    from previous log
+                  </span>
+                )}
+              </label>
               <input
                 type="number"
-                name="amount"
-                className={`input input-bordered w-full${gasFormError.amount ? ' is-invalid' : ''}`}
-                placeholder="e.g. 500.00"
-                min="0"
-                step="0.01"
+                name="odometerStart"
+                min={0}
                 required
-                value={gasForm.amount}
-                onChange={handleGasFormChange}
+                readOnly={addLogOdoStartLocked}
+                className={`input input-bordered w-full${addLogOdoStartLocked ? ' bg-base-200 cursor-not-allowed' : ''}${addLogFormError.odometerStart ? ' is-invalid' : ''}`}
+                placeholder="e.g. 12500"
+                value={addLogForm.odometerStart}
+                onChange={addLogOdoStartLocked ? undefined : handleAddLogFormChange}
               />
-              {gasFormError.amount && <span className="helper-text">{gasFormError.amount}</span>}
+              {addLogFormError.odometerStart && <span className="helper-text">{addLogFormError.odometerStart}</span>}
             </div>
 
-            {canManageDocs && (
-              <div className="sm:col-span-2 flex flex-col gap-1">
-                <label className="label-text font-medium">
-                  Document <span className="text-base-content/40 font-normal">(optional)</span>
-                </label>
-                <input
-                  ref={gasFileRef}
-                  type="file"
-                  accept={ACCEPTED_EXTENSIONS}
-                  className="hidden"
-                  onChange={e => setGasFile(e.target.files?.[0] ?? null)}
-                />
-                <button
-                  type="button"
-                  className={`btn btn-outline w-full justify-start font-normal${gasFormError.file ? ' btn-error' : ''}`}
-                  onClick={() => gasFileRef.current?.click()}
-                >
-                  <span className="icon-[tabler--paperclip] size-4"></span>
-                  {gasFile ? gasFile.name : 'Choose file…'}
-                </button>
-                {gasFormError.file && <span className="helper-text">{gasFormError.file}</span>}
-              </div>
-            )}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Odometer End (km)</label>
+              <input
+                type="number"
+                name="odometerEnd"
+                min={0}
+                className={`input input-bordered w-full${addLogFormError.odometerEnd ? ' is-invalid' : ''}`}
+                placeholder="Leave blank if still driving"
+                value={addLogForm.odometerEnd}
+                onChange={handleAddLogFormChange}
+              />
+              {addLogFormError.odometerEnd && <span className="helper-text">{addLogFormError.odometerEnd}</span>}
+            </div>
 
-            {gasFormError._general && (
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select
+                name="status"
+                className={`select select-bordered w-full${addLogFormError.status ? ' is-invalid' : ''}`}
+                value={addLogForm.status}
+                onChange={handleAddLogFormChange}
+              >
+                {STATUS_OPTIONS.map(s => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+              {addLogFormError.status && <span className="helper-text">{addLogFormError.status}</span>}
+            </div>
+
+            {addLogFormError._general && (
               <div className="sm:col-span-2 alert alert-error py-2">
                 <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{gasFormError._general}</span>
+                <span className="text-sm">{addLogFormError._general}</span>
               </div>
             )}
           </div>
         </form>
       </Modal>
+
+      {/* Schedule picker for add log form */}
+      <AnySchedulePickerModal
+        isOpen={addLogSchedPickerOpen}
+        onClose={() => setAddLogSchedPickerOpen(false)}
+        onSelect={handleAddLogScheduleSelect}
+      />
+
+      {/* Driver picker for add log form */}
+      <EmployeePickerModal
+        isOpen={addLogDriverPickerOpen}
+        onClose={() => setAddLogDriverPickerOpen(false)}
+        onSelect={handleAddLogDriverSelect}
+      />
 
       {/* ── Add Findings wizard (z-40/z-45) ────────────────────── */}
       {findingsOpen && (

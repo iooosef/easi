@@ -186,10 +186,13 @@ export default function VehicleLogs() {
   const [refreshKey, setRefreshKey]       = useState(0)
 
   // Add modal
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
-  const [submitting, setSubmitting] = useState(false)
+  const [modalOpen, setModalOpen]         = useState(false)
+  const [form, setForm]                   = useState(EMPTY_FORM)
+  const [formError, setFormError]         = useState({})
+  const [submitting, setSubmitting]       = useState(false)
+  const [checkingIncomplete, setCheckingIncomplete] = useState(false)
+  const [incompleteLog, setIncompleteLog] = useState(null)
+  const [odoStartLocked, setOdoStartLocked] = useState(false)
 
   // Manage menu
   const [selectedLog, setSelectedLog] = useState(null)
@@ -276,11 +279,33 @@ export default function VehicleLogs() {
     }
   }
 
-  function openModal() {
-    setForm(EMPTY_FORM)
-    setFormError({})
-    setAddDriverLabel('')
-    setModalOpen(true)
+  /** Checks for an ongoing trip before opening the new log form. */
+  async function openModal() {
+    setCheckingIncomplete(true)
+    try {
+      const res = await apiFetch(`/api/vehicle-logs/latest-incomplete?vehiclesId=${vehiclesIdInt}`)
+      if (res.status === 200) {
+        setIncompleteLog(await res.json())
+        return
+      }
+      // No incomplete log — prefill odometerStart from last completed log
+      let prefillOdo = ''
+      const lastRes = await apiFetch(
+        `/api/vehicle-logs?vehiclesId=${vehiclesIdInt}&sort=addedOn,desc&size=1`
+      )
+      if (lastRes.ok) {
+        const lastData = await lastRes.json()
+        const lastLog = lastData.content?.[0]
+        if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
+      }
+      setOdoStartLocked(prefillOdo !== '')
+      setForm({ ...EMPTY_FORM, odometerStart: prefillOdo })
+      setFormError({})
+      setAddDriverLabel('')
+      setModalOpen(true)
+    } finally {
+      setCheckingIncomplete(false)
+    }
   }
 
   function closeModal() {
@@ -288,6 +313,7 @@ export default function VehicleLogs() {
     setForm(EMPTY_FORM)
     setFormError({})
     setAddDriverLabel('')
+    setOdoStartLocked(false)
   }
 
   /** Opens the edit modal pre-populated with the given log's data. */
@@ -658,8 +684,12 @@ export default function VehicleLogs() {
               type="button"
               className="btn btn-primary h-full min-h-0"
               onClick={openModal}
+              disabled={checkingIncomplete}
             >
-              <span className="icon-[tabler--plus] size-4"></span>
+              {checkingIncomplete
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : <span className="icon-[tabler--plus] size-4"></span>
+              }
               New Log
             </button>
           )}
@@ -1134,6 +1164,54 @@ export default function VehicleLogs() {
         </>
       )}
 
+      {/* Blocking modal — vehicle is still on a trip with no end odometer */}
+      {incompleteLog && (
+        <>
+          <div className="fixed inset-0 bg-base-300/40 z-[55]" />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="modal-content w-full max-w-sm shadow-xl">
+              <div className="modal-header">
+                <div>
+                  <h3 className="modal-title">Vehicle Still Out</h3>
+                  <span className="text-sm text-base-content/50">{vehicleLabel}</span>
+                </div>
+              </div>
+              <div className="modal-body flex flex-col gap-4">
+                <div className="alert alert-error py-3">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">
+                    This vehicle has an ongoing trip with no end odometer recorded. Return the vehicle and log the end odometer before adding a new trip.
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Log #</span>
+                    <span className="font-medium font-mono">{incompleteLog.vehicleLogId}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Driver</span>
+                    <span className="font-medium">{incompleteLog.driverName}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Purpose</span>
+                    <span className="font-medium">{incompleteLog.purpose}</span>
+                  </div>
+                  <div>
+                    <span className="text-xs text-base-content/50 block">Odometer Start</span>
+                    <span className="font-medium">{incompleteLog.odometerStart?.toLocaleString()} km</span>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-primary" onClick={() => setIncompleteLog(null)}>
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* New Log Modal */}
       <Modal
         isOpen={modalOpen}
@@ -1161,6 +1239,7 @@ export default function VehicleLogs() {
             onChange={handleFormChange}
             onSetForm={setForm}
             driverLabel={addDriverLabel}
+            odoStartLocked={odoStartLocked}
             onOpenSchedulePicker={() => openSchedulePicker('add')}
             onOpenDriverPicker={() => openDriverPicker('add')}
           />
@@ -1218,7 +1297,7 @@ export default function VehicleLogs() {
 }
 
 /** Shared form fields used by both the add and edit modals. */
-function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, onOpenSchedulePicker, onOpenDriverPicker }) {
+function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoStartLocked, onOpenSchedulePicker, onOpenDriverPicker }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -1298,16 +1377,25 @@ function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, onOp
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="label-text font-medium">Odometer Start (km) <span className="text-error">*</span></label>
+        <label className="label-text font-medium">
+          Odometer Start (km) <span className="text-error">*</span>
+          {odoStartLocked && (
+            <span className="ml-2 text-xs font-normal text-base-content/40">
+              <span className="icon-[tabler--lock] size-3 inline-block align-middle mr-0.5"></span>
+              from previous log
+            </span>
+          )}
+        </label>
         <input
           type="number"
           name="odometerStart"
           min={0}
           required
-          className={`input input-bordered w-full${formError.odometerStart ? ' is-invalid' : ''}`}
+          readOnly={odoStartLocked}
+          className={`input input-bordered w-full${odoStartLocked ? ' bg-base-200 cursor-not-allowed' : ''}${formError.odometerStart ? ' is-invalid' : ''}`}
           placeholder="e.g. 12500"
           value={form.odometerStart}
-          onChange={onChange}
+          onChange={odoStartLocked ? undefined : onChange}
         />
         {formError.odometerStart && <span className="helper-text">{formError.odometerStart}</span>}
       </div>
