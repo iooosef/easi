@@ -113,6 +113,25 @@ export default function MaintenancePage() {
     }
   }
 
+  async function handleDownloadBackup(filename) {
+    try {
+      const res = await apiFetch(`/api/maintenance/backups/${encodeURIComponent(filename)}`)
+      if (!res.ok) {
+        notyfError('Download failed — file not available')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      notyfError('Download failed — server error')
+    }
+  }
+
   function handleRestoreFileChange(e) {
     setRestoreFile(e.target.files[0] ?? null)
     setRestoreFormError({})
@@ -272,14 +291,13 @@ export default function MaintenancePage() {
                         <p className="text-xs text-base-content/50">{formatBytes(b.sizeBytes)} · {formatDateTime(b.createdAt)}</p>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <a
-                          href={`/api/maintenance/backups/${encodeURIComponent(b.filename)}`}
-                          download
+                        <button
                           className="btn btn-soft btn-accent btn-xs btn-square text-primary"
                           title="Download"
+                          onClick={() => handleDownloadBackup(b.filename)}
                         >
                           <span className="icon-[tabler--download] size-4"></span>
-                        </a>
+                        </button>
                         <button
                           className="btn btn-soft btn-warning btn-xs btn-square text-error"
                           title="Delete"

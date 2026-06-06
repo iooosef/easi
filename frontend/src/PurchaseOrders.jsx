@@ -1079,7 +1079,7 @@ export default function PurchaseOrders() {
       {selectedPart && (
         <>
           <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={() => { setSelectedPart(null); closeLogUsage(); closeEditUsage() }} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="modal-content w-full max-w-xl my-auto">
               <div className="modal-header">
                 <div>
