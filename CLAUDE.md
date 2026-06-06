@@ -179,6 +179,7 @@ import ModalNav from './ModalNav'
 
 - Do not build inline button lists for action menus inside modals — always use `ModalNav`.
 - `onSelect` should call the component's own `handleAction` function, not a closure from the parent page.
+- The default grid is `grid-cols-5`. Pass `cols={4}` (or `cols={3}`) to override when fewer columns look better. Empty columns are intentional.
 
 ### reports
 See [PLAN.md](PLAN.md) for the full implementation plan.

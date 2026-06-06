@@ -60,7 +60,7 @@ function formatDate(dt) {
 const PAGE_SIZE = 10
 
 /** Self-contained manage panel rendered as a modal stack layer. */
-function ManageSRModal({ report, onRefresh, onNavigate }) {
+export function ManageSRModal({ report, onRefresh, onNavigate }) {
   const { pushModal, popModal } = useModal()
   const { hasRole } = useAuth()
 

@@ -30,10 +30,11 @@ const renderCard = (s, onSelect) => (
 )
 
 /** Picker modal for selecting a Supplier. Wraps PickerModal with supplier-specific config. */
-export default function SupplierPickerModal({ isOpen, onClose, onSelect }) {
+export default function SupplierPickerModal({ isOpen, onClose, onSelect, asLayer = false }) {
   return (
     <PickerModal
-      isOpen={isOpen}
+      asLayer={asLayer}
+      isOpen={asLayer ? true : isOpen}
       onClose={onClose}
       onSelect={onSelect}
       title="Select Supplier"

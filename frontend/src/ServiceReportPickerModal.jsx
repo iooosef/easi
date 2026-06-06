@@ -10,7 +10,7 @@ import { useAuth } from './auth'
  *   onClose  - function
  *   onSelect - function(sr) — called with the chosen SR object
  */
-export default function ServiceReportPickerModal({ isOpen, onClose, onSelect, backdropZ = 'z-[65]', modalZ = 'z-[70]' }) {
+export default function ServiceReportPickerModal({ isOpen, onClose, onSelect, backdropZ = 'z-[65]', modalZ = 'z-[70]', asLayer = false }) {
   const { apiFetch } = useAuth()
 
   const [step, setStep]                     = useState('project') // 'project' | 'sr'
@@ -97,14 +97,10 @@ export default function ServiceReportPickerModal({ isOpen, onClose, onSelect, ba
       (item.workDone ?? '').toLowerCase().includes(q)
   })
 
-  if (!isOpen) return null
+  if (!asLayer && !isOpen) return null
 
-  return (
-    <>
-      <div className={`fixed inset-0 bg-base-300/70 ${backdropZ}`} onClick={onClose} />
-
-      <div className={`fixed inset-0 ${modalZ} flex items-center justify-center p-4`}>
-        <div className="modal-content w-full max-w-xl">
+  const box = (
+    <div className="modal-content w-full max-w-xl">
 
           <div className="modal-header">
             <div className="flex items-center gap-2">
@@ -247,6 +243,15 @@ export default function ServiceReportPickerModal({ isOpen, onClose, onSelect, ba
 
           </div>
         </div>
+  )
+
+  if (asLayer) return box
+
+  return (
+    <>
+      <div className={`fixed inset-0 bg-base-300/70 ${backdropZ}`} onClick={onClose} />
+      <div className={`fixed inset-0 ${modalZ} flex items-center justify-center p-4`}>
+        {box}
       </div>
     </>
   )

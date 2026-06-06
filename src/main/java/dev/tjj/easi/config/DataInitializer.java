@@ -17,6 +17,7 @@ import dev.tjj.easi.entity.VehicleLog;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.Role;
+import dev.tjj.easi.entity.ScheduleVehicle;
 import dev.tjj.easi.entity.ServiceAssignment;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.entity.ServiceReportFinding;
@@ -46,6 +47,7 @@ import dev.tjj.easi.repository.SupplierRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
+import dev.tjj.easi.repository.ScheduleVehicleRepository;
 import dev.tjj.easi.repository.ServiceAssignmentRepository;
 import dev.tjj.easi.repository.ServiceReportFindingRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
@@ -86,6 +88,7 @@ public class DataInitializer implements CommandLineRunner {
     private final PaymentLogRepository paymentLogRepository;
     private final EquipmentRepository equipmentRepository;
     private final EquipmentUsageRepository equipmentUsageRepository;
+    private final ScheduleVehicleRepository scheduleVehicleRepository;
 
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
@@ -98,6 +101,7 @@ public class DataInitializer implements CommandLineRunner {
             seedProjectData();
             seedServiceAssignments();
             seedVehicles();
+            seedScheduleVehicles();
             seedSuppliers();
             seedPurchaseOrders();
             seedBillingItems();
@@ -566,7 +570,7 @@ public class DataInitializer implements CommandLineRunner {
             return;
         }
 
-        // Track employee IDs already assigned per calendar date to prevent same-day double-booking
+        // Track employee IDs already assigned per schedule to avoid duplicate assignments in the seed
         java.util.Map<LocalDate, java.util.Set<Integer>> busyByDate = new java.util.HashMap<>();
 
         java.util.List<ServiceSchedule> schedules = serviceScheduleRepository.findAll();
@@ -671,6 +675,65 @@ public class DataInitializer implements CommandLineRunner {
         vehicleGasLog(vt5, new BigDecimal("3500.00"), "INV-2026-TRK-031");
 
         log.info("Vehicle seed completed: 2 vehicles, 12 vehicle logs, 6 gas logs.");
+    }
+
+    /**
+     * Seeds one vehicle assignment per schedule: van for Project 1 & 2 schedules,
+     * truck for Project 3 schedules. Skips if any assignments already exist.
+     */
+    private void seedScheduleVehicles() {
+        if (scheduleVehicleRepository.count() > 0) {
+            log.info("Schedule vehicle data already exists, skipping.");
+            return;
+        }
+
+        java.util.List<Vehicle> vehicles = vehicleRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 2,
+                        org.springframework.data.domain.Sort.by("vehiclesId").ascending()))
+                .getContent();
+        if (vehicles.size() < 2) {
+            log.warn("Not enough vehicles to seed schedule vehicle assignments, skipping.");
+            return;
+        }
+
+        java.util.List<ServiceSchedule> schedules = serviceScheduleRepository.findAll(
+                org.springframework.data.domain.Sort.by("schedId").ascending());
+        if (schedules.isEmpty()) {
+            log.warn("No schedules found for schedule vehicle seed, skipping.");
+            return;
+        }
+
+        var projects = projectRepository.findAll(
+                org.springframework.data.domain.PageRequest.of(0, 3,
+                        org.springframework.data.domain.Sort.by("projNum").ascending()))
+                .getContent();
+        if (projects.size() < 3) {
+            log.warn("Not enough projects for schedule vehicle seed, skipping.");
+            return;
+        }
+
+        Vehicle van   = vehicles.get(0);
+        Vehicle truck = vehicles.get(1);
+        Integer p3Id  = projects.get(2).getProjNum();
+
+        int count = 0;
+        for (ServiceSchedule schedule : schedules) {
+            // Truck for project 3, van for the rest
+            Vehicle chosen = schedule.getProject().getProjNum().equals(p3Id) ? truck : van;
+            scheduleVehicle(chosen, schedule);
+            count++;
+        }
+
+        log.info("Schedule vehicle seed completed: {} assignments created.", count);
+    }
+
+    /** Creates and saves a ScheduleVehicle linking a vehicle to a schedule. */
+    private void scheduleVehicle(Vehicle vehicle, ServiceSchedule schedule) {
+        ScheduleVehicle sv = new ScheduleVehicle();
+        sv.setVehicle(vehicle);
+        sv.setServiceSchedule(schedule);
+        sv.setAddedOn(schedule.getAddedOn());
+        scheduleVehicleRepository.save(sv);
     }
 
     /** Creates and saves a Vehicle. */
@@ -1291,7 +1354,7 @@ public class DataInitializer implements CommandLineRunner {
         Equipment manifoldGauge = equipment("DeWalt Power Drill", "durable",
                 "DCD777C2", "SN-DW-001", "20V MAX cordless drill/driver for on-site installation work",
                 "active", 1, new BigDecimal("6500.00"), now);
-        Equipment leakDetector = equipment("Ladder", "durable",
+        Equipment ladder = equipment("Ladder", "durable",
                 "LDR-6FT", "SN-LDR-001", "6-foot aluminum step ladder for elevated installation access",
                 "under_maintenance", 1, new BigDecimal("2800.00"), now);
 
@@ -1306,33 +1369,109 @@ public class DataInitializer implements CommandLineRunner {
                 null, null, "100-piece box of nitrile gloves for technician protection",
                 "active", 10, new BigDecimal("350.00"), now);
 
-        // --- Seed some deployment records ---
+        // --- Seed deployment records across completed schedules ---
+        // Schedules are sorted by schedId; all seeded dates are unique so durable
+        // double-booking is not possible across these records.
         var schedules = serviceScheduleRepository.findAll(
                 org.springframework.data.domain.Sort.by("schedId").ascending());
 
         int usageCount = 0;
-        if (schedules.size() >= 3) {
-            ServiceSchedule s1 = schedules.get(0);
-            ServiceSchedule s2 = schedules.get(1);
-            ServiceSchedule s3 = schedules.get(2);
+        int n = schedules.size();
 
-            // Vacuum pump deployed to s1 (durable — only one per day)
-            equipmentUsage(vacuumPump, s1, "Brought for refrigerant evacuation", now);
-            usageCount++;
+        // Index map (matches seedProjectData insertion order):
+        //  0=P1 Jan 8   1=P1 Jan 22  2=P1 Feb 12  3=P1 Mar 5   4=P1 Apr 10
+        //  5=P2 Jan 14  6=P2 Feb 5   7=P2 Feb 25  8=P2 Mar 18  9=P2 Apr 22
+        // 10=P3 Jan 7  11=P3 Jan 28 12=P3 Feb 18 13=P3 Mar 11 14=P3 Mar 31 15=P3 Apr 15
 
-            // Power drill deployed to s1 and s2 (different days — OK for durable)
-            equipmentUsage(manifoldGauge, s1, "Used for bracket installation", now);
-            usageCount++;
-            if (!s2.getDate().equals(s1.getDate())) {
-                equipmentUsage(manifoldGauge, s2, "Follow-up installation work", now);
-                usageCount++;
-            }
-
-            // Consumables can appear on the same day — seed to s1, s2, s3
-            equipmentUsage(wireTape, s1, null, now);
-            equipmentUsage(teflonTape, s2, null, now);
-            equipmentUsage(gloves, s3, "New box opened on site", now);
+        if (n >= 1) {
+            // P1 Jan 8 — capacitor & refrigerant recharge
+            equipmentUsage(vacuumPump,    schedules.get(0), "Refrigerant evacuation before recharge", now);
+            equipmentUsage(manifoldGauge, schedules.get(0), "Capacitor housing removal and bracket work", now);
+            equipmentUsage(wireTape,      schedules.get(0), null, now);
             usageCount += 3;
+        }
+        if (n >= 2) {
+            // P1 Jan 22 — noisy compressor tightening
+            equipmentUsage(manifoldGauge, schedules.get(1), "Compressor mount bolt tightening", now);
+            equipmentUsage(teflonTape,    schedules.get(1), null, now);
+            usageCount += 2;
+        }
+        if (n >= 3) {
+            // P1 Feb 12 — drain line clearing & filter cleaning
+            equipmentUsage(ladder,   schedules.get(2), "Ceiling cassette unit access", now);
+            equipmentUsage(wireTape, schedules.get(2), null, now);
+            equipmentUsage(gloves,   schedules.get(2), "New box opened on site", now);
+            usageCount += 3;
+        }
+        if (n >= 4) {
+            // P1 Mar 5 — routine preventive maintenance (all floors)
+            equipmentUsage(vacuumPump, schedules.get(3), "System refrigerant level verification", now);
+            equipmentUsage(teflonTape, schedules.get(3), null, now);
+            usageCount += 2;
+        }
+        if (n >= 5) {
+            // P1 Apr 10 — thermostat recalibration
+            equipmentUsage(ladder, schedules.get(4), "Thermostat panel access", now);
+            usageCount++;
+        }
+        if (n >= 6) {
+            // P2 Jan 14 — PCB fuse & circuit breaker reset
+            equipmentUsage(manifoldGauge, schedules.get(5), "PCB housing re-installation", now);
+            equipmentUsage(wireTape,      schedules.get(5), null, now);
+            usageCount += 2;
+        }
+        if (n >= 7) {
+            // P2 Feb 5 — evaporator coil deep clean & anti-fungal treatment
+            equipmentUsage(gloves, schedules.get(6), null, now);
+            usageCount++;
+        }
+        if (n >= 8) {
+            // P2 Feb 25 — drain pan re-sealing
+            equipmentUsage(ladder,     schedules.get(7), "Indoor unit access for drain pan work", now);
+            equipmentUsage(teflonTape, schedules.get(7), null, now);
+            usageCount += 2;
+        }
+        if (n >= 9) {
+            // P2 Mar 18 — condenser coil cleaning & refrigerant top-up
+            equipmentUsage(vacuumPump, schedules.get(8), "Refrigerant evacuation and top-up", now);
+            equipmentUsage(gloves,     schedules.get(8), null, now);
+            usageCount += 2;
+        }
+        if (n >= 11) {
+            // P3 Jan 7 — circuit overload redistribution
+            equipmentUsage(manifoldGauge, schedules.get(10), "Panel and busbar mounting", now);
+            equipmentUsage(wireTape,      schedules.get(10), null, now);
+            usageCount += 2;
+        }
+        if (n >= 12) {
+            // P3 Jan 28 — frozen evaporator coil defrost
+            equipmentUsage(ladder,  schedules.get(11), "Ceiling unit access for defrost procedure", now);
+            equipmentUsage(gloves,  schedules.get(11), null, now);
+            usageCount += 2;
+        }
+        if (n >= 13) {
+            // P3 Feb 18 — ductwork rattling repair
+            equipmentUsage(ladder,   schedules.get(12), "Elevated duct access for securing", now);
+            equipmentUsage(wireTape, schedules.get(12), null, now);
+            usageCount += 2;
+        }
+        if (n >= 14) {
+            // P3 Mar 11 — AHU fan motor replacement
+            equipmentUsage(vacuumPump,    schedules.get(13), "System isolation before motor swap", now);
+            equipmentUsage(manifoldGauge, schedules.get(13), "Fan motor mounting and securing", now);
+            usageCount += 2;
+        }
+        if (n >= 15) {
+            // P3 Mar 31 — routine preventive maintenance (all units)
+            equipmentUsage(ladder,     schedules.get(14), "Elevated unit access during full PM", now);
+            equipmentUsage(teflonTape, schedules.get(14), null, now);
+            equipmentUsage(gloves,     schedules.get(14), null, now);
+            usageCount += 3;
+        }
+        if (n >= 16) {
+            // P3 Apr 15 — post-maintenance follow-up inspection
+            equipmentUsage(ladder, schedules.get(15), "Post-PM unit inspection access", now);
+            usageCount++;
         }
 
         log.info("Equipment seed completed: 6 equipment records, {} usage records created.", usageCount);

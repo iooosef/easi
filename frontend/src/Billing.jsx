@@ -4,6 +4,7 @@ import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
 import { useModal } from './modal/index.js'
+import ModalNav from './ModalNav'
 import { notyfSuccess, notyfError } from './notyf'
 
 const SR_PAGE_SIZE = 10
@@ -97,13 +98,6 @@ export function BillingManageModal({ report }) {
         </button>
       </div>
       <div className="modal-body flex flex-col gap-4">
-        <div className="flex justify-end">
-          <button type="button" className="btn btn-primary btn-sm"
-            onClick={() => pushModal(<AddBillingItemModal srNumber={report.srNumber} onSuccess={refreshItems} />)}>
-            <span className="icon-[tabler--plus] size-4"></span>Add Billing Item
-          </button>
-        </div>
-
         {loading ? (
           <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm text-primary"></span></div>
         ) : items.length === 0 ? (
@@ -174,6 +168,10 @@ export function BillingManageModal({ report }) {
       </div>
       <div className="modal-footer">
         <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>
+        <button type="button" className="btn btn-primary"
+          onClick={() => pushModal(<AddBillingItemModal srNumber={report.srNumber} onSuccess={refreshItems} />)}>
+          <span className="icon-[tabler--plus] size-4"></span>Add Billing Item
+        </button>
       </div>
     </div>
   )
@@ -1406,16 +1404,14 @@ function BillingModal({ report, apiFetch, onClose }) {
 const EMPTY_PAYMENT_FORM = { paidBy: '', amount: '', paymentMethod: 'cash', receiptDate: '', receiptNumber: '', notes: '' }
 
 /** Modal for recording a new payment against an SR */
-function AddPaymentModal({ report, apiFetch, onClose, onSuccess }) {
-  const [form, setForm]           = useState(EMPTY_PAYMENT_FORM)
-  const [formError, setFormError] = useState({})
+function AddPaymentModal({ report, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm]             = useState(EMPTY_PAYMENT_FORM)
+  const [formError, setFormError]   = useState({})
   const [submitting, setSubmitting] = useState(false)
 
   const balance = Math.max(0, Number(report?.totalBilled ?? 0) - Number(report?.totalPaid ?? 0))
-
-  useEffect(() => {
-    if (report) { setForm(EMPTY_PAYMENT_FORM); setFormError({}) }
-  }, [report])
 
   function handleChange(e) {
     const { name, value } = e.target
@@ -1451,7 +1447,8 @@ function AddPaymentModal({ report, apiFetch, onClose, onSuccess }) {
         return
       }
       notyfSuccess('Payment recorded.')
-      onSuccess()
+      popModal()
+      onSuccess?.()
     } catch (err) {
       setFormError({ _general: err.message })
     } finally {
@@ -1460,14 +1457,98 @@ function AddPaymentModal({ report, apiFetch, onClose, onSuccess }) {
   }
 
   return (
-    <Modal
-      isOpen={!!report}
-      onClose={onClose}
-      title={`Record Payment — SR #${report?.srNumber ?? ''}`}
-      size="max-w-lg"
-      footer={
-        <>
-          <button type="button" className="btn btn-soft btn-secondary" onClick={onClose}>Cancel</button>
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Record Payment — SR #{report.srNumber}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <form id="add-payment-form" onSubmit={handleSubmit}>
+        <div className="modal-body">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Paid By <span className="text-error">*</span></label>
+              <input type="text" name="paidBy" maxLength={120} required
+                className={`input input-bordered w-full${formError.paidBy ? ' is-invalid' : ''}`}
+                placeholder="Enter Name or Organization"
+                value={form.paidBy} onChange={handleChange} />
+              {formError.paidBy && <span className="helper-text">{formError.paidBy}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+              <div className="flex gap-1 mb-1">
+                {[25, 50, 75].map(p => (
+                  <button key={p} type="button"
+                    className="btn btn-xs btn-soft btn-secondary flex-1"
+                    onClick={() => setForm(prev => ({ ...prev, amount: ((p / 100) * balance).toFixed(2) }))}>
+                    {p}%
+                  </button>
+                ))}
+                <button type="button"
+                  className="btn btn-xs btn-soft btn-primary flex-1"
+                  onClick={() => setForm(prev => ({ ...prev, amount: balance.toFixed(2) }))}>
+                  Full
+                </button>
+              </div>
+              <input type="number" name="amount" min="0.01" step="0.01" required
+                className={`input input-bordered w-full${formError.amount ? ' is-invalid' : ''}`}
+                placeholder="e.g. 1500.00"
+                value={form.amount} onChange={handleChange} />
+              {formError.amount && <span className="helper-text">{formError.amount}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
+              <select name="paymentMethod" required
+                className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
+                value={form.paymentMethod} onChange={handleChange}>
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+                <option value="gcash">GCash</option>
+                <option value="bank">Bank Transfer</option>
+              </select>
+              {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>
+              <input type="date" name="receiptDate" required
+                className={`input input-bordered w-full${formError.receiptDate ? ' is-invalid' : ''}`}
+                value={form.receiptDate} onChange={handleChange} />
+              {formError.receiptDate && <span className="helper-text">{formError.receiptDate}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Receipt #</label>
+              <input type="text" name="receiptNumber" maxLength={60}
+                className={`input input-bordered w-full${formError.receiptNumber ? ' is-invalid' : ''}`}
+                placeholder="e.g. OR-2026-001"
+                value={form.receiptNumber} onChange={handleChange} />
+              {formError.receiptNumber && <span className="helper-text">{formError.receiptNumber}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Notes</label>
+              <textarea name="notes" maxLength={255} rows={2}
+                className={`textarea textarea-bordered w-full${formError.notes ? ' is-invalid' : ''}`}
+                placeholder="Optional notes"
+                value={form.notes} onChange={handleChange} />
+              {formError.notes && <span className="helper-text">{formError.notes}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
           <button type="submit" form="add-payment-form" className="btn btn-success" disabled={submitting}>
             {submitting
               ? <span className="loading loading-spinner loading-sm"></span>
@@ -1475,98 +1556,264 @@ function AddPaymentModal({ report, apiFetch, onClose, onSuccess }) {
             }
             Record Payment
           </button>
-        </>
-      }
-    >
-      <form id="add-payment-form" onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        </div>
+      </form>
+    </div>
+  )
+}
 
-          <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="label-text font-medium">Paid By <span className="text-error">*</span></label>
-            <input type="text" name="paidBy" maxLength={120} required
-              className={`input input-bordered w-full${formError.paidBy ? ' is-invalid' : ''}`}
-              placeholder="Enter Name or Organization"
-              value={form.paidBy} onChange={handleChange} />
-            {formError.paidBy && <span className="helper-text">{formError.paidBy}</span>}
+const BILLING_MENU_ITEMS = [
+  { key: 'update', label: 'Update Billing Items', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'ACCOUNTING'] },
+]
+
+/**
+ * Level 1 modal — billing view for a service report.
+ * Shows SR details, billing items, parts, payments, and a ModalNav to push Level 2.
+ */
+function ManageBillingViewModal({ report }) {
+  const { pushModal, popModal } = useModal()
+  const { apiFetch, hasRole } = useAuth()
+
+  const [billingItems, setBillingItems]       = useState([])
+  const [billingLoading, setBillingLoading]   = useState(true)
+  const [billingError, setBillingError]       = useState(null)
+
+  const [parts, setParts]                 = useState([])
+  const [partsLoading, setPartsLoading]   = useState(true)
+  const [partsError, setPartsError]       = useState(null)
+
+  const [payments, setPayments]               = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [paymentsError, setPaymentsError]     = useState(null)
+
+  useEffect(() => {
+    let active = true
+    setBillingLoading(true); setBillingError(null)
+    const params = new URLSearchParams({ srNumber: String(report.srNumber), page: '0', size: '1000', sort: 'srBillingNum,asc' })
+    apiFetch(`/api/service-report-billing-items?${params}`)
+      .then(res => { if (!res.ok) throw new Error(`Failed to load billing items (${res.status})`); return res.json() })
+      .then(data => { if (active) setBillingItems(data.content ?? []) })
+      .catch(err => { if (active) setBillingError(err.message) })
+      .finally(() => { if (active) setBillingLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report.srNumber])
+
+  useEffect(() => {
+    let active = true
+    setPartsLoading(true); setPartsError(null)
+    PARTS_BILLING_STRATEGY(apiFetch, report.srNumber)
+      .then(items => { if (active) setParts(items) })
+      .catch(err => { if (active) setPartsError(err.message) })
+      .finally(() => { if (active) setPartsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report.srNumber])
+
+  useEffect(() => {
+    let active = true
+    setPaymentsLoading(true); setPaymentsError(null)
+    apiFetch(`/api/payment-logs?srNumber=${encodeURIComponent(report.srNumber)}`)
+      .then(res => { if (!res.ok) throw new Error(`Failed to load payments (${res.status})`); return res.json() })
+      .then(data => { if (active) setPayments(Array.isArray(data) ? data : []) })
+      .catch(err => { if (active) setPaymentsError(err.message) })
+      .finally(() => { if (active) setPaymentsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report.srNumber])
+
+  const billingSubtotal = subtotal(billingItems)
+  const partsSubtotal   = parts.reduce((sum, p) => sum + (p.qty ?? 0) * Number(p.unitPrice ?? 0), 0)
+  const grandTotal      = billingSubtotal + partsSubtotal
+
+  function handleAction(key) {
+    if (key === 'update') pushModal(<BillingManageModal report={report} />)
+  }
+
+  return (
+    <div className="modal-content w-full max-w-3xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">SR #{report.srNumber} — Billing</h3>
+          <span className="text-sm text-base-content/50">{report.projectName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-6">
+
+        {/* SR Details */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Complaint</span>
+            <span className="text-sm font-medium">{report.complaint ?? '—'}</span>
           </div>
-
-
-          <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
-            <div className="flex gap-1 mb-1">
-              {[25, 50, 75].map(p => (
-                <button key={p} type="button"
-                  className="btn btn-xs btn-soft btn-secondary flex-1"
-                  onClick={() => setForm(prev => ({ ...prev, amount: ((p / 100) * balance).toFixed(2) }))}>
-                  {p}%
-                </button>
-              ))}
-              <button type="button"
-                className="btn btn-xs btn-soft btn-primary flex-1"
-                onClick={() => setForm(prev => ({ ...prev, amount: balance.toFixed(2) }))}>
-                Full
-              </button>
-            </div>
-            <input type="number" name="amount" min="0.01" step="0.01" required
-              className={`input input-bordered w-full${formError.amount ? ' is-invalid' : ''}`}
-              placeholder="e.g. 1500.00"
-              value={form.amount} onChange={handleChange} />
-            {formError.amount && <span className="helper-text">{formError.amount}</span>}
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Work Done</span>
+            <span className="text-sm font-medium">{report.workDone ?? '—'}</span>
           </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
-            <select name="paymentMethod" required
-              className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
-              value={form.paymentMethod} onChange={handleChange}>
-              <option value="cash">Cash</option>
-              <option value="check">Check</option>
-              <option value="gcash">GCash</option>
-              <option value="bank">Bank Transfer</option>
-            </select>
-            {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Location</span>
+            <span className="text-sm font-medium">{report.location ?? '—'}</span>
           </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>
-            <input type="date" name="receiptDate" required
-              className={`input input-bordered w-full${formError.receiptDate ? ' is-invalid' : ''}`}
-              value={form.receiptDate} onChange={handleChange} />
-            {formError.receiptDate && <span className="helper-text">{formError.receiptDate}</span>}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Status</span>
+            <span className={`badge badge-soft ${statusBadgeClass(report.status)} text-xs`}>{report.status}</span>
           </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="label-text font-medium">Receipt #</label>
-            <input type="text" name="receiptNumber" maxLength={60}
-              className={`input input-bordered w-full${formError.receiptNumber ? ' is-invalid' : ''}`}
-              placeholder="e.g. OR-2026-001"
-              value={form.receiptNumber} onChange={handleChange} />
-            {formError.receiptNumber && <span className="helper-text">{formError.receiptNumber}</span>}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Schedule Date</span>
+            <span className="text-sm font-medium">{formatDate(report.scheduleDate)}</span>
           </div>
+        </div>
 
-          <div className="sm:col-span-2 flex flex-col gap-1">
-            <label className="label-text font-medium">Notes</label>
-            <textarea name="notes" maxLength={255} rows={2}
-              className={`textarea textarea-bordered w-full${formError.notes ? ' is-invalid' : ''}`}
-              placeholder="Optional notes"
-              value={form.notes} onChange={handleChange} />
-            {formError.notes && <span className="helper-text">{formError.notes}</span>}
-          </div>
+        <div className="divider my-0"></div>
 
-          {formError._general && (
-            <div className="sm:col-span-2 alert alert-error py-2">
-              <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-              <span className="text-sm">{formError._general}</span>
+        {/* Billing Items */}
+        <div>
+          <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Services &amp; Labor</p>
+          {billingLoading && <div className="flex justify-center py-6"><span className="loading loading-spinner loading-md text-primary"></span></div>}
+          {billingError && <div className="alert alert-error py-2 text-sm"><span className="icon-[tabler--alert-circle] size-4"></span>{billingError}</div>}
+          {!billingLoading && !billingError && billingItems.length === 0 && (
+            <p className="text-sm text-base-content/40 text-center py-4">No billing items.</p>
+          )}
+          {!billingLoading && !billingError && billingItems.length > 0 && (
+            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+              <table className="table table-zebra table-sm w-full">
+                <thead>
+                  <tr><th>#</th><th>Description</th><th className="text-right">Qty</th><th className="text-right">Unit Price</th><th className="text-right">Amount</th></tr>
+                </thead>
+                <tbody>
+                  {billingItems.map(item => (
+                    <tr key={item.srBillingNum}>
+                      <td className="font-mono text-xs">{item.srBillingNum}</td>
+                      <td className="max-w-48"><span className="line-clamp-2 text-sm" title={item.description}>{item.description}</span></td>
+                      <td className="text-right text-sm">{item.quantity}</td>
+                      <td className="text-right text-sm">{formatCurrency(item.unitPrice)}</td>
+                      <td className="text-right text-sm font-medium">{formatCurrency(item.quantity * Number(item.unitPrice))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={4} className="text-right text-sm font-semibold">Services Subtotal</td>
+                    <td className="text-right text-sm font-semibold">{formatCurrency(billingSubtotal)}</td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
         </div>
-      </form>
-    </Modal>
+
+        {/* Parts */}
+        <div>
+          <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Parts (from Purchase Orders)</p>
+          {partsLoading && <div className="flex justify-center py-6"><span className="loading loading-spinner loading-md text-primary"></span></div>}
+          {partsError && <div className="alert alert-error py-2 text-sm"><span className="icon-[tabler--alert-circle] size-4"></span>{partsError}</div>}
+          {!partsLoading && !partsError && parts.length === 0 && (
+            <p className="text-sm text-base-content/40 text-center py-4">No parts linked to this service report.</p>
+          )}
+          {!partsLoading && !partsError && parts.length > 0 && (
+            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+              <table className="table table-zebra table-sm w-full">
+                <thead>
+                  <tr><th>Part</th><th className="text-right">Qty</th><th className="text-right">Unit Price</th><th className="text-right">Amount</th></tr>
+                </thead>
+                <tbody>
+                  {parts.map(part => (
+                    <tr key={part._key}>
+                      <td className="max-w-48"><span className="line-clamp-2 text-sm" title={part.name}>{part.name}</span></td>
+                      <td className="text-right text-sm">{part.qty}</td>
+                      <td className="text-right text-sm">{formatCurrency(part.unitPrice)}</td>
+                      <td className="text-right text-sm font-medium">{formatCurrency(part.qty * Number(part.unitPrice))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={3} className="text-right text-sm font-semibold">Parts Subtotal</td>
+                    <td className="text-right text-sm font-semibold">{formatCurrency(partsSubtotal)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Payments */}
+        <div>
+          <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Payments</p>
+          {paymentsLoading && <div className="flex justify-center py-6"><span className="loading loading-spinner loading-md text-primary"></span></div>}
+          {paymentsError && <div className="alert alert-error py-2 text-sm"><span className="icon-[tabler--alert-circle] size-4"></span>{paymentsError}</div>}
+          {!paymentsLoading && !paymentsError && payments.length === 0 && (
+            <p className="text-sm text-base-content/40 text-center py-4">No payments recorded.</p>
+          )}
+          {!paymentsLoading && !paymentsError && payments.length > 0 && (
+            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+              <table className="table table-zebra table-sm w-full">
+                <thead>
+                  <tr><th>Receipt Date</th><th>Paid By</th><th>Method</th><th>Receipt #</th><th>Notes</th><th className="text-right">Amount</th></tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p.logId}>
+                      <td className="text-sm">{formatDate(p.receiptDate)}</td>
+                      <td className="text-sm">{p.paidBy ?? '—'}</td>
+                      <td className="text-sm">{formatPaymentMethod(p.paymentMethod)}</td>
+                      <td className="font-mono text-xs">{p.receiptNumber ?? '—'}</td>
+                      <td className="max-w-40"><span className="line-clamp-2 text-sm" title={p.notes}>{p.notes ?? '—'}</span></td>
+                      <td className="text-right text-sm font-medium">{formatCurrency(p.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colSpan={5} className="text-right text-sm font-semibold">Total Paid</td>
+                    <td className="text-right text-sm font-semibold text-success">
+                      {formatCurrency(payments.reduce((s, p) => s + Number(p.amount ?? 0), 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Grand Total */}
+        {!billingLoading && !partsLoading && !paymentsLoading && (() => {
+          const totalPaid = payments.reduce((s, p) => s + Number(p.amount ?? 0), 0)
+          const balance   = grandTotal - totalPaid
+          return (
+            <div className="flex justify-end">
+              <div className="rounded-box border border-base-300 bg-base-200 px-6 py-3 flex flex-col sm:flex-row items-end sm:items-center gap-4 sm:gap-8">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-base-content/70">Grand Total</span>
+                  <span className="text-base font-bold">{formatCurrency(grandTotal)}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-base-content/70">Total Paid</span>
+                  <span className="text-base font-bold text-success">{formatCurrency(totalPaid)}</span>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm text-base-content/70">Balance</span>
+                  <span className={`text-lg font-bold ${balance <= 0 ? 'text-success' : 'text-error'}`}>
+                    {formatCurrency(Math.max(balance, 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
+        <ModalNav items={BILLING_MENU_ITEMS} hasRole={hasRole} onSelect={handleAction} title="Actions" />
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>
+      </div>
+    </div>
   )
 }
 
 export default function Billing() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING')
   const [searchParams] = useSearchParams()
 
@@ -1580,9 +1827,6 @@ export default function Billing() {
   const [totalElements, setTotalElements] = useState(0)
   const [refresh, setRefresh]             = useState(0)
 
-  const [viewReport, setViewReport]     = useState(null)
-  const [manageReport, setManageReport] = useState(null)
-  const [payReport, setPayReport]       = useState(null)
 
   useEffect(() => {
     let active = true
@@ -1699,18 +1943,12 @@ export default function Billing() {
                       </td>
                       <td>
                         <div className="flex gap-1 flex-wrap">
-                          <button className="btn btn-soft btn-primary btn-xs" title="View Billing" onClick={() => setViewReport(r)}>
+                          <button className="btn btn-soft btn-primary btn-xs" title="Manage Billing" onClick={() => pushModal(<ManageBillingViewModal report={r} />)}>
                             <span className="icon-[tabler--receipt] size-3.5"></span>
-                            View
+                            Manage
                           </button>
-                          {canEdit && (
-                            <button className="btn btn-soft btn-secondary btn-xs" title="Update Billing" onClick={() => setManageReport(r)}>
-                              <span className="icon-[tabler--pencil] size-3.5"></span>
-                              Update
-                            </button>
-                          )}
                           {canEdit && (r.status === 'unpaid' || r.status === 'partial') && (
-                            <button className="btn btn-soft btn-success btn-xs" title="Record Payment" onClick={() => setPayReport(r)}>
+                            <button className="btn btn-soft btn-success btn-xs" title="Record Payment" onClick={() => pushModal(<AddPaymentModal report={r} onSuccess={() => setRefresh(k => k + 1)} />)}>
                               <span className="icon-[tabler--cash] size-3.5"></span>
                               Pay
                             </button>
@@ -1740,24 +1978,6 @@ export default function Billing() {
         </>
       )}
 
-      <BillingModal
-        report={viewReport}
-        apiFetch={apiFetch}
-        onClose={() => setViewReport(null)}
-      />
-
-      <ManageBillingModal
-        report={manageReport}
-        apiFetch={apiFetch}
-        onClose={() => setManageReport(null)}
-      />
-
-      <AddPaymentModal
-        report={payReport}
-        apiFetch={apiFetch}
-        onClose={() => setPayReport(null)}
-        onSuccess={() => { setPayReport(null); setRefresh(k => k + 1) }}
-      />
     </Layout>
   )
 }

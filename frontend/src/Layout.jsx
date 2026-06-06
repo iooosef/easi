@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from './auth'
 import logoImg from './assets/logo.png'
@@ -34,6 +34,26 @@ export const NAV_ITEMS = [
  * @param {string} activePage - Page key matching one of the NAV_ITEMS entries.
  * @param {React.ReactNode} children - Content rendered inside the main area.
  */
+/** Ticking clock — updates every second using system time */
+function Clock() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const date = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+  const time = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="text-base-content/50">{date}</span>
+      <span className="font-mono font-medium text-base-content">{time}</span>
+    </div>
+  )
+}
+
 export default function Layout({ activePage, children }) {
   const { fullName, hasRole, handleLogout } = useAuth()
   const { pathname } = useLocation()
@@ -56,7 +76,9 @@ export default function Layout({ activePage, children }) {
             <img src={logoImg} alt="EASI Logo" className="h-10" />
           </a>
         </div>
-        <div className="navbar-end flex items-center pe-2">
+        <div className="navbar-end flex items-center gap-4 pe-2">
+          <Clock />
+          <div className="w-px h-5 bg-base-content/25"></div>
           <span className="text-sm font-medium text-base-content">{fullName}</span>
         </div>
       </nav>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useModal } from './modal/index.js'
 import Layout from './Layout'
 import ManageMenu from './ManageMenu'
 import SupplierPickerModal from './SupplierPickerModal'
@@ -98,12 +99,177 @@ function PartsTable({ parts, loading, onSelectPart }) {
   )
 }
 
+/** Level 3 — Supplier picker pushed on top of AddPart modal */
+function SupplierPickerLayer({ onSelect }) {
+  const { popModal } = useModal()
+  function handleSelect(s) { onSelect(s); popModal() }
+  return <SupplierPickerModal asLayer isOpen={true} onClose={popModal} onSelect={handleSelect} />
+}
+
+/** Level 2 — Add delivery contact to local list in parent modal */
+function NewPoAddContactModal({ onAdd }) {
+  const { popModal } = useModal()
+  const [form, setForm] = useState(EMPTY_CONTACT_FORM)
+  const [formError, setFormError] = useState({})
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!form.contactName.trim()) errors.contactName = 'Contact name is required.'
+    if (!form.contactNumber.trim()) errors.contactNumber = 'Contact number is required.'
+    if (Object.keys(errors).length > 0) { setFormError(errors); return }
+    onAdd({ ...form, _tempId: Date.now() })
+    popModal()
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Delivery Contact</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="inv-new-po-contact-modal-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+              <input type="text" maxLength={120}
+                className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
+                value={form.contactName}
+                onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} />
+              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+              <input type="text" maxLength={30}
+                className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
+                value={form.contactNumber}
+                onChange={e => setForm(p => ({ ...p, contactNumber: e.target.value }))} />
+              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
+            </div>
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="inv-new-po-contact-modal-form" className="btn btn-primary">
+          <span className="icon-[tabler--plus] size-4"></span>Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Level 2 — Add part to local list; uses SupplierPickerLayer (level 3) for supplier selection */
+function NewPoAddPartModal({ onAdd }) {
+  const { popModal, pushModal } = useModal()
+  const [form, setForm] = useState(EMPTY_NEW_PO_PART_FORM)
+  const [formError, setFormError] = useState({})
+  const [supplierDisplay, setSupplierDisplay] = useState('')
+
+  function handleSupplierSelect(s) {
+    setForm(p => ({ ...p, supplierId: s.supplierId, _supplierName: s.name }))
+    setSupplierDisplay(`${s.name} (#${s.supplierId})`)
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!form.name.trim()) errors.name = 'Name is required.'
+    if (!form.quantityOrdered || Number(form.quantityOrdered) < 1) errors.quantityOrdered = 'Quantity must be at least 1.'
+    if (!form.quantityType.trim()) errors.quantityType = 'Quantity type is required.'
+    if (form.unitPrice === '' || Number(form.unitPrice) < 0) errors.unitPrice = 'Unit price must be 0 or greater.'
+    if (!form.supplierId) errors.supplierId = 'Please select a supplier.'
+    if (Object.keys(errors).length > 0) { setFormError(errors); return }
+    onAdd({ ...form, _tempId: Date.now() })
+    popModal()
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Part</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="inv-new-po-part-modal-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" maxLength={120}
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+                value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" min={1}
+                className={`input input-bordered w-full${formError.quantityOrdered ? ' is-invalid' : ''}`}
+                value={form.quantityOrdered} onChange={e => setForm(p => ({ ...p, quantityOrdered: e.target.value }))} />
+              {formError.quantityOrdered && <span className="helper-text">{formError.quantityOrdered}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Qty Type <span className="text-error">*</span></label>
+              <input type="text" maxLength={30} placeholder="e.g. pcs, kg, m"
+                className={`input input-bordered w-full${formError.quantityType ? ' is-invalid' : ''}`}
+                value={form.quantityType} onChange={e => setForm(p => ({ ...p, quantityType: e.target.value }))} />
+              {formError.quantityType && <span className="helper-text">{formError.quantityType}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" min={0} step="0.01"
+                className={`input input-bordered w-full${formError.unitPrice ? ' is-invalid' : ''}`}
+                value={form.unitPrice} onChange={e => setForm(p => ({ ...p, unitPrice: e.target.value }))} />
+              {formError.unitPrice && <span className="helper-text">{formError.unitPrice}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${formError.supplierId ? ' is-invalid' : ''}`}
+                  placeholder="Select supplier…" value={supplierDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => pushModal(<SupplierPickerLayer onSelect={handleSupplierSelect} />)}>
+                  Pick
+                </button>
+              </div>
+              {formError.supplierId && <span className="helper-text">{formError.supplierId}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Order Date</label>
+              <input type="date" className="input input-bordered w-full"
+                value={form.orderDate} onChange={e => setForm(p => ({ ...p, orderDate: e.target.value }))} />
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="inv-new-po-part-modal-form" className="btn btn-primary">
+          <span className="icon-[tabler--plus] size-4"></span>Add Part
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function InventoryPurchaseOrders() {
   const { apiFetch, hasRole } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const srNumFilter = searchParams.get('srNum') ? Number(searchParams.get('srNum')) : null
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+  const { pushModal } = useModal()
 
   // ── List ─────────────────────────────────────────────────────────────────
   const [orders, setOrders]               = useState([])
@@ -176,14 +342,7 @@ export default function InventoryPurchaseOrders() {
   const [newPoError, setNewPoError]             = useState({})
   const [newPoSubmitting, setNewPoSubmitting]   = useState(false)
   const [newPoContacts, setNewPoContacts]       = useState([])
-  const [newPoContactModalOpen, setNewPoContactModalOpen] = useState(false)
-  const [newPoContactForm, setNewPoContactForm] = useState(EMPTY_CONTACT_FORM)
-  const [newPoContactError, setNewPoContactError] = useState({})
   const [newPoParts, setNewPoParts]             = useState([])
-  const [newPoPartModalOpen, setNewPoPartModalOpen] = useState(false)
-  const [newPoPartForm, setNewPoPartForm]       = useState(EMPTY_NEW_PO_PART_FORM)
-  const [newPoPartError, setNewPoPartError]     = useState({})
-  const [suppliers, setSuppliers]               = useState([])
 
   // ── New PO wizard (base page) ────────────────────────────────────────────
   const [wizardOpen, setWizardOpen]             = useState(false)
@@ -308,13 +467,6 @@ export default function InventoryPurchaseOrders() {
     return () => { active = false }
   }, [apiFetch, activePanel, contactsRefreshKey])
 
-  useEffect(() => {
-    if (!srNumFilter && !(wizardOpen && wizardStep === 4)) return
-    apiFetch('/api/suppliers?size=200&sort=name,asc')
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => setSuppliers(d.content ?? []))
-      .catch(() => {})
-  }, [apiFetch, srNumFilter, wizardOpen, wizardStep])
 
   // Auto-open wizard when ?newPO=1 is in the URL
   useEffect(() => {
@@ -517,31 +669,7 @@ export default function InventoryPurchaseOrders() {
 
   function resetNewPo() {
     setNewPoForm(EMPTY_PO_FORM); setNewPoError({})
-    setNewPoContacts([]); setNewPoContactForm(EMPTY_CONTACT_FORM); setNewPoContactError({}); setNewPoContactModalOpen(false)
-    setNewPoParts([]); setNewPoPartForm(EMPTY_NEW_PO_PART_FORM); setNewPoPartError({}); setNewPoPartModalOpen(false)
-  }
-
-  function handleAddNewPoContact(e) {
-    e.preventDefault()
-    const errors = {}
-    if (!newPoContactForm.contactName.trim()) errors.contactName = 'Contact name is required.'
-    if (!newPoContactForm.contactNumber.trim()) errors.contactNumber = 'Contact number is required.'
-    if (Object.keys(errors).length > 0) { setNewPoContactError(errors); return }
-    setNewPoContacts(list => [...list, { ...newPoContactForm, _tempId: Date.now() }])
-    setNewPoContactForm(EMPTY_CONTACT_FORM); setNewPoContactError({}); setNewPoContactModalOpen(false)
-  }
-
-  function handleAddNewPoPart(e) {
-    e.preventDefault()
-    const errors = {}
-    if (!newPoPartForm.name.trim()) errors.name = 'Name is required.'
-    if (!newPoPartForm.quantityOrdered || Number(newPoPartForm.quantityOrdered) < 1) errors.quantityOrdered = 'Quantity must be at least 1.'
-    if (!newPoPartForm.quantityType.trim()) errors.quantityType = 'Quantity type is required.'
-    if (newPoPartForm.unitPrice === '' || Number(newPoPartForm.unitPrice) < 0) errors.unitPrice = 'Unit price must be 0 or greater.'
-    if (!newPoPartForm.supplierId) errors.supplierId = 'Please select a supplier.'
-    if (Object.keys(errors).length > 0) { setNewPoPartError(errors); return }
-    setNewPoParts(list => [...list, { ...newPoPartForm, _tempId: Date.now() }])
-    setNewPoPartForm(EMPTY_NEW_PO_PART_FORM); setNewPoPartError({}); setNewPoPartModalOpen(false)
+    setNewPoContacts([]); setNewPoParts([])
   }
 
   async function handleNewPoSubmit(e) {
@@ -619,7 +747,7 @@ export default function InventoryPurchaseOrders() {
     setWizardEquipList([]); setWizardEquipForm(EMPTY_WIZARD_EQUIP); setWizardEquipFormError({}); setWizardAddingEquip(false)
     setWizardDocList([]); setWizardDocForm({ invoiceId: '', file: null }); setWizardDocFormError({}); setWizardAddingDoc(false)
     setWizardSubmitError({})
-    resetNewPo()
+    setNewPoForm(EMPTY_PO_FORM); setNewPoError({}); setNewPoContacts([]); setNewPoParts([])
   }
 
   function handleNextWizardEquipStep2() {
@@ -1588,7 +1716,7 @@ export default function InventoryPurchaseOrders() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Delivery Contacts</span>
                     <button type="button" className="btn btn-soft btn-accent btn-sm"
-                      onClick={() => { setNewPoContactForm(EMPTY_CONTACT_FORM); setNewPoContactError({}); setNewPoContactModalOpen(true) }}>
+                      onClick={() => pushModal(<NewPoAddContactModal onAdd={c => setNewPoContacts(l => [...l, c])} />)}>
                       <span className="icon-[tabler--address-book] size-4"></span>Add Contact
                     </button>
                   </div>
@@ -1623,7 +1751,7 @@ export default function InventoryPurchaseOrders() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Parts</span>
                     <button type="button" className="btn btn-soft btn-accent btn-sm"
-                      onClick={() => { setNewPoPartForm(EMPTY_NEW_PO_PART_FORM); setNewPoPartError({}); setNewPoPartModalOpen(true) }}>
+                      onClick={() => pushModal(<NewPoAddPartModal onAdd={p => setNewPoParts(l => [...l, p])} />)}>
                       <span className="icon-[tabler--package] size-4"></span>Add Part
                     </button>
                   </div>
@@ -1877,7 +2005,7 @@ export default function InventoryPurchaseOrders() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Delivery Contacts</span>
                         <button type="button" className="btn btn-soft btn-accent btn-sm"
-                          onClick={() => { setNewPoContactForm(EMPTY_CONTACT_FORM); setNewPoContactError({}); setNewPoContactModalOpen(true) }}>
+                          onClick={() => pushModal(<NewPoAddContactModal onAdd={c => setNewPoContacts(l => [...l, c])} />)}>
                           <span className="icon-[tabler--address-book] size-4"></span>Add Contact
                         </button>
                       </div>
@@ -1909,7 +2037,7 @@ export default function InventoryPurchaseOrders() {
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium">Parts</span>
                         <button type="button" className="btn btn-soft btn-accent btn-sm"
-                          onClick={() => { setNewPoPartForm(EMPTY_NEW_PO_PART_FORM); setNewPoPartError({}); setNewPoPartModalOpen(true) }}>
+                          onClick={() => pushModal(<NewPoAddPartModal onAdd={p => setNewPoParts(l => [...l, p])} />)}>
                           <span className="icon-[tabler--package] size-4"></span>Add Part
                         </button>
                       </div>
@@ -2246,136 +2374,6 @@ export default function InventoryPurchaseOrders() {
         </>
       )}
 
-      {/* ── Add Contact sub-modal (z-50/z-55) — shared by New PO & Wizard ────── */}
-      {newPoContactModalOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[50]" onClick={() => setNewPoContactModalOpen(false)} />
-          <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <h3 className="modal-title">Add Delivery Contact</h3>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={() => setNewPoContactModalOpen(false)}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="inv-new-po-contact-form" onSubmit={handleAddNewPoContact}>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-                      <input type="text" name="contactName" maxLength={120}
-                        className={`input input-bordered w-full${newPoContactError.contactName ? ' is-invalid' : ''}`}
-                        value={newPoContactForm.contactName}
-                        onChange={e => setNewPoContactForm(p => ({ ...p, contactName: e.target.value }))} />
-                      {newPoContactError.contactName && <span className="helper-text">{newPoContactError.contactName}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-                      <input type="text" name="contactNumber" maxLength={30}
-                        className={`input input-bordered w-full${newPoContactError.contactNumber ? ' is-invalid' : ''}`}
-                        value={newPoContactForm.contactNumber}
-                        onChange={e => setNewPoContactForm(p => ({ ...p, contactNumber: e.target.value }))} />
-                      {newPoContactError.contactNumber && <span className="helper-text">{newPoContactError.contactNumber}</span>}
-                    </div>
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={() => setNewPoContactModalOpen(false)}>Cancel</button>
-                <button type="submit" form="inv-new-po-contact-form" className="btn btn-primary">
-                  <span className="icon-[tabler--plus] size-4"></span>Add
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── Add Part sub-modal (z-50/z-55) — shared by New PO & Wizard ─────────── */}
-      {newPoPartModalOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[50]" onClick={() => setNewPoPartModalOpen(false)} />
-          <div className="fixed inset-0 z-[55] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-lg shadow-xl">
-              <div className="modal-header">
-                <h3 className="modal-title">Add Part</h3>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={() => setNewPoPartModalOpen(false)}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="inv-new-po-part-form" onSubmit={handleAddNewPoPart}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="sm:col-span-2 flex flex-col gap-1">
-                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-                      <input type="text" maxLength={120}
-                        className={`input input-bordered w-full${newPoPartError.name ? ' is-invalid' : ''}`}
-                        value={newPoPartForm.name}
-                        onChange={e => setNewPoPartForm(p => ({ ...p, name: e.target.value }))} />
-                      {newPoPartError.name && <span className="helper-text">{newPoPartError.name}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
-                      <input type="number" min={1}
-                        className={`input input-bordered w-full${newPoPartError.quantityOrdered ? ' is-invalid' : ''}`}
-                        value={newPoPartForm.quantityOrdered}
-                        onChange={e => setNewPoPartForm(p => ({ ...p, quantityOrdered: e.target.value }))} />
-                      {newPoPartError.quantityOrdered && <span className="helper-text">{newPoPartError.quantityOrdered}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Qty Type <span className="text-error">*</span></label>
-                      <input type="text" maxLength={30} placeholder="e.g. pcs, kg, m"
-                        className={`input input-bordered w-full${newPoPartError.quantityType ? ' is-invalid' : ''}`}
-                        value={newPoPartForm.quantityType}
-                        onChange={e => setNewPoPartForm(p => ({ ...p, quantityType: e.target.value }))} />
-                      {newPoPartError.quantityType && <span className="helper-text">{newPoPartError.quantityType}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
-                      <input type="number" min={0} step="0.01"
-                        className={`input input-bordered w-full${newPoPartError.unitPrice ? ' is-invalid' : ''}`}
-                        value={newPoPartForm.unitPrice}
-                        onChange={e => setNewPoPartForm(p => ({ ...p, unitPrice: e.target.value }))} />
-                      {newPoPartError.unitPrice && <span className="helper-text">{newPoPartError.unitPrice}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
-                      <select className={`select select-bordered w-full${newPoPartError.supplierId ? ' is-invalid' : ''}`}
-                        value={newPoPartForm.supplierId}
-                        onChange={e => {
-                          const s = suppliers.find(x => String(x.supplierId) === e.target.value)
-                          setNewPoPartForm(p => ({ ...p, supplierId: e.target.value, _supplierName: s?.name ?? '' }))
-                        }}>
-                        <option value="">Select supplier...</option>
-                        {suppliers.map(s => <option key={s.supplierId} value={s.supplierId}>{s.name}</option>)}
-                      </select>
-                      {newPoPartError.supplierId && <span className="helper-text">{newPoPartError.supplierId}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Order Date</label>
-                      <input type="date" className="input input-bordered w-full"
-                        value={newPoPartForm.orderDate}
-                        onChange={e => setNewPoPartForm(p => ({ ...p, orderDate: e.target.value }))} />
-                    </div>
-                    {newPoPartError._general && (
-                      <div className="sm:col-span-2 alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{newPoPartError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={() => setNewPoPartModalOpen(false)}>Cancel</button>
-                <button type="submit" form="inv-new-po-part-form" className="btn btn-primary">
-                  <span className="icon-[tabler--plus] size-4"></span>Add Part
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* ── Supplier picker ───────────────────────────────────────────────────── */}
       <SupplierPickerModal
