@@ -1,15 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth, LogoutPage } from './auth'
 import LoginPage from './LoginPage'
-import ForgotPasswordPage from './ForgotPasswordPage'
-import ResetOtpPage from './ResetOtpPage'
-import ResetPasswordPage from './ResetPasswordPage'
 import Home from './Home'
 import Projects from './Projects'
 import ServiceReports from './ServiceReports'
 import ServiceReportFindings from './ServiceReportFindings'
 import AirConditioningUnits from './AirConditioningUnits'
-import AccountSettings from './AccountSettings'
 import Employees from './Employees'
 import Schedules from './Schedules'
 import NewSchedule from './NewSchedule'
@@ -50,9 +46,6 @@ function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/logout" element={<LogoutPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-otp" element={<ResetOtpPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/" element={<Private element={<Home />} />} />
       <Route path="/home" element={<Private element={<Home />} />} />
       <Route path="/projects" element={<Private element={<Projects />} />} />
@@ -82,7 +75,6 @@ function App() {
       <Route path="/employees" element={<Private element={<Employees />} />} />
       <Route path="/help" element={<Private element={<Help />} />} />
       <Route path="/maintenance" element={<PrivateRole element={<MaintenancePage />} role="ADMIN" />} />
-      <Route path="/account-settings" element={<Private element={<AccountSettings />} />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

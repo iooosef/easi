@@ -1,4 +1,4 @@
-import { useEffect, Fragment } from 'react'
+import { useEffect } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from './auth'
 import logoImg from './assets/logo.png'
@@ -27,7 +27,6 @@ export const NAV_ITEMS = [
   { page: 'reports',         label: 'Reports',          icon: 'icon-[tabler--chart-bar]',    path: '/reports',          roles: ['ADMIN','STAFF','ACCOUNTING'] },
   { page: 'maintenance',     label: 'Maintenance',      icon: 'icon-[tabler--tool]',         path: '/maintenance',      roles: ['ADMIN'] },
   { page: 'help',            label: 'Help',             icon: 'icon-[tabler--help-circle]',  path: '/help',             roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
-  { page: 'account-settings',label: 'Account Settings', icon: 'icon-[tabler--settings]',    path: '/account-settings', roles: null },
 ]
 
 /**
@@ -105,26 +104,6 @@ export default function Layout({ activePage, children }) {
                   )
                 }
 
-                // Account Settings gets Sign Out appended after it
-                if (page === 'account-settings') {
-                  return (
-                    <Fragment key={page}>
-                      <li>
-                        <Link to={path} className={currentPage === page ? 'menu-active' : ''}>
-                          <span className={`${icon} size-5`}></span>
-                          {label}
-                        </Link>
-                      </li>
-                      <li>
-                        <button className="w-full" onClick={handleLogout}>
-                          <span className="icon-[tabler--logout-2] size-5"></span>
-                          Sign Out
-                        </button>
-                      </li>
-                    </Fragment>
-                  )
-                }
-
                 // Regular nav item
                 return (
                   <li key={page}>
@@ -135,6 +114,12 @@ export default function Layout({ activePage, children }) {
                   </li>
                 )
               })}
+              <li>
+                <button className="w-full" onClick={handleLogout}>
+                  <span className="icon-[tabler--logout-2] size-5"></span>
+                  Sign Out
+                </button>
+              </li>
             </ul>
           </div>
         </aside>

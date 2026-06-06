@@ -146,25 +146,10 @@ const MODULES = [
     roles: 'ADMIN only',
     hideFor: ['ACCOUNTING', 'HR', 'CREW', 'STAFF'],
   },
-  {
-    icon: 'icon-[tabler--settings]',
-    title: 'Account Settings',
-    description:
-      'Account Settings lets you update your own profile information and change your password.',
-    actions: [
-      'Update your display name or email address (requires OTP verification)',
-      'Change your account password',
-    ],
-    roles: 'All roles',
-  },
 ]
 
 /** Frequently asked questions. */
 const FAQS = [
-  {
-    q: 'How do I reset my password?',
-    a: 'Go to the login page and click "Forgot Password". Enter your registered email address to receive a one-time password (OTP). Enter the OTP, then set your new password.',
-  },
   {
     q: 'How do I generate a report?',
     a: 'Go to Reports from the sidebar. Select a report type from the left panel, then choose a date range using one of the preset buttons or enter a custom range. The table will load automatically. Click "Print / Save as PDF" to export.',
@@ -180,10 +165,6 @@ const FAQS = [
   {
     q: "Why can't I see some pages or actions?",
     a: 'Access to certain pages and actions depends on your assigned role. For example, Billing is only visible to ADMIN and ACCOUNTING, and Maintenance is only accessible to ADMIN. Contact your system administrator if you need access to a feature.',
-  },
-  {
-    q: 'How do I change my account email or password?',
-    a: 'Click "Account Settings" in the sidebar. From there you can update your email or change your password. Changing your email requires OTP verification sent to your current address.',
   },
   {
     q: 'How do I create a purchase order for parts?',
