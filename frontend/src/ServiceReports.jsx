@@ -3,13 +3,14 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
-import ManageMenu from './ManageMenu'
 import PickerInput from './PickerInput'
 import SchedulePickerModal from './SchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
-import { ManageBillingModal } from './Billing'
-import { ManageFindingsModal } from './ServiceReportFindings'
+import { useModal } from './modal/index.js'
+import ModalNav from './ModalNav'
+import { BillingManageModal } from './Billing'
+import { FindingsModal } from './ServiceReportFindings'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
@@ -33,16 +34,6 @@ const EMPTY_FORM = {
   docuId: '',
 }
 
-const EMPTY_EDIT_FORM = {
-  schedId: '',
-  _scheduleDisplay: '',
-  engineerEmployeeId: '',
-  _engineerDisplay: '',
-  complaint: '',
-  workDone: '',
-  location: '',
-  docuId: '',
-}
 
 /**
  * Parses a failed API response into field-level or general error object.
@@ -68,8 +59,220 @@ function formatDate(dt) {
 
 const PAGE_SIZE = 10
 
+/** Self-contained manage panel rendered as a modal stack layer. */
+function ManageSRModal({ report, onRefresh, onNavigate }) {
+  const { pushModal, popModal } = useModal()
+  const { hasRole } = useAuth()
+
+  function handleAction(key) {
+    if (key === 'update') pushModal(<UpdateSRModal report={report} onSuccess={onRefresh} />)
+    if (key === 'findings') pushModal(<FindingsModal report={report} onRefresh={onRefresh} />)
+    if (key === 'billing') pushModal(<BillingManageModal report={report} />)
+    if (key === 'purchase-order') { popModal(); onNavigate(`/inventory/purchase-orders?srNum=${report.srNumber}`) }
+    if (key === 'documents') {
+      popModal()
+      onNavigate(`/service-report/${report.srNumber}/documents`, {
+        state: {
+          entityType: 'service-report',
+          entityId: report.srNumber,
+          entityLabel: `SR #${report.srNumber}`,
+          parentLabel: report.projectName,
+          docuId: report.docuId ?? null,
+        },
+      })
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">SR #{report.srNumber}</h3>
+          <span className="text-sm text-base-content/50">{report.projectName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Complaint</span>
+            <span className="font-medium">{report.complaint ?? '—'}</span>
+          </div>
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Work Done</span>
+            <span className="font-medium">{report.workDone ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Location</span>
+            <span className="font-medium">{report.location ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Status</span>
+            <span className={`badge badge-soft ${statusBadgeClass(report.status)} text-xs`}>{report.status}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Schedule Date</span>
+            <span className="font-medium">{formatDate(report.scheduleDate)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Engineer Emp. ID</span>
+            <span className="font-medium">{report.engineerEmployeeId ?? '—'}</span>
+          </div>
+        </div>
+        <ModalNav
+          title="Manage"
+          items={SR_MENU_ITEMS}
+          hasRole={hasRole}
+          onSelect={handleAction}
+        />
+      </div>
+    </div>
+  )
+}
+
+/** Self-contained edit form rendered as a modal stack layer. */
+function UpdateSRModal({ report, onSuccess }) {
+  const { apiFetch } = useAuth()
+  const { popModal } = useModal()
+  const [form, setForm] = useState({
+    schedId: report.schedId ?? '',
+    _scheduleDisplay: report.schedId ? `Sched #${report.schedId}` : '',
+    engineerEmployeeId: report.engineerEmployeeId ?? '',
+    _engineerDisplay: report.engineerEmployeeId ? `Employee #${report.engineerEmployeeId}` : '',
+    complaint: report.complaint ?? '',
+    workDone: report.workDone ?? '',
+    location: report.location ?? '',
+    docuId: report.docuId ?? '',
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the update and calls onSuccess on completion. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/service-reports/${report.srNumber}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          complaint: form.complaint,
+          workDone: form.workDone,
+          engineerEmployeeId: form.engineerEmployeeId ? Number(form.engineerEmployeeId) : null,
+          location: form.location || null,
+          schedId: form.schedId ? Number(form.schedId) : null,
+          docuId: form.docuId ? Number(form.docuId) : null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      popModal()
+      setTimeout(() => notyfSuccess(`Service Report #${report.srNumber} updated successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update SR #{report.srNumber}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-sr-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Location <span className="text-error">*</span></label>
+              <input type="text" name="location" maxLength={255}
+                className={`input input-bordered w-full${formError.location ? ' is-invalid' : ''}`}
+                placeholder="e.g. 3rd Floor East Wing, ABC Corp" required
+                value={form.location} onChange={handleChange} />
+              {formError.location && <span className="helper-text">{formError.location}</span>}
+            </div>
+
+            <PickerInput
+              label="Schedule"
+              displayValue={form._scheduleDisplay}
+              placeholder="None selected"
+              buttonLabel="Change Schedule"
+              required
+              error={formError.schedId}
+              Picker={SchedulePickerModal}
+              onSelect={s => setForm(prev => ({ ...prev, schedId: s.schedId, _scheduleDisplay: `Sched #${s.schedId} — ${s.purpose ?? ''}` }))}
+            />
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Complaint <span className="text-error">*</span></label>
+              <textarea name="complaint" rows={3} maxLength={900}
+                className={`textarea textarea-bordered w-full${formError.complaint ? ' is-invalid' : ''}`}
+                placeholder="Describe the complaint..." required
+                value={form.complaint} onChange={handleChange} />
+              {formError.complaint && <span className="helper-text">{formError.complaint}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Work Done <span className="text-error">*</span></label>
+              <textarea name="workDone" rows={3} maxLength={900}
+                className={`textarea textarea-bordered w-full${formError.workDone ? ' is-invalid' : ''}`}
+                placeholder="Describe the work performed..." required
+                value={form.workDone} onChange={handleChange} />
+              {formError.workDone && <span className="helper-text">{formError.workDone}</span>}
+            </div>
+
+            <PickerInput
+              label="Assigned Engineer"
+              displayValue={form._engineerDisplay}
+              placeholder="None assigned"
+              buttonLabel="Select Engineer"
+              error={formError.engineerEmployeeId}
+              Picker={EmployeePickerModal}
+              onSelect={e => setForm(prev => ({ ...prev, engineerEmployeeId: e.employeeId, _engineerDisplay: `${e.lastName}, ${e.firstName} (#${e.employeeId})` }))}
+              className="sm:col-span-2"
+            />
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-sr-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function ServiceReports() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const { projNum: projNumParam } = useParams()
   const location = useLocation()
   const navigate = useNavigate()
@@ -94,16 +297,6 @@ export default function ServiceReports() {
 
   const canEdit = hasRole('ADMIN', 'STAFF')
 
-  const [selectedReport, setSelectedReport] = useState(null)
-  const [billingReport, setBillingReport] = useState(null)
-  const [findingsReport, setFindingsReport] = useState(null)
-
-  // Edit modal state
-  const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingReport, setEditingReport] = useState(null)
-  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM)
-  const [editFormError, setEditFormError] = useState({})
-  const [editSubmitting, setEditSubmitting] = useState(false)
 
   function openModal() { setModalOpen(true) }
 
@@ -113,66 +306,15 @@ export default function ServiceReports() {
     setFormError({})
   }
 
-  /** Opens the edit modal pre-populated with the given report's data. */
-  function openEditModal(report) {
-    setEditForm({
-      schedId: report.schedId ?? '',
-      _scheduleDisplay: report.schedId ? `Sched #${report.schedId}` : '',
-      engineerEmployeeId: report.engineerEmployeeId ?? '',
-      _engineerDisplay: report.engineerEmployeeId ? `Employee #${report.engineerEmployeeId}` : '',
-      complaint: report.complaint ?? '',
-      workDone: report.workDone ?? '',
-      location: report.location ?? '',
-      docuId: report.docuId ?? '',
-    })
-    setEditingReport(report)
-    setEditFormError({})
-    setEditModalOpen(true)
-  }
-
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingReport(null)
-    setEditForm(EMPTY_EDIT_FORM)
-    setEditFormError({})
-  }
-
-  function handleEditFormChange(e) {
-    const { name, value } = e.target
-    setEditForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  /** Submits the update service report form. */
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setEditFormError({})
-    setEditSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/service-reports/${editingReport.srNumber}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          complaint: editForm.complaint,
-          workDone: editForm.workDone,
-          engineerEmployeeId: editForm.engineerEmployeeId ? Number(editForm.engineerEmployeeId) : null,
-          location: editForm.location || null,
-          schedId: editForm.schedId ? Number(editForm.schedId) : null,
-          docuId: editForm.docuId ? Number(editForm.docuId) : null,
-        }),
-      })
-      if (!res.ok) {
-        setEditFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`Service Report #${editingReport.srNumber} updated successfully.`), 150)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setEditFormError({ _general: err.message })
-    } finally {
-      setEditSubmitting(false)
-    }
+  /** Pushes the SR manage panel onto the modal stack. */
+  function openManageModal(r) {
+    pushModal(
+      <ManageSRModal
+        report={r}
+        onRefresh={() => setRefreshKey(k => k + 1)}
+        onNavigate={(path, opts) => navigate(path, opts)}
+      />
+    )
   }
 
   // Reset to page 0 whenever the project filter changes
@@ -356,7 +498,7 @@ export default function ServiceReports() {
                       <td>
                         <button
                           className="btn btn-soft btn-primary btn-sm"
-                          onClick={() => setSelectedReport(r)}
+                          onClick={() => openManageModal(r)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           Manage
@@ -484,135 +626,6 @@ export default function ServiceReports() {
           </div>
         </form>
       </Modal>
-      {/* Edit Report Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title={`Update SR #${editingReport?.srNumber}`}
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="edit-report-form" className="btn btn-primary" disabled={editSubmitting}>
-              {editSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="edit-report-form" onSubmit={handleUpdate}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Location <span className="text-error">*</span></label>
-              <input type="text" name="location" maxLength={255}
-                className={`input input-bordered w-full${editFormError.location ? ' is-invalid' : ''}`}
-                placeholder="e.g. 3rd Floor East Wing, ABC Corp" required
-                value={editForm.location} onChange={handleEditFormChange} />
-              {editFormError.location && <span className="helper-text">{editFormError.location}</span>}
-            </div>
-
-            <PickerInput
-              label="Schedule"
-              displayValue={editForm._scheduleDisplay}
-              placeholder="None selected"
-              buttonLabel="Change Schedule"
-              required
-              error={editFormError.schedId}
-              Picker={SchedulePickerModal}
-              onSelect={s => setEditForm(prev => ({ ...prev, schedId: s.schedId, _scheduleDisplay: `Sched #${s.schedId} — ${s.purpose ?? ''}` }))}
-            />
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Complaint <span className="text-error">*</span></label>
-              <textarea name="complaint" rows={3} maxLength={900}
-                className={`textarea textarea-bordered w-full${editFormError.complaint ? ' is-invalid' : ''}`}
-                placeholder="Describe the complaint..." required
-                value={editForm.complaint} onChange={handleEditFormChange} />
-              {editFormError.complaint && <span className="helper-text">{editFormError.complaint}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Work Done <span className="text-error">*</span></label>
-              <textarea name="workDone" rows={3} maxLength={900}
-                className={`textarea textarea-bordered w-full${editFormError.workDone ? ' is-invalid' : ''}`}
-                placeholder="Describe the work performed..." required
-                value={editForm.workDone} onChange={handleEditFormChange} />
-              {editFormError.workDone && <span className="helper-text">{editFormError.workDone}</span>}
-            </div>
-
-            <PickerInput
-              label="Assigned Engineer"
-              displayValue={editForm._engineerDisplay}
-              placeholder="None assigned"
-              buttonLabel="Select Engineer"
-              error={editFormError.engineerEmployeeId}
-              Picker={EmployeePickerModal}
-              onSelect={e => setEditForm(prev => ({ ...prev, engineerEmployeeId: e.employeeId, _engineerDisplay: `${e.lastName}, ${e.firstName} (#${e.employeeId})` }))}
-              className="sm:col-span-2"
-            />
-
-            {editFormError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{editFormError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Service Report Manage Modal */}
-      <ManageMenu
-        title={selectedReport ? `SR #${selectedReport.srNumber}` : ''}
-        subtitle={selectedReport?.projectName}
-        item={selectedReport}
-        details={selectedReport ? [
-          { label: 'Complaint', value: selectedReport.complaint, fullWidth: true },
-          { label: 'Work Done', value: selectedReport.workDone, fullWidth: true },
-          { label: 'Location', value: selectedReport.location },
-          { label: 'Status', value: selectedReport.status },
-          { label: 'Schedule Date', value: formatDate(selectedReport.scheduleDate) },
-          { label: 'Engineer Emp. ID', value: selectedReport.engineerEmployeeId ?? null },
-        ] : []}
-        isOpen={!!selectedReport}
-        onClose={() => setSelectedReport(null)}
-        hasRole={hasRole}
-        menuItems={SR_MENU_ITEMS}
-        onMenuSelect={(key, report) => {
-          setSelectedReport(null)
-          if (key === 'update') openEditModal(report)
-          if (key === 'findings') setFindingsReport(report)
-          if (key === 'purchase-order') navigate(`/inventory/purchase-orders?srNum=${report.srNumber}`)
-          if (key === 'billing') setBillingReport(report)
-          if (key === 'documents') navigate(`/service-report/${report.srNumber}/documents`, {
-            state: {
-              entityType: 'service-report',
-              entityId:   report.srNumber,
-              entityLabel: `SR #${report.srNumber}`,
-              parentLabel: report.projectName,
-              docuId:     report.docuId ?? null,
-            },
-          })
-        }}
-      />
-
-      <ManageBillingModal
-        report={billingReport}
-        apiFetch={apiFetch}
-        onClose={() => setBillingReport(null)}
-      />
-
-      <ManageFindingsModal
-        report={findingsReport}
-        apiFetch={apiFetch}
-        hasRole={hasRole}
-        onClose={() => setFindingsReport(null)}
-      />
     </Layout>
   )
 }

@@ -2,7 +2,11 @@ import { createContext, useContext, useState, useCallback } from 'react'
 
 export const ModalContext = createContext(null)
 
-/** Base z-index for the backdrop. Each layer sits one above the previous. */
+/**
+ * Base z-index for the backdrop.
+ * Each layer uses a step of 2: the layer container sits at BASE_Z + 1 + index*2,
+ * and a dim overlay occupies BASE_Z + 2 + index*2 for all non-top layers.
+ */
 const BASE_Z = 100
 
 let _id = 0
@@ -11,6 +15,7 @@ const nextId = () => String(++_id)
 /**
  * Renders the active modal stack.
  * The backdrop is a single decorative overlay behind all layers.
+ * Non-top layers are dimmed by an overlay that sits between them and the layer above.
  * Only the top layer's padding area closes the modal on click.
  * Clicks inside any modal box are stopped from propagating.
  */
@@ -27,25 +32,35 @@ function ModalStack({ stack, onPop }) {
 
       {stack.map((entry, index) => {
         const isTop = index === stack.length - 1
+        const layerZ = BASE_Z + 1 + index * 2
         return (
-          /*
-           * Full-screen layer container. Clicking the padding area (outside the
-           * modal box) on the top layer closes it. Lower layers are inert.
-           */
-          <div
-            key={entry.id}
-            className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto"
-            style={{ zIndex: BASE_Z + 1 + index }}
-            onClick={isTop ? onPop : undefined}
-          >
+          <div key={entry.id}>
             {/*
-             * display:contents removes this div from layout so the modal-content
-             * inside becomes a direct flex child, while still intercepting clicks
-             * to prevent them from closing the modal.
+             * Full-screen layer container. Clicking the padding area (outside the
+             * modal box) on the top layer closes it. Lower layers are inert.
              */}
-            <div className="contents" onClick={e => e.stopPropagation()}>
-              {entry.content}
+            <div
+              className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto"
+              style={{ zIndex: layerZ }}
+              onClick={isTop ? onPop : undefined}
+            >
+              {/*
+               * display:contents removes this div from layout so the modal-content
+               * inside becomes a direct flex child, while still intercepting clicks
+               * to prevent them from closing the modal.
+               */}
+              <div className="contents" onClick={e => e.stopPropagation()}>
+                {entry.content}
+              </div>
             </div>
+
+            {/* Dim overlay — covers this layer when a higher layer is open */}
+            {!isTop && (
+              <div
+                className="fixed inset-0 bg-base-300/50 transition duration-300"
+                style={{ zIndex: layerZ + 1 }}
+              />
+            )}
           </div>
         )
       })}

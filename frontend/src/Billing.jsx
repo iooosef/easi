@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
 import Modal from './Modal'
+import { useModal } from './modal/index.js'
 import { notyfSuccess, notyfError } from './notyf'
 
 const SR_PAGE_SIZE = 10
@@ -40,6 +41,476 @@ function subtotal(items) {
 
 const EMPTY_BILLING_FORM = { description: '', quantity: '', unitPrice: '' }
 
+
+/**
+ * Layer 2 — billing items and payments list for a service report.
+ * Pushed from ManageSRModal; pushes add/update layers on top.
+ */
+export function BillingManageModal({ report }) {
+  const { pushModal, popModal } = useModal()
+  const { apiFetch } = useAuth()
+
+  const [items, setItems]                   = useState([])
+  const [loading, setLoading]               = useState(true)
+  const [refreshKey, setRefreshKey]         = useState(0)
+  const [payments, setPayments]             = useState([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0)
+
+  function refreshItems() { setRefreshKey(k => k + 1) }
+  function refreshPayments() { setPaymentsRefreshKey(k => k + 1) }
+
+  /** Fetches billing items for this service report. */
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    const params = new URLSearchParams({ srNumber: String(report.srNumber), page: '0', size: '1000', sort: 'srBillingNum,asc' })
+    apiFetch(`/api/service-report-billing-items?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setItems(data.content ?? []) })
+      .catch(() => { if (active) setItems([]) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report.srNumber, refreshKey])
+
+  /** Fetches payment logs for this service report. */
+  useEffect(() => {
+    let active = true
+    setPaymentsLoading(true)
+    apiFetch(`/api/payment-logs?srNumber=${encodeURIComponent(report.srNumber)}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setPayments(Array.isArray(data) ? data : []) })
+      .catch(() => { if (active) setPayments([]) })
+      .finally(() => { if (active) setPaymentsLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, report.srNumber, paymentsRefreshKey])
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Manage Billing — SR #{report.srNumber}</h3>
+          <span className="text-sm text-base-content/50">{report.projectName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="flex justify-end">
+          <button type="button" className="btn btn-primary btn-sm"
+            onClick={() => pushModal(<AddBillingItemModal srNumber={report.srNumber} onSuccess={refreshItems} />)}>
+            <span className="icon-[tabler--plus] size-4"></span>Add Billing Item
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm text-primary"></span></div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-8 text-base-content/40 text-sm">No billing items yet.</div>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300">
+            <table className="table table-zebra table-sm w-full">
+              <thead>
+                <tr><th>#</th><th>Description</th><th className="text-right">Qty</th><th className="text-right">Unit Price</th><th className="text-right">Amount</th><th>Action</th></tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item.srBillingNum}>
+                    <td className="font-mono text-xs">{item.srBillingNum}</td>
+                    <td className="max-w-48"><span className="line-clamp-2 text-sm" title={item.description}>{item.description}</span></td>
+                    <td className="text-right text-sm">{item.quantity}</td>
+                    <td className="text-right text-sm">{formatCurrency(item.unitPrice)}</td>
+                    <td className="text-right text-sm font-medium">{formatCurrency(item.quantity * Number(item.unitPrice))}</td>
+                    <td>
+                      <button className="btn btn-soft btn-secondary btn-xs"
+                        onClick={() => pushModal(<UpdateBillingItemModal item={item} srNumber={report.srNumber} onSuccess={refreshItems} />)}>
+                        <span className="icon-[tabler--pencil] size-3"></span>Update
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} className="text-right text-sm font-semibold">Subtotal</td>
+                  <td className="text-right text-sm font-semibold">{formatCurrency(subtotal(items))}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+
+        {!paymentsLoading && payments.length > 0 && (
+          <>
+            <div className="divider my-2 text-xs text-base-content/40">Payments</div>
+            <div className="overflow-x-auto rounded-box border border-base-300">
+              <table className="table table-zebra table-sm w-full">
+                <thead>
+                  <tr><th>Receipt Date</th><th>Paid By</th><th>Method</th><th>Receipt #</th><th className="text-right">Amount</th><th>Action</th></tr>
+                </thead>
+                <tbody>
+                  {payments.map(p => (
+                    <tr key={p.logId}>
+                      <td className="text-sm">{p.receiptDate ? String(p.receiptDate).slice(0, 10) : '—'}</td>
+                      <td className="text-sm">{p.paidBy ?? '—'}</td>
+                      <td className="text-sm">{formatPaymentMethod(p.paymentMethod)}</td>
+                      <td className="font-mono text-xs">{p.receiptNumber ?? '—'}</td>
+                      <td className="text-right text-sm font-medium">{formatCurrency(p.amount)}</td>
+                      <td>
+                        <button className="btn btn-soft btn-secondary btn-xs"
+                          onClick={() => pushModal(<UpdatePaymentModal payment={p} items={items} payments={payments} srNumber={report.srNumber} onSuccess={refreshPayments} />)}>
+                          <span className="icon-[tabler--pencil] size-3"></span>Update
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+/** Add billing item form pushed from BillingManageModal. */
+function AddBillingItemModal({ srNumber, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState(EMPTY_BILLING_FORM)
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the new billing item and closes this layer on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/service-report-billing-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ srNumber, description: form.description, quantity: Number(form.quantity), unitPrice: Number(form.unitPrice) }),
+      })
+      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Add billing item failed'); return }
+      popModal()
+      notyfSuccess('Billing item added.')
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Billing Item</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="add-billing-item-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Description <span className="text-error">*</span></label>
+              <input type="text" name="description" maxLength={255} required
+                className={`input input-bordered w-full${formError.description ? ' is-invalid' : ''}`}
+                placeholder="e.g. Labor — Coil Cleaning"
+                value={form.description} onChange={handleChange} />
+              {formError.description && <span className="helper-text">{formError.description}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" name="quantity" min={1} required
+                className={`input input-bordered w-full${formError.quantity ? ' is-invalid' : ''}`}
+                placeholder="e.g. 1"
+                value={form.quantity} onChange={handleChange} />
+              {formError.quantity && <span className="helper-text">{formError.quantity}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" name="unitPrice" min={0} step="0.01" required
+                className={`input input-bordered w-full${formError.unitPrice ? ' is-invalid' : ''}`}
+                placeholder="e.g. 800.00"
+                value={form.unitPrice} onChange={handleChange} />
+              {formError.unitPrice && <span className="helper-text">{formError.unitPrice}</span>}
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="add-billing-item-form" className="btn btn-primary" disabled={submitting}>
+          {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--plus] size-4"></span>}
+          Add Item
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Update billing item form pushed from BillingManageModal. */
+function UpdateBillingItemModal({ item, srNumber, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ description: item.description, quantity: item.quantity, unitPrice: item.unitPrice })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the billing item update and closes this layer on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/service-report-billing-items/${item.srBillingNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ srNumber, description: form.description, quantity: Number(form.quantity), unitPrice: Number(form.unitPrice) }),
+      })
+      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Update failed'); return }
+      popModal()
+      notyfSuccess(`Billing item #${item.srBillingNum} updated.`)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Update Billing Item #{item.srBillingNum}</h3>
+          <span className="text-sm text-base-content/50 line-clamp-1">{item.description}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-billing-item-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Description <span className="text-error">*</span></label>
+              <input type="text" name="description" maxLength={255} required
+                className={`input input-bordered w-full${formError.description ? ' is-invalid' : ''}`}
+                value={form.description} onChange={handleChange} />
+              {formError.description && <span className="helper-text">{formError.description}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" name="quantity" min={1} required
+                className={`input input-bordered w-full${formError.quantity ? ' is-invalid' : ''}`}
+                value={form.quantity} onChange={handleChange} />
+              {formError.quantity && <span className="helper-text">{formError.quantity}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" name="unitPrice" min={0} step="0.01" required
+                className={`input input-bordered w-full${formError.unitPrice ? ' is-invalid' : ''}`}
+                value={form.unitPrice} onChange={handleChange} />
+              {formError.unitPrice && <span className="helper-text">{formError.unitPrice}</span>}
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-billing-item-form" className="btn btn-primary" disabled={submitting}>
+          {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--device-floppy] size-4"></span>}
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Update payment form pushed from BillingManageModal. */
+function UpdatePaymentModal({ payment, items, payments, srNumber, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+
+  const updateBalance = Math.max(0, subtotal(items) -
+    payments.reduce((s, p) => s + (p.logId !== payment.logId ? Number(p.amount ?? 0) : 0), 0))
+
+  const [form, setForm] = useState({
+    paidBy:        payment.paidBy ?? '',
+    amount:        payment.amount ?? '',
+    paymentMethod: payment.paymentMethod ?? 'cash',
+    receiptDate:   payment.receiptDate ? String(payment.receiptDate).slice(0, 10) : '',
+    receiptNumber: payment.receiptNumber ?? '',
+    notes:         payment.notes ?? '',
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    if (name === 'amount') {
+      const num = parseFloat(value)
+      if (!isNaN(num) && num < 0)              { setForm(prev => ({ ...prev, amount: '0' })); return }
+      if (!isNaN(num) && num > updateBalance)  { setForm(prev => ({ ...prev, amount: updateBalance.toFixed(2) })); return }
+    }
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the payment update and closes this layer on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/payment-logs/${payment.logId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber,
+          paidBy:        form.paidBy,
+          amount:        Number(form.amount),
+          paymentMethod: form.paymentMethod,
+          receiptDate:   form.receiptDate,
+          receiptNumber: form.receiptNumber || null,
+          notes:         form.notes || null,
+        }),
+      })
+      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Update failed'); return }
+      popModal()
+      notyfSuccess(`Payment #${payment.logId} updated.`)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Update Payment #{payment.logId}</h3>
+          <span className="text-sm text-base-content/50">{payment.paidBy}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-payment-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Paid By <span className="text-error">*</span></label>
+              <input type="text" name="paidBy" maxLength={120} required
+                className={`input input-bordered w-full${formError.paidBy ? ' is-invalid' : ''}`}
+                value={form.paidBy} onChange={handleChange} />
+              {formError.paidBy && <span className="helper-text">{formError.paidBy}</span>}
+            </div>
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+              <div className="flex gap-1 mb-1">
+                {[25, 50, 75].map(p => (
+                  <button key={p} type="button" className="btn btn-xs btn-soft btn-secondary flex-1"
+                    onClick={() => setForm(prev => ({ ...prev, amount: ((p / 100) * updateBalance).toFixed(2) }))}>
+                    {p}%
+                  </button>
+                ))}
+                <button type="button" className="btn btn-xs btn-soft btn-primary flex-1"
+                  onClick={() => setForm(prev => ({ ...prev, amount: updateBalance.toFixed(2) }))}>
+                  Full
+                </button>
+              </div>
+              <input type="number" name="amount" min="0.01" step="0.01" required
+                className={`input input-bordered w-full${formError.amount ? ' is-invalid' : ''}`}
+                value={form.amount} onChange={handleChange} />
+              {formError.amount && <span className="helper-text">{formError.amount}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
+              <select name="paymentMethod" required
+                className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
+                value={form.paymentMethod} onChange={handleChange}>
+                <option value="cash">Cash</option>
+                <option value="check">Check</option>
+                <option value="gcash">GCash</option>
+                <option value="bank">Bank Transfer</option>
+              </select>
+              {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>
+              <input type="date" name="receiptDate" required
+                className={`input input-bordered w-full${formError.receiptDate ? ' is-invalid' : ''}`}
+                value={form.receiptDate} onChange={handleChange} />
+              {formError.receiptDate && <span className="helper-text">{formError.receiptDate}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Receipt #</label>
+              <input type="text" name="receiptNumber" maxLength={60}
+                className={`input input-bordered w-full${formError.receiptNumber ? ' is-invalid' : ''}`}
+                placeholder="e.g. OR-2026-001"
+                value={form.receiptNumber} onChange={handleChange} />
+              {formError.receiptNumber && <span className="helper-text">{formError.receiptNumber}</span>}
+            </div>
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Notes</label>
+              <textarea name="notes" maxLength={255} rows={2}
+                className={`textarea textarea-bordered w-full${formError.notes ? ' is-invalid' : ''}`}
+                value={form.notes} onChange={handleChange} />
+              {formError.notes && <span className="helper-text">{formError.notes}</span>}
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-payment-form" className="btn btn-primary" disabled={submitting}>
+          {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--device-floppy] size-4"></span>}
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /** Modal for adding and updating billing items for an SR — modeled after Manage Parts */
 export function ManageBillingModal({ report, apiFetch, onClose }) {
