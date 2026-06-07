@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
-import { useModal } from './modal/index.js'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
 import { notyfSuccess, notyfError } from './notyf'
 import AnySchedulePickerModal from './AnySchedulePickerModal'

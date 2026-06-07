@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import Modal from './Modal'
+import Modal from './modals/Modal'
 import { notyfSuccess, notyfError } from './notyf'
 
 /** Parses a failed API response into field-level or general errors. */

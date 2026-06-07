@@ -72,9 +72,9 @@ The app uses a layered modal system in `frontend/src/modal/`.
 
 **BEFORE writing any modal code, re-read this section.**
 
-**API** — import using the explicit path (use `'./modal/index.js'` from `src/`, `'../modal/index.js'` from subdirs):
+**API** — import using the explicit path (use `'./modals/index.js'` from `src/`, `'../modals/index.js'` from subdirs):
 ```js
-import { useModal } from './modal/index.js'
+import { useModal } from './modals/index.js'
 const { pushModal, popModal, replaceModal, clearModals } = useModal()
 ```
 
@@ -160,7 +160,7 @@ function openManage(item) {
 Use `ModalNav` (`frontend/src/ModalNav.jsx`) whenever a modal needs to present a list of navigable actions (e.g. a "Manage" panel). It renders a labelled grid of icon cards, one per action.
 
 ```jsx
-import ModalNav from './ModalNav'
+import ModalNav from './modals/ModalNav.jsx'
 
 <ModalNav
   title="Manage"        // section label shown above the grid (optional)

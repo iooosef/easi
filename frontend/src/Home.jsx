@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import Modal from './Modal'
+import Modal from './modals/Modal'
 import AnySchedulePickerModal from './AnySchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
@@ -37,6 +37,7 @@ async function parseApiError(res) {
 
 /** Navigation items shown as Link cards on the Home page. */
 const HOME_NAV_ITEMS = [
+  { page: 'your-schedules-today', label: 'Your Schedules Today', icon: 'icon-[tabler--calendar-check]', path: '/schedules?hideFinished=1&showToday=1', roles: ['CREW'] },
   { page: 'new-schedule',      label: 'Make new Schedule',  icon: 'icon-[tabler--calendar-plus]', path: '/schedules/new',                        roles: ['ADMIN', 'STAFF'] },
   { page: 'new-service-report',label: 'New Service Report', icon: 'icon-[tabler--file-plus]',     path: '/service-report/new',                   roles: ['ADMIN', 'STAFF'] },
   { page: 'new-purchase-order',label: 'New Purchase Order', icon: 'icon-[tabler--file-invoice]',  path: '/inventory/purchase-orders?newPO=1',    roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },

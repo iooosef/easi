@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import Modal from './Modal'
-import { useModal } from './modal/index.js'
-import ModalNav from './ModalNav'
+import Modal from './modals/Modal.jsx'
+import { useModal } from './modals/index.js'
+import ModalNav from './modals/ModalNav.jsx'
 import { notyfSuccess, notyfError } from './notyf'
 
 const SR_PAGE_SIZE = 10

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
-import Modal from './Modal'
-import ManageMenu from './ManageMenu'
+import ModalNav from './modals/ModalNav.jsx'
 import { notyfSuccess, notyfError } from './notyf'
 
 const STATUS_OPTIONS = ['active', 'inactive', 'maintenance']
@@ -40,10 +40,303 @@ function formatStatus(status) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+/** Single labeled detail cell used inside manage panel */
+function DetailItem({ label, value }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-base-content/50 uppercase tracking-wide">{label}</span>
+      <span className="text-sm font-medium text-base-content">{value ?? '—'}</span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Modal components
+// ---------------------------------------------------------------------------
+
+/**
+ * Add form for a new AC unit.
+ * Calls popModal on success or cancel.
+ */
+function AddACUnitModal({ projNumInt, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the new AC unit and closes this layer on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/ac-units', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, projNum: projNumInt }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      setTimeout(() => notyfSuccess(`AC Unit #${data.acNum} added successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New AC Unit</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="new-ac-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Brand <span className="text-error">*</span></label>
+              <input type="text" name="brand" maxLength={30} required
+                className={`input input-bordered w-full${formError.brand ? ' is-invalid' : ''}`}
+                placeholder="e.g. Daikin"
+                value={form.brand} onChange={handleChange} />
+              {formError.brand && <span className="helper-text">{formError.brand}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Model <span className="text-error">*</span></label>
+              <input type="text" name="model" maxLength={30} required
+                className={`input input-bordered w-full${formError.model ? ' is-invalid' : ''}`}
+                placeholder="e.g. FTKF25TV"
+                value={form.model} onChange={handleChange} />
+              {formError.model && <span className="helper-text">{formError.model}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Serial Number <span className="text-error">*</span></label>
+              <input type="text" name="serialNum" maxLength={60} required
+                className={`input input-bordered w-full${formError.serialNum ? ' is-invalid' : ''}`}
+                placeholder="e.g. SN-1234567890"
+                value={form.serialNum} onChange={handleChange} />
+              {formError.serialNum && <span className="helper-text">{formError.serialNum}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status"
+                className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
+                value={form.status} onChange={handleChange}>
+                {STATUS_OPTIONS.map(o => (
+                  <option key={o} value={o}>{formatStatus(o)}</option>
+                ))}
+              </select>
+              {formError.status && <span className="helper-text">{formError.status}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="new-ac-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Unit
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Manage panel for an AC unit (Layer 1).
+ * Shows unit details and a ModalNav for available actions.
+ */
+function ManageACUnitModal({ unit, projNumInt, onRefresh }) {
+  const { pushModal, popModal } = useModal()
+  const { hasRole } = useAuth()
+
+  function handleAction(key) {
+    if (key === 'update') pushModal(<UpdateACUnitModal unit={unit} projNumInt={projNumInt} onSuccess={onRefresh} />)
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">AC Unit #{unit.acNum}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body space-y-4">
+        <p className="text-sm text-base-content/60">{unit.brand} {unit.model}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <DetailItem label="Brand" value={unit.brand} />
+          <DetailItem label="Model" value={unit.model} />
+          <div className="col-span-2">
+            <DetailItem label="Serial Number" value={unit.serialNum} />
+          </div>
+          <DetailItem label="Status" value={formatStatus(unit.status)} />
+        </div>
+        <ModalNav items={AC_MENU_ITEMS} hasRole={hasRole} onSelect={handleAction} cols={4} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Edit form for an AC unit (Layer 2).
+ * Popped automatically on success, revealing the manage panel.
+ */
+function UpdateACUnitModal({ unit, projNumInt, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    brand: unit.brand,
+    model: unit.model,
+    serialNum: unit.serialNum,
+    status: unit.status,
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the update AC unit form. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/ac-units/${unit.acNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, projNum: projNumInt }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      popModal()
+      setTimeout(() => notyfSuccess(`AC Unit #${unit.acNum} updated successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update AC Unit #{unit.acNum}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-ac-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Brand <span className="text-error">*</span></label>
+              <input type="text" name="brand" maxLength={30} required
+                className={`input input-bordered w-full${formError.brand ? ' is-invalid' : ''}`}
+                placeholder="e.g. Daikin"
+                value={form.brand} onChange={handleChange} />
+              {formError.brand && <span className="helper-text">{formError.brand}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Model <span className="text-error">*</span></label>
+              <input type="text" name="model" maxLength={30} required
+                className={`input input-bordered w-full${formError.model ? ' is-invalid' : ''}`}
+                placeholder="e.g. FTKF25TV"
+                value={form.model} onChange={handleChange} />
+              {formError.model && <span className="helper-text">{formError.model}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Serial Number <span className="text-error">*</span></label>
+              <input type="text" name="serialNum" maxLength={60} required
+                className={`input input-bordered w-full${formError.serialNum ? ' is-invalid' : ''}`}
+                placeholder="e.g. SN-1234567890"
+                value={form.serialNum} onChange={handleChange} />
+              {formError.serialNum && <span className="helper-text">{formError.serialNum}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status"
+                className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
+                value={form.status} onChange={handleChange}>
+                {STATUS_OPTIONS.map(o => (
+                  <option key={o} value={o}>{formatStatus(o)}</option>
+                ))}
+              </select>
+              {formError.status && <span className="helper-text">{formError.status}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-ac-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page component
+// ---------------------------------------------------------------------------
+
 const PAGE_SIZE = 10
 
 export default function AirConditioningUnits() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const { projNum } = useParams()
   const location = useLocation()
   const projNumInt = Number(projNum)
@@ -58,53 +351,7 @@ export default function AirConditioningUnits() {
   const [totalElements, setTotalElements] = useState(0)
   const [refreshKey, setRefreshKey]     = useState(0)
 
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
-  const [submitting, setSubmitting] = useState(false)
-
-  const [selectedUnit, setSelectedUnit] = useState(null)
-
-  const [editModalOpen, setEditModalOpen]     = useState(false)
-  const [editingUnit, setEditingUnit]         = useState(null)
-  const [editForm, setEditForm]               = useState(EMPTY_FORM)
-  const [editFormError, setEditFormError]     = useState({})
-  const [editSubmitting, setEditSubmitting]   = useState(false)
-
   const canEdit = hasRole('ADMIN', 'STAFF')
-
-  function openModal() { setModalOpen(true) }
-
-  function closeModal() {
-    setModalOpen(false)
-    setForm(EMPTY_FORM)
-    setFormError({})
-  }
-
-  /** Opens the edit modal pre-populated with the given unit's data. */
-  function openEditModal(unit) {
-    setEditForm({ brand: unit.brand, model: unit.model, serialNum: unit.serialNum, status: unit.status })
-    setEditingUnit(unit)
-    setEditFormError({})
-    setEditModalOpen(true)
-  }
-
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingUnit(null)
-    setEditForm(EMPTY_FORM)
-    setEditFormError({})
-  }
-
-  function handleFormChange(e) {
-    const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  function handleEditFormChange(e) {
-    const { name, value } = e.target
-    setEditForm(prev => ({ ...prev, [name]: value }))
-  }
 
   /** Fetches AC units for the current project. */
   useEffect(() => {
@@ -144,60 +391,6 @@ export default function AirConditioningUnits() {
     )
   })
 
-  /** Submits the new AC unit form. */
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/ac-units', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, projNum: projNumInt }),
-      })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Add failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeModal()
-      setTimeout(() => notyfSuccess(`AC Unit #${data.acNum} added successfully.`), 150)
-      setPage(0)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  /** Submits the update AC unit form. */
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setEditFormError({})
-    setEditSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/ac-units/${editingUnit.acNum}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editForm, projNum: projNumInt }),
-      })
-      if (!res.ok) {
-        setEditFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`AC Unit #${editingUnit.acNum} updated successfully.`), 150)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setEditFormError({ _general: err.message })
-    } finally {
-      setEditSubmitting(false)
-    }
-  }
-
   return (
     <Layout activePage="projects">
       {/* Header row */}
@@ -214,7 +407,12 @@ export default function AirConditioningUnits() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={openModal}
+              onClick={() => pushModal(
+                <AddACUnitModal
+                  projNumInt={projNumInt}
+                  onSuccess={() => { setPage(0); setRefreshKey(k => k + 1) }}
+                />
+              )}
             >
               <span className="icon-[tabler--plus] size-4"></span>
               New AC Unit
@@ -293,7 +491,13 @@ export default function AirConditioningUnits() {
                       <td>
                         <button
                           className="btn btn-soft btn-primary btn-sm"
-                          onClick={() => setSelectedUnit(u)}
+                          onClick={() => pushModal(
+                            <ManageACUnitModal
+                              unit={u}
+                              projNumInt={projNumInt}
+                              onRefresh={() => setRefreshKey(k => k + 1)}
+                            />
+                          )}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           Manage
@@ -321,171 +525,6 @@ export default function AirConditioningUnits() {
           )}
         </>
       )}
-
-      {/* New AC Unit Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title="New AC Unit"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeModal}>
-              Cancel
-            </button>
-            <button type="submit" form="new-ac-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Unit
-            </button>
-          </>
-        }
-      >
-        <form id="new-ac-form" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Brand <span className="text-error">*</span></label>
-              <input type="text" name="brand" maxLength={30} required
-                className={`input input-bordered w-full${formError.brand ? ' is-invalid' : ''}`}
-                placeholder="e.g. Daikin"
-                value={form.brand} onChange={handleFormChange} />
-              {formError.brand && <span className="helper-text">{formError.brand}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Model <span className="text-error">*</span></label>
-              <input type="text" name="model" maxLength={30} required
-                className={`input input-bordered w-full${formError.model ? ' is-invalid' : ''}`}
-                placeholder="e.g. FTKF25TV"
-                value={form.model} onChange={handleFormChange} />
-              {formError.model && <span className="helper-text">{formError.model}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Serial Number <span className="text-error">*</span></label>
-              <input type="text" name="serialNum" maxLength={60} required
-                className={`input input-bordered w-full${formError.serialNum ? ' is-invalid' : ''}`}
-                placeholder="e.g. SN-1234567890"
-                value={form.serialNum} onChange={handleFormChange} />
-              {formError.serialNum && <span className="helper-text">{formError.serialNum}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select name="status"
-                className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
-                value={form.status} onChange={handleFormChange}>
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o} value={o}>{formatStatus(o)}</option>
-                ))}
-              </select>
-              {formError.status && <span className="helper-text">{formError.status}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Edit AC Unit Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title={`Update AC Unit #${editingUnit?.acNum}`}
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="edit-ac-form" className="btn btn-primary" disabled={editSubmitting}>
-              {editSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="edit-ac-form" onSubmit={handleUpdate}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Brand <span className="text-error">*</span></label>
-              <input type="text" name="brand" maxLength={30} required
-                className={`input input-bordered w-full${editFormError.brand ? ' is-invalid' : ''}`}
-                placeholder="e.g. Daikin"
-                value={editForm.brand} onChange={handleEditFormChange} />
-              {editFormError.brand && <span className="helper-text">{editFormError.brand}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Model <span className="text-error">*</span></label>
-              <input type="text" name="model" maxLength={30} required
-                className={`input input-bordered w-full${editFormError.model ? ' is-invalid' : ''}`}
-                placeholder="e.g. FTKF25TV"
-                value={editForm.model} onChange={handleEditFormChange} />
-              {editFormError.model && <span className="helper-text">{editFormError.model}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Serial Number <span className="text-error">*</span></label>
-              <input type="text" name="serialNum" maxLength={60} required
-                className={`input input-bordered w-full${editFormError.serialNum ? ' is-invalid' : ''}`}
-                placeholder="e.g. SN-1234567890"
-                value={editForm.serialNum} onChange={handleEditFormChange} />
-              {editFormError.serialNum && <span className="helper-text">{editFormError.serialNum}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select name="status"
-                className={`select select-bordered w-full${editFormError.status ? ' is-invalid' : ''}`}
-                value={editForm.status} onChange={handleEditFormChange}>
-                {STATUS_OPTIONS.map(o => (
-                  <option key={o} value={o}>{formatStatus(o)}</option>
-                ))}
-              </select>
-              {editFormError.status && <span className="helper-text">{editFormError.status}</span>}
-            </div>
-
-            {editFormError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{editFormError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* AC Unit Manage Modal */}
-      <ManageMenu
-        title={selectedUnit ? `AC Unit #${selectedUnit.acNum}` : ''}
-        subtitle={selectedUnit ? `${selectedUnit.brand} ${selectedUnit.model}` : ''}
-        item={selectedUnit}
-        details={selectedUnit ? [
-          { label: 'Brand',         value: selectedUnit.brand },
-          { label: 'Model',         value: selectedUnit.model },
-          { label: 'Serial Number', value: selectedUnit.serialNum, fullWidth: true },
-          { label: 'Status',        value: formatStatus(selectedUnit.status) },
-        ] : []}
-        isOpen={!!selectedUnit}
-        onClose={() => setSelectedUnit(null)}
-        hasRole={hasRole}
-        menuItems={AC_MENU_ITEMS}
-        onMenuSelect={(key, unit) => {
-          setSelectedUnit(null)
-          if (key === 'update') openEditModal(unit)
-        }}
-      />
     </Layout>
   )
 }

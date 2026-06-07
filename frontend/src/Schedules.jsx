@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useLocation, useNavigate } from 'react-router-dom'
+import { useParams, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
-import { useModal } from './modal/index.js'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
-import ModalNav from './ModalNav'
+import ModalNav from './modals/ModalNav.jsx'
 import ProjectPickerModal from './ProjectPickerModal'
 import PickerInput from './PickerInput'
 import CrewPickerModal from './CrewPickerModal'
@@ -147,7 +147,7 @@ function ManageSchedModal({ sched, projectMap, onRefresh }) {
             )}
           </div>
         </div>
-        <ModalNav items={menuItems} hasRole={hasRole} onSelect={handleAction} title="Actions" />
+        <ModalNav items={menuItems} hasRole={hasRole} onSelect={handleAction} cols={4} title="Actions" />
         {sr === null && (
           <p className="text-xs text-base-content/40 text-center">Checking for linked service report...</p>
         )}
@@ -1280,6 +1280,7 @@ export default function Schedules() {
   const isProjectView = projNum !== null
 
   const canEdit = hasRole('ADMIN', 'STAFF')
+  const [searchParams] = useSearchParams()
 
   const [projectMap, setProjectMap] = useState({})
 
@@ -1293,7 +1294,8 @@ export default function Schedules() {
   const [searchInput, setSearchInput] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
 
-  const [hideFinished, setHideFinished] = useState(false)
+  const [hideFinished, setHideFinished] = useState(searchParams.get('hideFinished') === '1')
+  const [showToday, setShowToday] = useState(searchParams.get('showToday') === '1')
   const [highlightDate, setHighlightDate] = useState(null)
 
   /** Fetches project names once for the lookup map */
@@ -1308,25 +1310,38 @@ export default function Schedules() {
     } catch (_) {}
   }
 
-  /** Fetches the paginated list with current search and hideFinished state */
+  /** Fetches the paginated list with current search and hideFinished state, or today's schedules when showToday is active */
   async function fetchList() {
     setListLoading(true)
     setListError(null)
     try {
-      const params = new URLSearchParams({
-        page: String(listPage),
-        size: String(LIST_SIZE),
-        sort: hideFinished ? 'date,desc' : 'schedId,desc',
-        hideFinished: String(hideFinished),
-      })
-      if (appliedSearch) params.set('search', appliedSearch)
-      if (projNum) params.set('projNum', String(projNum))
-      const res = await apiFetch(`/api/service-schedules?${params}`)
-      if (!res.ok) throw new Error(`Failed to load schedules (${res.status})`)
-      const data = await res.json()
-      setListSchedules(data.content ?? [])
-      setListTotalPages(data.totalPages ?? 0)
-      setListTotal(data.totalElements ?? 0)
+      if (showToday) {
+        const today = new Date().toISOString().split('T')[0]
+        const params = new URLSearchParams({ dateFrom: today, dateTo: today })
+        if (projNum) params.set('projNum', String(projNum))
+        const res = await apiFetch(`/api/service-schedules/calendar?${params}`)
+        if (!res.ok) throw new Error(`Failed to load schedules (${res.status})`)
+        let data = await res.json()
+        if (hideFinished) data = data.filter(s => s.status !== 'completed' && s.status !== 'cancelled')
+        setListSchedules(data)
+        setListTotalPages(0)
+        setListTotal(data.length)
+      } else {
+        const params = new URLSearchParams({
+          page: String(listPage),
+          size: String(LIST_SIZE),
+          sort: hideFinished ? 'date,desc' : 'schedId,desc',
+          hideFinished: String(hideFinished),
+        })
+        if (appliedSearch) params.set('search', appliedSearch)
+        if (projNum) params.set('projNum', String(projNum))
+        const res = await apiFetch(`/api/service-schedules?${params}`)
+        if (!res.ok) throw new Error(`Failed to load schedules (${res.status})`)
+        const data = await res.json()
+        setListSchedules(data.content ?? [])
+        setListTotalPages(data.totalPages ?? 0)
+        setListTotal(data.totalElements ?? 0)
+      }
     } catch (err) {
       setListError(err.message)
     } finally {
@@ -1335,7 +1350,7 @@ export default function Schedules() {
   }
 
   useEffect(() => { fetchProjects() }, [apiFetch])
-  useEffect(() => { fetchList() }, [apiFetch, listPage, appliedSearch, hideFinished, projNum])
+  useEffect(() => { fetchList() }, [apiFetch, listPage, appliedSearch, hideFinished, showToday, projNum])
 
   // Debounce search input: apply after 400ms of no typing, reset to page 0
   useEffect(() => {
@@ -1350,6 +1365,12 @@ export default function Schedules() {
   function toggleHideFinished() {
     setListPage(0)
     setHideFinished(h => !h)
+  }
+
+  /** Toggles today-only filter and resets list to first page */
+  function toggleShowToday() {
+    setListPage(0)
+    setShowToday(t => !t)
   }
 
   /** Opens the manage modal for a schedule */
@@ -1374,7 +1395,7 @@ export default function Schedules() {
             {isProjectView ? `Schedules of ${projectName ?? `Project #${projNum}`}` : 'Schedules'}
           </h1>
           <p className="text-base-content/60 mt-1">
-            {isProjectView ? 'Service schedules for this project' : 'View and manage service schedules'}
+            {isProjectView ? 'Service schedules for this project' : hasRole('CREW') ? 'View your schedules' : 'View and manage service schedules'}
           </p>
         </div>
         <div className="flex gap-2 items-center h-full">
@@ -1413,19 +1434,33 @@ export default function Schedules() {
               />
             </div>
 
-            {/* Count + hide-finished toggle */}
+            {/* Count + filter toggles */}
             <div className="flex items-center justify-between shrink-0">
-              <p className="text-xs text-base-content/50">
+              <p className="text-sm font-medium text-base-content">
                 {listTotal} schedule{listTotal !== 1 ? 's' : ''}
               </p>
-              <button
-                className={`btn btn-xs gap-1 ${hideFinished ? 'btn-primary' : 'btn-secondary border border-base-300'}`}
-                onClick={toggleHideFinished}
-                title={hideFinished ? 'Click to show completed and cancelled schedules' : 'Click to hide completed and cancelled schedules'}
-              >
-                <span className="icon-[tabler--filter] size-3.5"></span>
-                {hideFinished ? 'Show Pending Only' : 'Show All Statuses'}
-              </button>
+              <div className="flex gap-1">
+                <button
+                  className={`btn btn-xs flex-col h-auto py-1.5 px-3 gap-0.5 min-w-[72px] ${showToday ? 'btn-primary' : 'btn-secondary border border-base-300'}`}
+                  onClick={toggleShowToday}
+                  title={showToday ? 'Click to show all dates' : 'Click to show only today\'s schedules'}
+                >
+                  <span className="icon-[tabler--filter] size-3.5"></span>
+                  <span className="text-[10px] font-medium leading-tight text-center whitespace-normal">
+                    {showToday ? <>Showing Today<br/>Only</> : <>Showing Any<br/>Dates</>}
+                  </span>
+                </button>
+                <button
+                  className={`btn btn-xs flex-col h-auto py-1.5 px-3 gap-0.5 min-w-[72px] ${hideFinished ? 'btn-primary' : 'btn-secondary border border-base-300'}`}
+                  onClick={toggleHideFinished}
+                  title={hideFinished ? 'Click to show completed and cancelled schedules' : 'Click to hide completed and cancelled schedules'}
+                >
+                  <span className="icon-[tabler--filter] size-3.5"></span>
+                  <span className="text-[10px] font-medium leading-tight text-center whitespace-normal">
+                    {hideFinished ? <>Showing Pending Only</> : <>Showing All Statuses</>}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* List error */}

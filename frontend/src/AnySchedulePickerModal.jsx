@@ -35,7 +35,7 @@ const renderCard = (s, onSelect) => (
 export default function AnySchedulePickerModal({ isOpen, onClose, onSelect, asLayer = false }) {
   return (
     <PickerModal
-      isOpen={isOpen}
+      isOpen={asLayer ? true : isOpen}
       onClose={onClose}
       onSelect={onSelect}
       title="Select Schedule"

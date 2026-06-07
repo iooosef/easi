@@ -19,7 +19,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Handles service schedule business logic: creation, updates, and retrieval. */
+/**
+ * Handles service schedule business logic: creation, updates, and retrieval.
+ */
 @Service
 public class ServiceScheduleService {
 
@@ -28,8 +30,8 @@ public class ServiceScheduleService {
     private final LogService logService;
 
     public ServiceScheduleService(ServiceScheduleRepository serviceScheduleRepository,
-                                  ProjectRepository projectRepository,
-                                  LogService logService) {
+            ProjectRepository projectRepository,
+            LogService logService) {
         this.serviceScheduleRepository = serviceScheduleRepository;
         this.projectRepository = projectRepository;
         this.logService = logService;
@@ -47,7 +49,8 @@ public class ServiceScheduleService {
         applyRequest(schedule, request, project);
         schedule.setAddedOn(LocalDateTime.now());
         ServiceSchedule saved = serviceScheduleRepository.save(schedule);
-        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceSchedule", String.valueOf(saved.getSchedId()), "Created service schedule #" + saved.getSchedId(), null);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "ServiceSchedule",
+                String.valueOf(saved.getSchedId()), "Created service schedule #" + saved.getSchedId(), null);
         return toResponse(saved);
     }
 
@@ -60,26 +63,40 @@ public class ServiceScheduleService {
                 .orElseThrow(() -> new IllegalArgumentException("Project not found."));
         applyRequest(schedule, request, project);
         ServiceSchedule saved = serviceScheduleRepository.save(schedule);
-        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceSchedule", String.valueOf(schedId), "Updated service schedule #" + schedId, null);
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceSchedule",
+                String.valueOf(schedId), "Updated service schedule #" + schedId, null);
         return toResponse(saved);
     }
 
     /**
      * Returns a filtered, paginated page of service schedule records.
-     * Optionally excludes completed and cancelled schedules when hideFinished is true.
+     * Optionally excludes completed and cancelled schedules when hideFinished is
+     * true.
      * Optionally filters by purpose or project name when search is provided.
      */
     /**
      * Returns a filtered, paginated page of service schedule records.
-     * Optionally excludes completed and cancelled schedules when hideFinished is true.
+     * Optionally excludes completed and cancelled schedules when hideFinished is
+     * true.
      * Optionally filters by purpose or project name when search is provided.
      * Optionally restricts results to a single project when projNum is provided.
+     * Optionally filters by crew member when crewEmpNum is provided.
      */
     /** Returns a filtered, paginated page of service schedule records. */
-    public Page<ServiceScheduleResponse> getAll(Pageable pageable, boolean hideFinished, boolean withoutReport, String search, Integer projNum) {
+    public Page<ServiceScheduleResponse> getAll(Pageable pageable, boolean hideFinished, boolean withoutReport,
+            String search, Integer projNum, Integer crewEmpNum) {
         String q = (search != null && !search.isBlank()) ? search : "";
+        if (crewEmpNum != null && hideFinished) {
+            return serviceScheduleRepository.findFilteredByCrewMemberHideFinished(q, projNum, crewEmpNum, pageable)
+                    .map(this::toResponse);
+        }
+        if (crewEmpNum != null) {
+            return serviceScheduleRepository.findFilteredByCrewMember(q, projNum, crewEmpNum, pageable)
+                    .map(this::toResponse);
+        }
         if (hideFinished && withoutReport) {
-            return serviceScheduleRepository.findFilteredHideFinishedWithoutReport(q, projNum, pageable).map(this::toResponse);
+            return serviceScheduleRepository.findFilteredHideFinishedWithoutReport(q, projNum, pageable)
+                    .map(this::toResponse);
         }
         if (hideFinished) {
             return serviceScheduleRepository.findFilteredHideFinished(q, projNum, pageable).map(this::toResponse);
@@ -90,8 +107,16 @@ public class ServiceScheduleService {
         return serviceScheduleRepository.findFiltered(q, projNum, pageable).map(this::toResponse);
     }
 
-    /** Returns all schedules within the given date range for calendar display, optionally scoped to a project. */
-    public List<ServiceScheduleResponse> getForCalendar(LocalDate dateFrom, LocalDate dateTo, Integer projNum) {
+    /**
+     * Returns all schedules within the given date range for calendar display,
+     * optionally scoped to a project and crew member.
+     */
+    public List<ServiceScheduleResponse> getForCalendar(LocalDate dateFrom, LocalDate dateTo, Integer projNum,
+            Integer crewEmpNum) {
+        if (crewEmpNum != null) {
+            return serviceScheduleRepository.findForCalendarByCrew(dateFrom, dateTo, projNum, crewEmpNum)
+                    .stream().map(this::toResponse).toList();
+        }
         return serviceScheduleRepository.findForCalendar(dateFrom, dateTo, projNum)
                 .stream().map(this::toResponse).toList();
     }
@@ -126,7 +151,6 @@ public class ServiceScheduleService {
                 s.getPurpose(),
                 s.getDate(),
                 s.getStatus(),
-                s.getAddedOn()
-        );
+                s.getAddedOn());
     }
 }
