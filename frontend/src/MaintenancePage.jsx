@@ -28,6 +28,7 @@ function formatDateTime(dt) {
 }
 
 const LOG_PAGE_SIZE = 20
+const BACKUP_PAGE_SIZE = 5
 
 export default function MaintenancePage() {
   const { apiFetch } = useAuth()
@@ -36,6 +37,7 @@ export default function MaintenancePage() {
   const [backups, setBackups]               = useState([])
   const [backupsLoading, setBackupsLoading] = useState(true)
   const [creatingBackup, setCreatingBackup] = useState(false)
+  const [backupPage, setBackupPage]         = useState(0)
 
   // Restore state
   const [restoreFile, setRestoreFile]         = useState(null)
@@ -64,7 +66,10 @@ export default function MaintenancePage() {
     try {
       const res = await apiFetch('/api/maintenance/backups')
       if (!res.ok) throw new Error(`Failed to load backups (${res.status})`)
-      setBackups(await res.json())
+      const data = await res.json()
+      data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      setBackups(data)
+      setBackupPage(0)
     } catch {
       /* silently leave list empty */
     } finally {
@@ -282,34 +287,55 @@ export default function MaintenancePage() {
                 <p className="text-sm text-base-content/40 text-center py-4">No backups found.</p>
               )}
 
-              {!backupsLoading && backups.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  {backups.map(b => (
-                    <div key={b.filename} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-base-200 bg-base-50 hover:bg-base-200/50 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-mono text-base-content truncate">{b.filename}</p>
-                        <p className="text-xs text-base-content/50">{formatBytes(b.sizeBytes)} · {formatDateTime(b.createdAt)}</p>
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <button
-                          className="btn btn-soft btn-accent btn-xs btn-square text-primary"
-                          title="Download"
-                          onClick={() => handleDownloadBackup(b.filename)}
-                        >
-                          <span className="icon-[tabler--download] size-4"></span>
-                        </button>
-                        <button
-                          className="btn btn-soft btn-warning btn-xs btn-square text-error"
-                          title="Delete"
-                          onClick={() => setDeleteTarget(b.filename)}
-                        >
-                          <span className="icon-[tabler--x] size-4"></span>
-                        </button>
-                      </div>
+              {!backupsLoading && backups.length > 0 && (() => {
+                const totalPages = Math.ceil(backups.length / BACKUP_PAGE_SIZE)
+                const pageItems = backups.slice(backupPage * BACKUP_PAGE_SIZE, (backupPage + 1) * BACKUP_PAGE_SIZE)
+                return (
+                  <>
+                    <div className="flex flex-col gap-2">
+                      {pageItems.map(b => (
+                        <div key={b.filename} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-base-200 bg-base-50 hover:bg-base-200/50 transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-mono text-base-content truncate">{b.filename}</p>
+                            <p className="text-xs text-base-content/50">
+                              {formatBytes(b.sizeBytes)} · {new Date(b.createdAt).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </p>
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              className="btn btn-soft btn-accent btn-xs btn-square text-primary"
+                              title="Download"
+                              onClick={() => handleDownloadBackup(b.filename)}
+                            >
+                              <span className="icon-[tabler--download] size-4"></span>
+                            </button>
+                            <button
+                              className="btn btn-soft btn-warning btn-xs btn-square text-error"
+                              title="Delete"
+                              onClick={() => setDeleteTarget(b.filename)}
+                            >
+                              <span className="icon-[tabler--x] size-4"></span>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs text-base-content/40">{backupPage + 1} / {totalPages}</span>
+                        <div className="flex gap-1">
+                          <button className="btn btn-xs btn-secondary btn-square" disabled={backupPage === 0} onClick={() => setBackupPage(p => p - 1)}>
+                            <span className="icon-[tabler--chevron-left] size-3.5"></span>
+                          </button>
+                          <button className="btn btn-xs btn-secondary btn-square" disabled={backupPage >= totalPages - 1} onClick={() => setBackupPage(p => p + 1)}>
+                            <span className="icon-[tabler--chevron-right] size-3.5"></span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           </div>
 
@@ -325,8 +351,9 @@ export default function MaintenancePage() {
               </p>
               <form onSubmit={openRestoreConfirm} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="label-text font-medium text-sm">Backup File</label>
+                  <label htmlFor="restore-file-input" className="p-2 btn btn-secondary text-white label-text font-medium text-sm text-left">Backup File</label>
                   <input
+                    id="restore-file-input"
                     type="file"
                     accept=".sql,.dump"
                     className={`file-input file-input-bordered w-full${restoreFormError.file ? ' is-invalid' : ''}`}
