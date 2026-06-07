@@ -174,6 +174,10 @@ const FAQS = [
     q: 'How do I assign employees to a schedule?',
     a: 'When creating or editing a schedule, use the employee assignment section to search for and add employees. Make sure employees have been added under the Employees page first.',
   },
+  {
+    q: 'How do I reset my password?',
+    a: 'Contact your HR or administrator for password reset.',
+  },
 ]
 
 /** Developer / team contact details. */
