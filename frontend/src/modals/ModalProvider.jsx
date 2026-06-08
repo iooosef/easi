@@ -16,10 +16,9 @@ const nextId = () => String(++_id)
  * Renders the active modal stack.
  * The backdrop is a single decorative overlay behind all layers.
  * Non-top layers are dimmed by an overlay that sits between them and the layer above.
- * Only the top layer's padding area closes the modal on click.
- * Clicks inside any modal box are stopped from propagating.
+ * Backdrop clicks are ignored — modals must be closed via explicit buttons.
  */
-function ModalStack({ stack, onPop }) {
+function ModalStack({ stack }) {
   if (stack.length === 0) return null
 
   return (
@@ -35,23 +34,12 @@ function ModalStack({ stack, onPop }) {
         const layerZ = BASE_Z + 1 + index * 2
         return (
           <div key={entry.id}>
-            {/*
-             * Full-screen layer container. Clicking the padding area (outside the
-             * modal box) on the top layer closes it. Lower layers are inert.
-             */}
+            {/* Full-screen layer container — centers the modal box */}
             <div
               className="fixed inset-0 flex items-center justify-center p-4 overflow-y-auto"
               style={{ zIndex: layerZ }}
-              onClick={isTop ? onPop : undefined}
             >
-              {/*
-               * display:contents removes this div from layout so the modal-content
-               * inside becomes a direct flex child, while still intercepting clicks
-               * to prevent them from closing the modal.
-               */}
-              <div className="contents" onClick={e => e.stopPropagation()}>
-                {entry.content}
-              </div>
+              {entry.content}
             </div>
 
             {/* Dim overlay — covers this layer when a higher layer is open */}
@@ -102,7 +90,7 @@ export function ModalProvider({ children }) {
   return (
     <ModalContext.Provider value={{ pushModal, popModal, replaceModal, clearModals }}>
       {children}
-      <ModalStack stack={stack} onPop={popModal} />
+      <ModalStack stack={stack} />
     </ModalContext.Provider>
   )
 }

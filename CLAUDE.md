@@ -89,7 +89,7 @@ const { pushModal, popModal, replaceModal, clearModals } = useModal()
 - Use `pushModal` / `popModal` for ALL modal flows. Do not use the legacy `<Modal>` component or state-driven modal patterns for new modals.
 - Every modal layer MUST be its own React component. Never pass inline JSX with event handlers or state to `pushModal` — closures captured at call time go stale and break interaction. Trivial static content (no handlers, no state) is the only exception.
 - Each modal component calls `useModal()` itself to get `pushModal`/`popModal`. Never pass these as props.
-- Clicking the backdrop on the top layer calls `popModal` automatically — no extra wiring needed.
+- Clicking the backdrop does NOT close the modal — backdrop-dismiss is disabled globally to prevent accidental form loss.
 - Do not add `e.stopPropagation()` to buttons inside modals; the system handles click isolation.
 - Z-indexes start at 100 and increment per layer, safely above all other UI.
 
