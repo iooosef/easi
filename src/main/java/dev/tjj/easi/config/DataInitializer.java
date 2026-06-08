@@ -108,6 +108,7 @@ public class DataInitializer implements CommandLineRunner {
             seedPaymentLogs();
             seedPartUsages();
             seedEquipment();
+            seedEquipmentPurchaseOrders();
         }
     }
 
@@ -905,26 +906,26 @@ public class DataInitializer implements CommandLineRunner {
 
         // Parts — 2-3 per PO (references captured for usage seeding)
         if (po1 != null) {
-            part("Capacitor 35/5 MFD",        2, "pcs",  new BigDecimal("650.00"),  s1, LocalDate.of(2026, 1, 6),  po1, "delivered");
-            part("R-410A Refrigerant (10 kg)", 1, "tank", new BigDecimal("3200.00"), s2, LocalDate.of(2026, 1, 6),  po1, "delivered");
+            part("Capacitor 35/5 MFD",        2, "pcs",  new BigDecimal("650.00"),  s1, LocalDate.of(2026, 1, 6),  po1, "received");
+            part("R-410A Refrigerant (10 kg)", 1, "tank", new BigDecimal("3200.00"), s2, LocalDate.of(2026, 1, 6),  po1, "received");
         }
         if (po2 != null) {
-            part("Air Filter 24-inch",         4, "pcs",  new BigDecimal("420.00"),  s1, LocalDate.of(2026, 2, 10), po2, "delivered");
-            part("Drain Line Cleaner (1L)",    2, "btl",  new BigDecimal("280.00"),  s3, LocalDate.of(2026, 2, 10), po2, "delivered");
-            part("Anti-fungal Coil Spray",     2, "btl",  new BigDecimal("350.00"),  s3, LocalDate.of(2026, 2, 10), po2, "delivered");
+            part("Air Filter 24-inch",         4, "pcs",  new BigDecimal("420.00"),  s1, LocalDate.of(2026, 2, 10), po2, "received");
+            part("Drain Line Cleaner (1L)",    2, "btl",  new BigDecimal("280.00"),  s3, LocalDate.of(2026, 2, 10), po2, "received");
+            part("Anti-fungal Coil Spray",     2, "btl",  new BigDecimal("350.00"),  s3, LocalDate.of(2026, 2, 10), po2, "received");
         }
         if (po3 != null) {
-            part("PCB Fuse 15A",               5, "pcs",  new BigDecimal("85.00"),   s4, LocalDate.of(2026, 1, 12), po3, "delivered");
-            part("Circuit Breaker 20A",        2, "pcs",  new BigDecimal("750.00"),  s4, LocalDate.of(2026, 1, 12), po3, "delivered");
+            part("PCB Fuse 15A",               5, "pcs",  new BigDecimal("85.00"),   s4, LocalDate.of(2026, 1, 12), po3, "received");
+            part("Circuit Breaker 20A",        2, "pcs",  new BigDecimal("750.00"),  s4, LocalDate.of(2026, 1, 12), po3, "received");
         }
         if (po4 != null) {
-            part("Evaporator Coil Cleaner (1L)", 3, "btl", new BigDecimal("310.00"), s3, LocalDate.of(2026, 2, 23), po4, "delivered");
+            part("Evaporator Coil Cleaner (1L)", 3, "btl", new BigDecimal("310.00"), s3, LocalDate.of(2026, 2, 23), po4, "received");
             part("Condensate Drain Pan Sealant", 1, "set", new BigDecimal("540.00"), s1, LocalDate.of(2026, 2, 23), po4, "ordered");
         }
         if (po5 != null) {
-            part("Circuit Breaker 20A",        4, "pcs",  new BigDecimal("750.00"),  s4, LocalDate.of(2026, 1, 5),  po5, "delivered");
-            part("Panel Busbar 100A",          1, "pcs",  new BigDecimal("1850.00"), s4, LocalDate.of(2026, 1, 5),  po5, "delivered");
-            part("Cable Lug 35mm²",            10, "pcs", new BigDecimal("45.00"),   s4, LocalDate.of(2026, 1, 5),  po5, "delivered");
+            part("Circuit Breaker 20A",        4, "pcs",  new BigDecimal("750.00"),  s4, LocalDate.of(2026, 1, 5),  po5, "received");
+            part("Panel Busbar 100A",          1, "pcs",  new BigDecimal("1850.00"), s4, LocalDate.of(2026, 1, 5),  po5, "received");
+            part("Cable Lug 35mm²",            10, "pcs", new BigDecimal("45.00"),   s4, LocalDate.of(2026, 1, 5),  po5, "received");
         }
         if (po6 != null) {
             part("AHU Fan Motor 1.5HP",        1, "pcs",  new BigDecimal("8500.00"), s2, LocalDate.of(2026, 3, 9),  po6, "ordered");
@@ -1206,7 +1207,7 @@ public class DataInitializer implements CommandLineRunner {
 
     /**
      * Seeds sample part usage records demonstrating single and split-leftover consumption.
-     * Parts with "ordered" status are skipped — only delivered parts get usage records.
+     * Parts with "ordered" status are skipped — only received parts get usage records.
      */
     private void seedPartUsages() {
         if (partUsageRepository.count() > 0) {
@@ -1223,7 +1224,7 @@ public class DataInitializer implements CommandLineRunner {
 
         var allReports = serviceReportRepository.findAll(
                 org.springframework.data.domain.Sort.by("srNumber").ascending());
-        if (allReports.size() < 11) {
+        if (allReports.size() < 12) {
             log.warn("Not enough service reports to seed part usages, skipping.");
             return;
         }
@@ -1236,7 +1237,9 @@ public class DataInitializer implements CommandLineRunner {
         ServiceReport sr6  = allReports.get(5);   // P2 — Jan 14 — PCB fuse
         ServiceReport sr7  = allReports.get(6);   // P2 — Feb 5  — foul smell / coil clean
         ServiceReport sr8  = allReports.get(7);   // P2 — Feb 25 — drain pan leak
+        ServiceReport sr9  = allReports.get(8);   // P2 — Mar 18 — routine PM
         ServiceReport sr11 = allReports.get(10);  // P3 — Jan 7  — circuit overload
+        ServiceReport sr12 = allReports.get(11);  // P3 — Jan 28 — wiring inspection
 
         // Resolve parts by name + PO (handles duplicate names across POs)
         Part capacitor    = findPart("Capacitor 35/5 MFD",        "PO-2026-001");
@@ -1310,6 +1313,29 @@ public class DataInitializer implements CommandLineRunner {
         // PO-2026-005 — Cable Lug 35mm² (qty 10): 6 used in SR11 (4 leftover)
         if (cableLug != null) {
             partUsage(cableLug, sr11, 6, null);
+            count++;
+        }
+
+        // --- Additional records with notes for richer test data ---
+
+        // PO-2026-003 — PCB Fuse 15A (qty 5): 2 more used in SR9 after power surge (3 leftover total)
+        if (pcbFuse != null) {
+            partUsage(pcbFuse, sr9, 2, "Replaced blown fuses on outdoor unit control board after power surge");
+            count++;
+        }
+        // PO-2026-002 — Drain Line Cleaner (qty 2): remaining bottle used in SR9 during routine PM (fully used)
+        if (drainCleaner != null) {
+            partUsage(drainCleaner, sr9, 1, "Preventive drain flush during routine PM — last unit consumed");
+            count++;
+        }
+        // PO-2026-005 — Cable Lug 35mm² (qty 10): 2 more used in SR12 for additional panel connections (2 leftover)
+        if (cableLug != null) {
+            partUsage(cableLug, sr12, 2, "Additional wiring connections for extended distribution panel");
+            count++;
+        }
+        // PO-2026-005 — Circuit Breaker 20A (qty 4): final unit used in SR12 (fully used)
+        if (cbPo5 != null) {
+            partUsage(cbPo5, sr12, 1, "Replaced tripped breaker on sub-panel during inspection");
             count++;
         }
 
@@ -1503,6 +1529,85 @@ public class DataInitializer implements CommandLineRunner {
         u.setNotes(notes);
         u.setLoggedOn(loggedOn);
         equipmentUsageRepository.save(u);
+    }
+
+    /**
+     * Seeds two equipment purchase orders (not linked to any service report) with equipment
+     * items procured through each. Skipped if any equipment already has a PO link.
+     */
+    private void seedEquipmentPurchaseOrders() {
+        boolean alreadySeeded = equipmentRepository.findAll().stream()
+                .anyMatch(e -> e.getPurchaseOrder() != null);
+        if (alreadySeeded) {
+            log.info("Equipment purchase order data already exists, skipping.");
+            return;
+        }
+
+        LocalDateTime t1 = LocalDateTime.of(2026, 1, 10, 9, 0);
+        LocalDateTime t2 = LocalDateTime.of(2026, 2, 5, 10, 0);
+
+        // PO-EQUIP-001 — HVAC service tools (durables)
+        PurchaseOrder equipPo1 = po("PO-EQUIP-001", null,
+                "HVAC Service Tools",
+                "net30",
+                "EASI Office, 45 Rizal Ave., Quezon City",
+                "Priority procurement for incoming project season",
+                "bank_transfer", "BDO Account #4892-1234", t1);
+
+        equipmentWithPo("Refrigerant Recovery Unit", "durable",
+                "RRU-200", "SN-RRU-001",
+                "Refrigerant recovery and recycling machine compatible with R-410A and R-22",
+                "active", 1, new BigDecimal("18500.00"), t1, equipPo1);
+        equipmentWithPo("Digital Manifold Gauge Set", "durable",
+                "DMG-4V", "SN-DMG-001",
+                "4-valve digital manifold gauge for HVAC system diagnostics and refrigerant charging",
+                "active", 1, new BigDecimal("9800.00"), t1, equipPo1);
+        equipmentWithPo("Pipe Cutter (1/8\u20131-5/8 inch)", "durable",
+                "PC-158", "SN-PC-001",
+                "Precision copper pipe cutter for refrigerant line installation",
+                "active", 2, new BigDecimal("1200.00"), t1, equipPo1);
+
+        // PO-EQUIP-002 — Consumables and PPE
+        PurchaseOrder equipPo2 = po("PO-EQUIP-002", null,
+                "Consumables & PPE",
+                "cod",
+                "EASI Office, 45 Rizal Ave., Quezon City",
+                null,
+                "cash", null, t2);
+
+        equipmentWithPo("Safety Helmet (Class E)", "consumable",
+                null, null,
+                "Class E rated electrical safety helmet for on-site technicians",
+                "active", 5, new BigDecimal("650.00"), t2, equipPo2);
+        equipmentWithPo("Rubber Insulated Gloves (Class 0)", "consumable",
+                null, null,
+                "Class 0 insulated rubber gloves rated up to 1000V for electrical work",
+                "active", 10, new BigDecimal("380.00"), t2, equipPo2);
+        equipmentWithPo("PVC Electrical Tape (20m)", "consumable",
+                null, null,
+                "High-grade PVC insulation tape for wiring and cable management",
+                "active", 20, new BigDecimal("55.00"), t2, equipPo2);
+
+        log.info("Equipment purchase order seed completed: 2 POs with 6 equipment items created.");
+    }
+
+    /** Creates and saves an Equipment record linked to a purchase order. */
+    private Equipment equipmentWithPo(String name, String type, String model, String serialNumber,
+                                       String description, String status, int stock,
+                                       BigDecimal acquisitionCost, LocalDateTime addedOn,
+                                       PurchaseOrder purchaseOrder) {
+        Equipment e = new Equipment();
+        e.setName(name);
+        e.setType(type);
+        e.setModel(model);
+        e.setSerialNumber(serialNumber);
+        e.setDescription(description);
+        e.setStatus(status);
+        e.setStock(stock);
+        e.setAcquisitionCost(acquisitionCost);
+        e.setAddedOn(addedOn);
+        e.setPurchaseOrder(purchaseOrder);
+        return equipmentRepository.save(e);
     }
 
 }
