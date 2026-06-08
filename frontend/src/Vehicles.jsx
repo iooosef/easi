@@ -642,6 +642,7 @@ export default function Vehicles() {
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.get('addLog') === '1') {
+      navigate(location.pathname, { replace: true })
       pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)
     }
   }, [])

@@ -6,8 +6,8 @@ import logoImg from './assets/logo.png'
 export const NAV_ITEMS = [
   { page: 'home',            label: 'Home',             icon: 'icon-[tabler--home]',        path: '/',                 roles: null },
   { page: 'projects',        label: 'Projects',         icon: 'icon-[tabler--folder]',       path: '/projects',         roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
-  { page: 'service-report',  label: 'Service Report',   icon: 'icon-[tabler--file-report]',  path: '/service-report',   roles: ['ADMIN','STAFF','ACCOUNTING','CREW'] },
   { page: 'schedules',       label: 'Schedules',        icon: 'icon-[tabler--calendar]',     path: '/schedules',        roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
+  { page: 'service-report',  label: 'Service Report',   icon: 'icon-[tabler--file-report]',  path: '/service-report',   roles: ['ADMIN','STAFF','ACCOUNTING','CREW'] },
   {
     page: 'inventory',
     label: 'Inventory',

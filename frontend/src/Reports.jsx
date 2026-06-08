@@ -215,6 +215,26 @@ function PieChart({ data, size = 160 }) {
   )
 }
 
+/** Generates a short plain-English interpretation of a pie chart's data. */
+function PieInterpretation({ data }) {
+  if (!data || data.length === 0) return null
+  const total = data.reduce((s, d) => s + d.value, 0)
+  if (total === 0) return null
+  const sorted = [...data].sort((a, b) => b.value - a.value)
+  const top = sorted[0]
+  const pct = Math.round((top.value / total) * 100)
+  if (data.length === 1) {
+    return <p className="text-xs text-gray-500 mt-3 text-center">{top.label} accounts for all {total} {total === 1 ? 'entry' : 'entries'}.</p>
+  }
+  const second = sorted[1]
+  return (
+    <p className="text-xs text-gray-500 mt-3 text-center">
+      <span className="font-medium text-gray-700">{top.label}</span> is the largest group at {pct}% ({top.value} of {total}).
+      {' '}<span className="font-medium text-gray-700">{second.label}</span> follows with {second.value}.
+    </p>
+  )
+}
+
 // ─── Vehicle picker modal ─────────────────────────────────────────────────────
 
 /** Step-1 modal: pick "All Vehicles" or a specific vehicle before generating the report. */
@@ -2249,10 +2269,12 @@ export default function Reports() {
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">By Status</p>
                     <PieChart data={statusData} size={160} />
+                    <PieInterpretation data={statusData} />
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">By Supplier</p>
                     <PieChart data={supplierData} size={160} />
+                    <PieInterpretation data={supplierData} />
                   </div>
                 </div>
 
@@ -2382,6 +2404,7 @@ export default function Reports() {
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 max-w-xs">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">Payment Status</p>
                     <PieChart data={statusData} size={160} />
+                    <PieInterpretation data={statusData} />
                   </div>
                 </div>
 
