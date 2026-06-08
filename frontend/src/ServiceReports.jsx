@@ -9,7 +9,7 @@ import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 import { useModal } from './modals/index.js'
 import ModalNav from './modals/ModalNav.jsx'
-import { BillingManageModal } from './Billing'
+import { BillingManageModal, ManageBillingViewModal } from './Billing'
 import { FindingsModal } from './ServiceReportFindings'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
@@ -60,17 +60,65 @@ function formatDate(dt) {
 const PAGE_SIZE = 10
 
 /** Self-contained manage panel rendered as a modal stack layer. */
-export function ManageSRModal({ report, onRefresh, onNavigate }) {
-  const { pushModal, popModal } = useModal()
-  const { hasRole } = useAuth()
+export function ManageSRModal({ report: initialReport, onRefresh, onNavigate }) {
+  const { pushModal, popModal, clearModals } = useModal()
+  const { hasRole, apiFetch } = useAuth()
+  const [report, setReport] = useState(initialReport)
+  const [hasBilling, setHasBilling] = useState(null) // null=loading, false=none, true=exists
+  const [billingRefreshKey, setBillingRefreshKey] = useState(0)
+
+  async function refreshReport() {
+    try {
+      const res = await apiFetch(`/api/service-reports/${report.srNumber}`)
+      if (res.ok) {
+        const updated = await res.json()
+        setReport(updated)
+        // Auto-complete the linked schedule when SR becomes fully paid
+        if (updated.status === 'paid' && updated.schedId) {
+          try {
+            const schedRes = await apiFetch(`/api/service-schedules/${updated.schedId}`)
+            if (schedRes.ok) {
+              const sched = await schedRes.json()
+              if (sched.status !== 'completed') {
+                await apiFetch(`/api/service-schedules/${updated.schedId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ projNum: sched.projNum, purpose: sched.purpose, date: sched.date, status: 'completed' }),
+                })
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    setBillingRefreshKey(k => k + 1)
+    onRefresh?.()
+  }
+
+  /** Checks billing items and part usages to determine if payment can be recorded */
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      apiFetch(`/api/service-report-billing-items?srNumber=${report.srNumber}&size=1`).then(r => r.ok ? r.json() : { content: [] }).catch(() => ({ content: [] })),
+      apiFetch(`/api/part-usages?srNumber=${report.srNumber}&size=1`).then(r => r.ok ? r.json() : { content: [] }).catch(() => ({ content: [] })),
+    ]).then(([billing, parts]) => {
+      if (!cancelled) setHasBilling((billing.content ?? []).length > 0 || (parts.content ?? []).length > 0)
+    })
+    return () => { cancelled = true }
+  }, [report.srNumber, apiFetch, billingRefreshKey])
+
+  const menuItems = [
+    ...SR_MENU_ITEMS,
+    ...(hasBilling ? [{ key: 'record-payment', label: 'Record a Payment', icon: 'icon-[tabler--cash]', roles: ['ADMIN', 'ACCOUNTING'] }] : []),
+  ]
 
   function handleAction(key) {
-    if (key === 'update') pushModal(<UpdateSRModal report={report} onSuccess={onRefresh} />)
+    if (key === 'update') pushModal(<UpdateSRModal report={report} onSuccess={refreshReport} />)
     if (key === 'findings') pushModal(<FindingsModal report={report} onRefresh={onRefresh} />)
-    if (key === 'billing') pushModal(<BillingManageModal report={report} />)
-    if (key === 'purchase-order') { popModal(); onNavigate(`/inventory/purchase-orders?srNum=${report.srNumber}`) }
+    if (key === 'billing') pushModal(<BillingManageModal report={report} onSuccess={refreshReport} />)
+    if (key === 'purchase-order') { clearModals(); onNavigate(`/inventory/purchase-orders?srNum=${report.srNumber}`) }
     if (key === 'documents') {
-      popModal()
+      clearModals()
       onNavigate(`/service-report/${report.srNumber}/documents`, {
         state: {
           entityType: 'service-report',
@@ -81,6 +129,7 @@ export function ManageSRModal({ report, onRefresh, onNavigate }) {
         },
       })
     }
+    if (key === 'record-payment') pushModal(<ManageBillingViewModal report={report} withPaymentForm onSuccess={refreshReport} />)
   }
 
   return (
@@ -123,10 +172,13 @@ export function ManageSRModal({ report, onRefresh, onNavigate }) {
         </div>
         <ModalNav
           title="Manage"
-          items={SR_MENU_ITEMS}
+          items={menuItems}
           hasRole={hasRole}
           onSelect={handleAction}
         />
+        {hasBilling === null && (
+          <p className="text-xs text-base-content/40 text-center">Checking for billing...</p>
+        )}
       </div>
     </div>
   )
