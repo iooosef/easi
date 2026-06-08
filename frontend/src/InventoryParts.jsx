@@ -251,11 +251,12 @@ function EditUsageModal({ usage, onSuccess }) {
 
 /** Layer 2 — log a new usage for a part */
 function LogUsageModal({ part, onSuccess }) {
-  const { popModal } = useModal()
+  const { popModal, pushModal } = useModal()
   const { apiFetch } = useAuth()
   const [form, setForm] = useState(EMPTY_USAGE_FORM)
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [srDisplay, setSrDisplay] = useState('')
 
   function handleChange(e) {
     const { name, value } = e.target
@@ -309,7 +310,13 @@ function LogUsageModal({ part, onSuccess }) {
           <div className="flex flex-col gap-4">
 
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Quantity Used <span className="text-error">*</span></label>
+              <div className="flex items-center justify-between">
+                <label className="label-text font-medium">Quantity Used <span className="text-error">*</span></label>
+                <button type="button" className="btn btn-xs btn-soft btn-primary"
+                  onClick={() => setForm(prev => ({ ...prev, qtyUsed: part.availableQty }))}>
+                  Use All
+                </button>
+              </div>
               <input type="number" name="qtyUsed" min={1} max={part.availableQty}
                 className={`input input-bordered w-full${formError.qtyUsed ? ' is-invalid' : ''}`}
                 placeholder="e.g. 2" required
@@ -318,11 +325,35 @@ function LogUsageModal({ part, onSuccess }) {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">SR Number <span className="text-base-content/40 font-normal">(optional)</span></label>
-              <input type="number" name="srNumber" min={1}
-                className={`input input-bordered w-full${formError.srNumber ? ' is-invalid' : ''}`}
-                placeholder="e.g. 5 — leave blank if not from an SR"
-                value={form.srNumber} onChange={handleChange} />
+              <label className="label-text font-medium">Service Report <span className="text-base-content/40 font-normal">(optional)</span></label>
+              <div className="flex gap-2">
+                <input
+                  type="text" readOnly
+                  className={`input input-bordered flex-1${formError.srNumber ? ' is-invalid' : ''}`}
+                  placeholder="None — not linked to an SR"
+                  value={srDisplay}
+                />
+                <button
+                  type="button"
+                  className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => pushModal(<SRPickerLayer onSelect={sr => {
+                    setForm(prev => ({ ...prev, srNumber: sr.srNumber }))
+                    setSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? sr.projectName ?? ''}`)
+                  }} />)}
+                >
+                  Select Service Report
+                </button>
+                {form.srNumber && (
+                  <button
+                    type="button"
+                    className="btn btn-soft btn-error shrink-0"
+                    title="Clear SR link"
+                    onClick={() => { setForm(prev => ({ ...prev, srNumber: '' })); setSrDisplay('') }}
+                  >
+                    <span className="icon-[tabler--x] size-4"></span>
+                  </button>
+                )}
+              </div>
               {formError.srNumber && <span className="helper-text">{formError.srNumber}</span>}
             </div>
 
@@ -358,7 +389,7 @@ function LogUsageModal({ part, onSuccess }) {
   )
 }
 
-/** Layer 2 — update part details; replaces ManagePartModal in the stack */
+/** Layer 2 — update part details; sits on top of ManagePartModal */
 function UpdatePartModal({ part, onRefresh }) {
   const { popModal, pushModal } = useModal()
   const { apiFetch } = useAuth()
@@ -511,7 +542,7 @@ function UpdatePartModal({ part, onRefresh }) {
 
 /** Layer 1 — manage part: details, usage history, and action menu */
 function ManagePartModal({ part, onRefresh }) {
-  const { pushModal, replaceModal, popModal } = useModal()
+  const { pushModal, popModal } = useModal()
   const { hasRole, apiFetch } = useAuth()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
   const [usageHistory, setUsageHistory] = useState([])
@@ -535,8 +566,7 @@ function ManagePartModal({ part, onRefresh }) {
     : PART_MENU_ITEMS
 
   function handleAction(key) {
-    // Update replaces this modal so closing UpdatePartModal returns to the list.
-    if (key === 'update') replaceModal(<UpdatePartModal part={part} onRefresh={onRefresh} />)
+    if (key === 'update') pushModal(<UpdatePartModal part={part} onRefresh={onRefresh} />)
     // Log Usage sits on top; closing it reveals this modal with refreshed history.
     if (key === 'log-usage') pushModal(<LogUsageModal part={part} onSuccess={() => { setUsageRefreshKey(k => k + 1); onRefresh?.() }} />)
   }
