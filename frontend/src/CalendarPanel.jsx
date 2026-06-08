@@ -53,16 +53,21 @@ export default function CalendarPanel({
   conflict = false,
   disabledDates = null,
   onMonthChange = null,
+  externalSchedules = null,
 }) {
   const { apiFetch } = useAuth()
   const today = new Date()
   const [calYear, setCalYear] = useState(today.getFullYear())
   const [calMonth, setCalMonth] = useState(today.getMonth())
-  const [calSchedules, setCalSchedules] = useState([])
+  const [internalSchedules, setInternalSchedules] = useState([])
   const [calLoading, setCalLoading] = useState(false)
 
-  /** Fetches schedules for the currently viewed month */
+  // Use externally provided schedules if given, otherwise use internally fetched ones
+  const calSchedules = externalSchedules ?? internalSchedules
+
+  /** Fetches schedules for the currently viewed month — skipped when externalSchedules is provided */
   useEffect(() => {
+    if (externalSchedules !== null) return
     let cancelled = false
     async function fetchCal() {
       setCalLoading(true)
@@ -75,7 +80,7 @@ export default function CalendarPanel({
         const res = await apiFetch(`/api/service-schedules/calendar?${params}`)
         if (!res.ok || cancelled) return
         const data = await res.json()
-        if (!cancelled) setCalSchedules(data)
+        if (!cancelled) setInternalSchedules(data)
       } catch (_) {
       } finally {
         if (!cancelled) setCalLoading(false)
@@ -83,7 +88,7 @@ export default function CalendarPanel({
     }
     fetchCal()
     return () => { cancelled = true }
-  }, [apiFetch, calYear, calMonth, projNum])
+  }, [apiFetch, calYear, calMonth, projNum, externalSchedules])
 
   /** Syncs the visible month to match the selected date when it changes externally */
   useEffect(() => {

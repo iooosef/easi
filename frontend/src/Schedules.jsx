@@ -7,7 +7,6 @@ import ModalNav from './modals/ModalNav.jsx'
 import ProjectPickerModal from './ProjectPickerModal'
 import PickerInput from './PickerInput'
 import CrewPickerModal from './CrewPickerModal'
-import VehiclePickerModal from './VehiclePickerModal'
 import EquipmentPickerModal from './EquipmentPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 import CalendarPanel, { statusDotColor } from './CalendarPanel'
@@ -19,7 +18,7 @@ const LIST_SIZE = 8
 const STEPS = [
   { number: 1, label: 'Project & Purpose' },
   { number: 2, label: 'Select Date' },
-  { number: 3, label: 'Select Crew & Vehicle' },
+  { number: 3, label: 'Select Crew Members' },
   { number: 4, label: 'Select Equipment' },
 ]
 
@@ -55,15 +54,32 @@ function formatDateTime(dt) {
  * Level 1 modal for managing a schedule.
  * Shows schedule details and a ModalNav for available actions.
  */
-function ManageSchedModal({ sched, projectMap, onRefresh }) {
+function ManageSchedModal({ sched: initialSched, projectMap, onRefresh }) {
   const { pushModal, popModal } = useModal()
   const { apiFetch, hasRole } = useAuth()
   const navigate = useNavigate()
+  const [sched, setSched] = useState(initialSched)
   const [crew, setCrew] = useState([])
   const [crewLoading, setCrewLoading] = useState(true)
   const [sr, setSr] = useState(null) // null=loading, false=not found, object=found
 
+  /** Re-fetches the latest schedule data to reflect updates made in sub-modals */
+  async function refreshSched() {
+    try {
+      const res = await apiFetch(`/api/service-schedules/${sched.schedId}`)
+      if (res.ok) setSched(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
+
   /** Fetches assigned crew for display in the detail panel */
+  function refreshCrew() {
+    setCrewLoading(true)
+    apiFetch(`/api/service-assignments/schedule/${sched.schedId}`)
+      .then(r => r.ok ? r.json() : []).catch(() => [])
+      .then(data => { setCrew(data); setCrewLoading(false) })
+  }
+
   useEffect(() => {
     let cancelled = false
     apiFetch(`/api/service-assignments/schedule/${sched.schedId}`)
@@ -85,18 +101,20 @@ function ManageSchedModal({ sched, projectMap, onRefresh }) {
     return () => { cancelled = true }
   }, [sched.schedId, sched.projNum, apiFetch])
 
+  const srPaid = sr && sr.status === 'paid'
+
   const menuItems = [
     { key: 'update',    label: 'Update Schedule',        icon: 'icon-[tabler--pencil]',      roles: ['ADMIN', 'STAFF'] },
     { key: 'crew',      label: 'Manage Crew Assignment', icon: 'icon-[tabler--users]',        roles: ['ADMIN', 'STAFF', 'HR', 'ACCOUNTING'] },
     { key: 'equipment', label: 'Equipment Used',         icon: 'icon-[tabler--tool]',         roles: null },
-    ...(sr ? [{ key: 'service-report', label: 'Manage Service Report', icon: 'icon-[tabler--file-report]', roles: null }] : []),
+    ...(sr && sched.status !== 'cancelled' ? [{ key: 'service-report', label: 'Manage Service Report', icon: 'icon-[tabler--file-report]', roles: null }] : []),
   ]
 
   function handleAction(key) {
-    if (key === 'update')         pushModal(<UpdateSchedModal sched={sched} onSuccess={onRefresh} />)
-    if (key === 'crew')           pushModal(<ManageCrewModal sched={sched} />)
+    if (key === 'update') pushModal(<UpdateSchedModal sched={sched} lockStatus={srPaid} onSuccess={refreshSched} />)
+    if (key === 'crew')           pushModal(<ManageCrewModal sched={sched} onSuccess={refreshCrew} />)
     if (key === 'equipment')      pushModal(<EquipUsedModal sched={sched} />)
-    if (key === 'service-report') pushModal(<ManageSRModal report={sr} onRefresh={onRefresh} onNavigate={(path, opts) => navigate(path, opts)} />)
+    if (key === 'service-report') pushModal(<ManageSRModal report={sr} onRefresh={refreshSched} onNavigate={(path, opts) => navigate(path, opts)} />)
   }
 
   const projName = projectMap[sched.projNum] ?? `Project #${sched.projNum}`
@@ -160,7 +178,7 @@ function ManageSchedModal({ sched, projectMap, onRefresh }) {
  * Level 2 modal for updating schedule details.
  * Pushed from ManageSchedModal.
  */
-function UpdateSchedModal({ sched, onSuccess }) {
+function UpdateSchedModal({ sched, lockStatus, onSuccess }) {
   const { popModal } = useModal()
   const { apiFetch } = useAuth()
   const [form, setForm] = useState({
@@ -236,12 +254,14 @@ function UpdateSchedModal({ sched, onSuccess }) {
             <select
               className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
               value={form.status}
+              disabled={lockStatus}
               onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
             >
               {STATUS_OPTIONS.map(s => (
                 <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
               ))}
             </select>
+            {lockStatus && <span className="helper-text">Status is locked because the service report is paid.</span>}
             {formError.status && <span className="helper-text">{formError.status}</span>}
           </div>
 
@@ -271,7 +291,7 @@ function UpdateSchedModal({ sched, onSuccess }) {
  * Level 2 modal for managing crew assignments on a schedule.
  * Pushed from ManageSchedModal.
  */
-function ManageCrewModal({ sched }) {
+function ManageCrewModal({ sched, onSuccess }) {
   const { popModal } = useModal()
   const { apiFetch, hasRole } = useAuth()
   const canManageCrew = hasRole('ADMIN', 'STAFF', 'HR')
@@ -325,6 +345,7 @@ function ManageCrewModal({ sched }) {
       }
       notyfSuccess('Crew assignment updated.')
       popModal()
+      onSuccess?.()
     } catch {
       notyfError('Update failed')
     } finally {
@@ -748,9 +769,6 @@ function NewScheduleModal({ onSuccess }) {
   const [crewList, setCrewList] = useState([])
   const [crewPickerOpen, setCrewPickerOpen] = useState(false)
 
-  const [vehicleList, setVehicleList] = useState([])
-  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false)
-
   const [equipmentList, setEquipmentList] = useState([])
   const [equipmentPickerOpen, setEquipmentPickerOpen] = useState(false)
 
@@ -775,11 +793,6 @@ function NewScheduleModal({ onSuccess }) {
   const excludeEquipmentIds = useMemo(
     () => new Set([...equipmentList.map(e => e.equipmentId), ...busyDurableIds]),
     [equipmentList, busyDurableIds]
-  )
-
-  const excludeVehicleIds = useMemo(
-    () => new Set(vehicleList.map(v => v.vehiclesId)),
-    [vehicleList]
   )
 
   const noCrewOnDate = totalCrewCount > 0 && !loadingCrew && !!form.date && busyEmployeeIds.size >= totalCrewCount
@@ -868,14 +881,6 @@ function NewScheduleModal({ onSuccess }) {
     setCrewPickerOpen(false)
   }
 
-  function removeVehicle(vehiclesId) { setVehicleList(l => l.filter(v => v.vehiclesId !== vehiclesId)) }
-
-  function addVehicleFromPicker(v) {
-    if (vehicleList.some(existing => existing.vehiclesId === v.vehiclesId)) { setVehiclePickerOpen(false); return }
-    setVehicleList(l => [...l, { vehiclesId: v.vehiclesId, vehicleModel: v.vehicleModel, vehiclePlateNum: v.vehiclePlateNum }])
-    setVehiclePickerOpen(false)
-  }
-
   function removeEquipment(equipmentId) { setEquipmentList(l => l.filter(e => e.equipmentId !== equipmentId)) }
 
   function addEquipmentFromPicker(eq) {
@@ -945,17 +950,6 @@ function NewScheduleModal({ onSuccess }) {
         }
       }
 
-      for (const v of vehicleList) {
-        const vRes = await apiFetch('/api/schedule-vehicles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vehicleId: v.vehiclesId, schedId: created.schedId }),
-        })
-        if (!vRes.ok) {
-          const err = await parseApiError(vRes)
-          notyfError(err._general ?? `Vehicle #${v.vehiclesId} could not be assigned.`)
-        }
-      }
 
       for (const eq of equipmentList) {
         const eqRes = await apiFetch('/api/equipment-usages', {
@@ -1124,34 +1118,6 @@ function NewScheduleModal({ onSuccess }) {
                 Add Crew Member
               </button>
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="label-text font-medium">Vehicles</label>
-              {vehicleList.length === 0 ? (
-                <p className="text-sm text-base-content/40">No vehicles added yet.</p>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {vehicleList.map(v => (
-                    <div key={v.vehiclesId} className="card bg-base-100 border border-base-300">
-                      <div className="card-body py-2 px-3 gap-0.5">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm line-clamp-1">{v.vehicleModel}</p>
-                            <p className="text-xs text-base-content/50">{v.vehiclePlateNum}</p>
-                          </div>
-                          <button type="button" className="btn btn-error btn-xs btn-square shrink-0" onClick={() => removeVehicle(v.vehiclesId)}>
-                            <span className="icon-[tabler--x] size-3.5"></span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <button type="button" className="btn btn-soft btn-primary btn-sm w-full" onClick={() => setVehiclePickerOpen(true)}>
-                <span className="icon-[tabler--car] size-4"></span>
-                Add Vehicle
-              </button>
-            </div>
             {formError._general && (
               <div className="alert alert-error py-2">
                 <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
@@ -1253,12 +1219,6 @@ function NewScheduleModal({ onSuccess }) {
         onSelect={addCrewFromPicker}
         excludeIds={excludeIdsForPicker}
       />
-      <VehiclePickerModal
-        isOpen={vehiclePickerOpen}
-        onClose={() => setVehiclePickerOpen(false)}
-        onSelect={addVehicleFromPicker}
-        excludeIds={excludeVehicleIds}
-      />
       <EquipmentPickerModal
         isOpen={equipmentPickerOpen}
         onClose={() => setEquipmentPickerOpen(false)}
@@ -1297,6 +1257,28 @@ export default function Schedules() {
   const [hideFinished, setHideFinished] = useState(searchParams.get('hideFinished') === '1')
   const [showToday, setShowToday] = useState(searchParams.get('showToday') === '1')
   const [highlightDate, setHighlightDate] = useState(null)
+
+  const calToday = new Date()
+  const [calViewYear, setCalViewYear] = useState(calToday.getFullYear())
+  const [calViewMonth, setCalViewMonth] = useState(calToday.getMonth())
+  const [calSchedules, setCalSchedules] = useState([])
+
+  /** Fetches schedules for the given year/month and updates calSchedules */
+  async function fetchCalendar(year, month) {
+    try {
+      const mm = String(month + 1).padStart(2, '0')
+      const lastDay = new Date(year, month + 1, 0).getDate()
+      const params = new URLSearchParams({
+        dateFrom: `${year}-${mm}-01`,
+        dateTo: `${year}-${mm}-${String(lastDay).padStart(2, '0')}`,
+      })
+      if (projNum) params.set('projNum', String(projNum))
+      const res = await apiFetch(`/api/service-schedules/calendar?${params}`)
+      if (!res.ok) return
+      const data = await res.json()
+      setCalSchedules(data)
+    } catch (_) {}
+  }
 
   /** Fetches project names once for the lookup map */
   async function fetchProjects() {
@@ -1351,6 +1333,7 @@ export default function Schedules() {
 
   useEffect(() => { fetchProjects() }, [apiFetch])
   useEffect(() => { fetchList() }, [apiFetch, listPage, appliedSearch, hideFinished, showToday, projNum])
+  useEffect(() => { fetchCalendar(calViewYear, calViewMonth) }, [apiFetch, calViewYear, calViewMonth, projNum])
 
   // Debounce search input: apply after 400ms of no typing, reset to page 0
   useEffect(() => {
@@ -1379,7 +1362,7 @@ export default function Schedules() {
       <ManageSchedModal
         sched={sched}
         projectMap={projectMap}
-        onRefresh={fetchList}
+        onRefresh={() => { fetchList(); fetchCalendar(calViewYear, calViewMonth) }}
       />
     )
   }
@@ -1387,7 +1370,7 @@ export default function Schedules() {
   const initialLoading = listLoading && listSchedules.length === 0
 
   return (
-    <Layout activePage={isProjectView ? 'projects' : 'schedules'}>
+    <Layout activePage="schedules">
       {/* Header row */}
       <div className="flex items-stretch justify-between h-16 mb-6">
         <div>
@@ -1400,7 +1383,7 @@ export default function Schedules() {
         </div>
         <div className="flex gap-2 items-center h-full">
           {canEdit && (
-            <button type="button" className="btn btn-primary h-full min-h-0" onClick={() => pushModal(<NewScheduleModal onSuccess={fetchList} />)}>
+            <button type="button" className="btn btn-primary h-full min-h-0" onClick={() => pushModal(<NewScheduleModal onSuccess={() => { fetchList(); fetchCalendar(calViewYear, calViewMonth) }} />)}>
               <span className="icon-[tabler--plus] size-4"></span>
               Add New Schedule
             </button>
@@ -1544,6 +1527,8 @@ export default function Schedules() {
               onDateSelect={ds => setHighlightDate(h => h === ds ? null : ds)}
               projNum={projNum}
               fillHeight
+              externalSchedules={calSchedules}
+              onMonthChange={(y, m) => { setCalViewYear(y); setCalViewMonth(m) }}
               renderCellSchedules={(dayScheds) => (
                 <div className="flex flex-col gap-0.5">
                   {dayScheds.slice(0, 3).map(s => (
