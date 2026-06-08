@@ -54,9 +54,18 @@ function formatDate(dt) {
 }
 
 /** Level 1 — employee manage panel: details view and action menu. */
-function ManageEmployeeModal({ emp, onRefresh }) {
+function ManageEmployeeModal({ emp: initialEmp, onRefresh }) {
   const { pushModal, popModal } = useModal()
-  const { hasRole } = useAuth()
+  const { hasRole, apiFetch } = useAuth()
+  const [emp, setEmp] = useState(initialEmp)
+
+  async function refreshEmp() {
+    try {
+      const res = await apiFetch(`/api/employees/${emp.employeeId}`)
+      if (res.ok) setEmp(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
 
   const menuItems = [
     { key: 'update-employee', label: 'Update Employee Details', icon: 'icon-[tabler--user-edit]', roles: ['ADMIN', 'HR'] },
@@ -73,9 +82,9 @@ function ManageEmployeeModal({ emp, onRefresh }) {
   ]
 
   function handleAction(key) {
-    if (key === 'update-employee') pushModal(<UpdateEmployeeModal emp={emp} onSuccess={onRefresh} />)
-    if (key === 'update-user')     pushModal(<UpdateUserAccountModal emp={emp} onSuccess={onRefresh} />)
-    if (key === 'register-user')   pushModal(<RegisterUserAccountModal emp={emp} onSuccess={onRefresh} />)
+    if (key === 'update-employee') pushModal(<UpdateEmployeeModal emp={emp} onSuccess={refreshEmp} />)
+    if (key === 'update-user')     pushModal(<UpdateUserAccountModal emp={emp} onSuccess={refreshEmp} />)
+    if (key === 'register-user')   pushModal(<RegisterUserAccountModal emp={emp} onSuccess={refreshEmp} />)
     if (key === 'update-password') pushModal(<UpdatePasswordModal emp={emp} />)
   }
 

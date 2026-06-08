@@ -280,12 +280,21 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
 }
 
 /** L1 manage panel for a vehicle log — shows details and action menu. */
-function ManageLogModal({ log, onRefresh }) {
+function ManageLogModal({ log: initialLog, onRefresh }) {
   const { pushModal, popModal } = useModal()
-  const { hasRole } = useAuth()
+  const { hasRole, apiFetch } = useAuth()
+  const [log, setLog] = useState(initialLog)
+
+  async function refreshLog() {
+    try {
+      const res = await apiFetch(`/api/vehicle-logs/${log.vehicleLogId}`)
+      if (res.ok) setLog(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
 
   function handleAction(key) {
-    if (key === 'update') pushModal(<UpdateLogModal log={log} onRefresh={onRefresh} />)
+    if (key === 'update') pushModal(<UpdateLogModal log={log} onRefresh={refreshLog} />)
     if (key === 'manage-gas-logs') pushModal(<ManageGasLogsModal log={log} />)
   }
 

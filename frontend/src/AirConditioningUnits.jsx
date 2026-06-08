@@ -175,12 +175,21 @@ function AddACUnitModal({ projNumInt, onSuccess }) {
  * Manage panel for an AC unit (Layer 1).
  * Shows unit details and a ModalNav for available actions.
  */
-function ManageACUnitModal({ unit, projNumInt, onRefresh }) {
+function ManageACUnitModal({ unit: initialUnit, projNumInt, onRefresh }) {
   const { pushModal, popModal } = useModal()
-  const { hasRole } = useAuth()
+  const { hasRole, apiFetch } = useAuth()
+  const [unit, setUnit] = useState(initialUnit)
+
+  async function refreshUnit() {
+    try {
+      const res = await apiFetch(`/api/ac-units/${unit.acNum}`)
+      if (res.ok) setUnit(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
 
   function handleAction(key) {
-    if (key === 'update') pushModal(<UpdateACUnitModal unit={unit} projNumInt={projNumInt} onSuccess={onRefresh} />)
+    if (key === 'update') pushModal(<UpdateACUnitModal unit={unit} projNumInt={projNumInt} onSuccess={refreshUnit} />)
   }
 
   return (

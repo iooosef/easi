@@ -142,12 +142,21 @@ export function FindingsModal({ report, onRefresh }) {
  * Layer 3 — detail and action menu for a single finding.
  * Pushed from FindingsModal; pushes UpdateFindingModal on top.
  */
-function ManageFindingModal({ finding, srNumber, acUnits, onRefresh }) {
+function ManageFindingModal({ finding: initialFinding, srNumber, acUnits, onRefresh }) {
   const { pushModal, popModal } = useModal()
-  const { hasRole } = useAuth()
+  const { hasRole, apiFetch } = useAuth()
+  const [finding, setFinding] = useState(initialFinding)
+
+  async function refreshFinding() {
+    try {
+      const res = await apiFetch(`/api/service-report-findings/${finding.srFindingsNumber}`)
+      if (res.ok) setFinding(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
 
   function handleAction(key) {
-    if (key === 'update') pushModal(<UpdateFindingModal finding={finding} srNumber={srNumber} acUnits={acUnits} onSuccess={onRefresh} />)
+    if (key === 'update') pushModal(<UpdateFindingModal finding={finding} srNumber={srNumber} acUnits={acUnits} onSuccess={refreshFinding} />)
   }
 
   return (
