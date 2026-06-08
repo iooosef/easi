@@ -39,6 +39,30 @@ async function parseApiError(res) {
   return { _general: data.message ?? data.error ?? `Error ${res.status}` }
 }
 
+/** Tiny SVG donut showing installation progress percentage */
+function ProgressDonut({ value = 0 }) {
+  const r = 16
+  const circ = 2 * Math.PI * r
+  const offset = circ * (1 - Math.min(100, Math.max(0, value)) / 100)
+  return (
+    <svg width="44" height="44" viewBox="0 0 44 44" className="shrink-0">
+      <circle cx="22" cy="22" r={r} fill="none" strokeWidth="4" className="stroke-base-300" />
+      <circle
+        cx="22" cy="22" r={r} fill="none"
+        strokeWidth="4"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform="rotate(-90 22 22)"
+        className="stroke-primary transition-all duration-500"
+      />
+      <text x="22" y="26" textAnchor="middle" fontSize="9" fontWeight="700" className="fill-base-content">
+        {value}%
+      </text>
+    </svg>
+  )
+}
+
 /** Returns badge class based on project type */
 function typeBadgeClass(type) {
   if (!type) return 'badge-neutral'
@@ -594,9 +618,12 @@ export default function Projects() {
                     <div className="card-body gap-2">
                       <div className="flex items-start justify-between gap-2">
                         <h2 className="card-title text-base">{project.name}</h2>
-                        <span className={`badge badge-soft ${typeBadgeClass(project.type)} shrink-0 text-xs`}>
-                          {project.type}
-                        </span>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <ProgressDonut value={project.installationProgress} />
+                          <span className={`badge badge-soft ${typeBadgeClass(project.type)} text-xs`}>
+                            {project.type}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-sm text-primary line-clamp-2">{project.address}</p>
                       <div className="text-sm text-base-content/70 space-y-0.5">

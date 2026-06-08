@@ -301,6 +301,30 @@ function ManageCrewModal({ sched, onSuccess }) {
   const [crewLoading, setCrewLoading] = useState(true)
   const [crewSaving, setCrewSaving] = useState(false)
   const [crewPickerOpen, setCrewPickerOpen] = useState(false)
+  const [busyEmployeeIds, setBusyEmployeeIds] = useState(new Set())
+
+  /** Fetches employee IDs assigned to other schedules on the same date (informational only) */
+  useEffect(() => {
+    if (!sched.date) return
+    let cancelled = false
+    async function fetchBusy() {
+      try {
+        const res = await apiFetch(`/api/service-schedules/calendar?dateFrom=${sched.date}&dateTo=${sched.date}`)
+        if (!res.ok || cancelled) return
+        const schedules = (await res.json()).filter(s => s.schedId !== sched.schedId)
+        if (cancelled) return
+        const crewResults = await Promise.all(
+          schedules.map(s => apiFetch(`/api/service-assignments/schedule/${s.schedId}`).then(r => r.ok ? r.json() : []).catch(() => []))
+        )
+        if (cancelled) return
+        const ids = new Set()
+        for (const crew of crewResults) for (const c of crew) ids.add(c.employeeId)
+        setBusyEmployeeIds(ids)
+      } catch (_) {}
+    }
+    fetchBusy()
+    return () => { cancelled = true }
+  }, [sched.schedId, sched.date, apiFetch])
 
   /** Fetches current crew assignments for the schedule */
   useEffect(() => {
@@ -382,9 +406,14 @@ function ManageCrewModal({ sched, onSuccess }) {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm line-clamp-1">{c.lastName}, {c.firstName}</p>
                           <p className="text-xs text-base-content/50">Emp #{c.employeeId} · {c.position ?? '—'}</p>
-                          {!c.servAssgnId && (
-                            <span className="badge badge-soft badge-warning badge-xs mt-0.5">New</span>
-                          )}
+                          <div className="flex gap-1 flex-wrap mt-0.5">
+                            {!c.servAssgnId && (
+                              <span className="badge badge-soft badge-warning badge-xs">New</span>
+                            )}
+                            {busyEmployeeIds.has(c.employeeId) && (
+                              <span className="badge badge-soft badge-info badge-xs">Also assigned today</span>
+                            )}
+                          </div>
                         </div>
                         {canManageCrew && (
                           <button type="button" className="btn btn-error btn-xs btn-square shrink-0" onClick={() => removeCrew(c.employeeId)}>
@@ -777,25 +806,11 @@ function NewScheduleModal({ onSuccess }) {
   const [projectConflict, setProjectConflict] = useState(false)
   const [loadingConflict, setLoadingConflict] = useState(false)
   const [busyEmployeeIds, setBusyEmployeeIds] = useState(new Set())
-  const [loadingCrew, setLoadingCrew] = useState(false)
-  const [totalCrewCount, setTotalCrewCount] = useState(0)
-
-  const busyCrewInList = useMemo(
-    () => new Set(crewList.filter(c => busyEmployeeIds.has(c.employeeId)).map(c => c.employeeId)),
-    [crewList, busyEmployeeIds]
-  )
-
-  const excludeIdsForPicker = useMemo(
-    () => new Set([...busyEmployeeIds, ...crewList.map(c => c.employeeId)]),
-    [busyEmployeeIds, crewList]
-  )
 
   const excludeEquipmentIds = useMemo(
     () => new Set([...equipmentList.map(e => e.equipmentId), ...busyDurableIds]),
     [equipmentList, busyDurableIds]
   )
-
-  const noCrewOnDate = totalCrewCount > 0 && !loadingCrew && !!form.date && busyEmployeeIds.size >= totalCrewCount
 
   /** Checks if this project already has a schedule on the selected date */
   useEffect(() => {
@@ -815,12 +830,11 @@ function NewScheduleModal({ onSuccess }) {
     return () => { cancelled = true }
   }, [form.date, form.projNum, apiFetch])
 
-  /** Fetches employee IDs already assigned to any schedule on the selected date */
+  /** Fetches employee IDs already assigned to any schedule on the selected date (informational only) */
   useEffect(() => {
     if (!form.date) { setBusyEmployeeIds(new Set()); return }
     let cancelled = false
     async function fetchCrewAvail() {
-      setLoadingCrew(true)
       try {
         const res = await apiFetch(`/api/service-schedules/calendar?dateFrom=${form.date}&dateTo=${form.date}`)
         if (!res.ok || cancelled) return
@@ -834,7 +848,6 @@ function NewScheduleModal({ onSuccess }) {
         for (const crew of crewResults) for (const c of crew) ids.add(c.employeeId)
         setBusyEmployeeIds(ids)
       } catch (_) { if (!cancelled) setBusyEmployeeIds(new Set()) }
-      finally { if (!cancelled) setLoadingCrew(false) }
     }
     fetchCrewAvail()
     return () => { cancelled = true }
@@ -864,14 +877,6 @@ function NewScheduleModal({ onSuccess }) {
     fetchEquipAvail()
     return () => { cancelled = true }
   }, [form.date, apiFetch])
-
-  /** Fetches total crew employee count once on mount */
-  useEffect(() => {
-    apiFetch('/api/crew-employees?size=1')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setTotalCrewCount(data.totalElements) })
-      .catch(() => {})
-  }, [apiFetch])
 
   function removeCrew(employeeId) { setCrewList(l => l.filter(c => c.employeeId !== employeeId)) }
 
@@ -904,8 +909,7 @@ function NewScheduleModal({ onSuccess }) {
       setStep(2)
     } else if (step === 2) {
       if (!form.date) { setFormError({ date: 'Please select a date.' }); return }
-      if (loadingConflict || loadingCrew) return
-      if (noCrewOnDate) { setFormError({ date: 'No crew members are available on this date.' }); return }
+      if (loadingConflict) return
       if (projectConflict) { setFormError({ date: 'This project already has a schedule on the selected date.' }); return }
       setStep(3)
     } else if (step === 3) {
@@ -916,10 +920,6 @@ function NewScheduleModal({ onSuccess }) {
 
   /** Creates schedule, service report, crew assignments, and equipment usages */
   async function handleSubmit() {
-    if (busyCrewInList.size > 0) {
-      setFormError({ _general: 'Remove crew members already assigned on the selected date before submitting.' })
-      return
-    }
     setFormError({})
     setSubmitting(true)
     try {
@@ -1047,18 +1047,16 @@ function NewScheduleModal({ onSuccess }) {
               <label className="label-text font-medium">Date <span className="text-error">*</span></label>
               <input
                 type="date"
-                className={`input input-bordered w-full${formError.date || projectConflict || noCrewOnDate ? ' is-invalid' : ''}`}
+                className={`input input-bordered w-full${formError.date || projectConflict ? ' is-invalid' : ''}`}
                 required
                 value={form.date}
                 onChange={e => { setForm(f => ({ ...f, date: e.target.value })); setFormError({}) }}
               />
-              {loadingConflict || loadingCrew ? (
+              {loadingConflict ? (
                 <span className="text-xs text-base-content/50 flex items-center gap-1 mt-0.5">
                   <span className="loading loading-spinner loading-xs"></span>
                   Checking availability...
                 </span>
-              ) : noCrewOnDate ? (
-                <span className="helper-text">No crew members are available on this date — all crew are fully assigned.</span>
               ) : projectConflict ? (
                 <span className="helper-text">This project already has a schedule on this date. Please choose a different date.</span>
               ) : formError.date ? (
@@ -1094,14 +1092,14 @@ function NewScheduleModal({ onSuccess }) {
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {crewList.map(c => (
-                    <div key={c.employeeId} className={`card border ${busyCrewInList.has(c.employeeId) ? 'border-error bg-error/5' : 'bg-base-100 border-base-300'}`}>
+                    <div key={c.employeeId} className="card border bg-base-100 border-base-300">
                       <div className="card-body py-2 px-3 gap-0.5">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm line-clamp-1">{c.lastName}, {c.firstName}</p>
                             <p className="text-xs text-base-content/50">Emp #{c.employeeId} · {c.position ?? '—'}</p>
-                            {busyCrewInList.has(c.employeeId) && (
-                              <span className="badge badge-soft badge-error badge-xs mt-0.5">Already assigned this day</span>
+                            {busyEmployeeIds.has(c.employeeId) && (
+                              <span className="badge badge-soft badge-warning badge-xs mt-0.5">Also assigned today</span>
                             )}
                           </div>
                           <button type="button" className="btn btn-error btn-xs btn-square shrink-0" onClick={() => removeCrew(c.employeeId)}>
@@ -1202,11 +1200,11 @@ function NewScheduleModal({ onSuccess }) {
           </button>
         ) : <span />}
         {step < 4 ? (
-          <button type="button" className="btn btn-primary" disabled={step === 2 && (loadingConflict || loadingCrew || noCrewOnDate)} onClick={handleNext}>
+          <button type="button" className="btn btn-primary" disabled={step === 2 && loadingConflict} onClick={handleNext}>
             Next <span className="icon-[tabler--arrow-right] size-4"></span>
           </button>
         ) : (
-          <button type="button" className="btn btn-primary" disabled={submitting || busyCrewInList.size > 0} onClick={handleSubmit}>
+          <button type="button" className="btn btn-primary" disabled={submitting} onClick={handleSubmit}>
             {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--plus] size-4"></span>}
             Add Schedule
           </button>
@@ -1217,7 +1215,7 @@ function NewScheduleModal({ onSuccess }) {
         isOpen={crewPickerOpen}
         onClose={() => setCrewPickerOpen(false)}
         onSelect={addCrewFromPicker}
-        excludeIds={excludeIdsForPicker}
+        excludeIds={new Set(crewList.map(c => c.employeeId))}
       />
       <EquipmentPickerModal
         isOpen={equipmentPickerOpen}
