@@ -18,7 +18,8 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
 
     @Query(value = """
             SELECT sr FROM ServiceReport sr
-            WHERE (:projNum IS NULL OR sr.serviceSchedule.project.projNum = :projNum)
+            WHERE sr.serviceSchedule.status <> 'cancelled'
+            AND (:projNum IS NULL OR sr.serviceSchedule.project.projNum = :projNum)
             AND (
                 :noFilter = true
                 OR (:wantUnpaid = true
@@ -37,7 +38,8 @@ public interface ServiceReportRepository extends JpaRepository<ServiceReport, In
             """,
             countQuery = """
             SELECT COUNT(sr) FROM ServiceReport sr
-            WHERE (:projNum IS NULL OR sr.serviceSchedule.project.projNum = :projNum)
+            WHERE sr.serviceSchedule.status <> 'cancelled'
+            AND (:projNum IS NULL OR sr.serviceSchedule.project.projNum = :projNum)
             AND (
                 :noFilter = true
                 OR (:wantUnpaid = true

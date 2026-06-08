@@ -5,7 +5,7 @@ import dev.tjj.easi.dto.ServiceReportResponse;
 import dev.tjj.easi.entity.*;
 import dev.tjj.easi.repository.DocumentRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
-import dev.tjj.easi.repository.PartRepository;
+import dev.tjj.easi.repository.PartUsageRepository;
 import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
@@ -35,7 +35,7 @@ public class ServiceReportService {
     private final DocumentRepository documentRepository;
     private final ServiceReportBillingItemRepository billingItemRepository;
     private final PaymentLogRepository paymentLogRepository;
-    private final PartRepository partRepository;
+    private final PartUsageRepository partUsageRepository;
     private final LogService logService;
 
     public ServiceReportService(ServiceReportRepository serviceReportRepository,
@@ -44,7 +44,7 @@ public class ServiceReportService {
                                 DocumentRepository documentRepository,
                                 ServiceReportBillingItemRepository billingItemRepository,
                                 PaymentLogRepository paymentLogRepository,
-                                PartRepository partRepository,
+                                PartUsageRepository partUsageRepository,
                                 LogService logService) {
         this.serviceReportRepository = serviceReportRepository;
         this.employeeRepository = employeeRepository;
@@ -52,7 +52,7 @@ public class ServiceReportService {
         this.documentRepository = documentRepository;
         this.billingItemRepository = billingItemRepository;
         this.paymentLogRepository = paymentLogRepository;
-        this.partRepository = partRepository;
+        this.partUsageRepository = partUsageRepository;
         this.logService = logService;
     }
 
@@ -95,8 +95,10 @@ public class ServiceReportService {
                         row -> (Integer) row[0],
                         row -> new BigDecimal(row[1].toString())));
 
-        // Add parts cost (from POs linked to each SR) to the billed map
-        partRepository.sumTotalCostBySrNumbers(srNums)
+        // BILLING STRATEGY — must match PARTS_BILLING_STRATEGY in frontend/src/Billing.jsx
+        // fetchPartsByUsage (current): partUsageRepository.sumTotalCostBySrNumbers  — bills by qtyUsed
+        // fetchPartsByPO   (alternate): partRepository.sumTotalCostBySrNumbers       — bills by quantityOrdered
+        partUsageRepository.sumTotalCostBySrNumbers(srNums)
                 .forEach(row -> {
                     Integer srNum = (Integer) row[0];
                     BigDecimal partsCost = new BigDecimal(row[1].toString());
@@ -173,10 +175,13 @@ public class ServiceReportService {
 
     }
 
-    /** Computes payment status from live billing (items + parts) and payment totals for a single SR. */
+    /** Computes payment status from live billing (items + part usages) and payment totals for a single SR.
+     *  BILLING STRATEGY — must match PARTS_BILLING_STRATEGY in frontend/src/Billing.jsx:
+     *  fetchPartsByUsage (current): partUsageRepository.sumTotalCostBySrNumber  — bills by qtyUsed
+     *  fetchPartsByPO   (alternate): partRepository.sumTotalCostBySrNumber       — bills by quantityOrdered */
     private ServiceReportResponse toResponse(ServiceReport r) {
         BigDecimal billed = billingItemRepository.sumTotalBySrNumber(r.getSrNumber())
-                .add(partRepository.sumTotalCostBySrNumber(r.getSrNumber()));
+                .add(partUsageRepository.sumTotalCostBySrNumber(r.getSrNumber()));
         BigDecimal paid = paymentLogRepository.sumPaidBySrNumber(r.getSrNumber());
         return toResponse(r, billed, paid);
     }
@@ -193,6 +198,7 @@ public class ServiceReportService {
                 r.getLocation(),
                 r.getServiceSchedule().getSchedId(),
                 r.getServiceSchedule().getDate(),
+                r.getServiceSchedule().getStatus(),
                 r.getDocument() != null ? r.getDocument().getDocuId() : null,
                 deriveStatus(billed, paid),
                 billed,

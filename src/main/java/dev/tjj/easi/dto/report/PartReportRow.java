@@ -31,8 +31,8 @@ public record PartReportRow(
         @Schema(description = "Total cost: quantityOrdered × unitPrice", example = "2500.00")
         BigDecimal total,
 
-        @Schema(description = "Current status of the part", example = "delivered",
-                allowableValues = {"ordered", "delivered", "used"})
+        @Schema(description = "Current status of the part", example = "received",
+                allowableValues = {"ordered", "received", "used"})
         String status
 
 ) {}
