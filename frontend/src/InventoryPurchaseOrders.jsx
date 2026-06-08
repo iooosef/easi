@@ -36,6 +36,7 @@ function partStatusBadge(status) {
 
 const PAGE_SIZE = 12
 const PARTS_PAGE_SIZE = 7
+
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
 const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
 const EMPTY_WIZARD_EQUIP = { name: '', type: 'durable', model: '', serialNumber: '', description: '', stock: '1', acquisitionCost: '' }
@@ -273,6 +274,17 @@ function UpdatePoModal({ order, onRefresh }) {
   const [form, setForm] = useState({ purpose: order.purpose ?? '', terms: order.terms ?? '', paymentMethod: order.paymentMethod ?? '', paymentDetails: order.paymentDetails ?? '', deliveryAddress: order.deliveryAddress ?? '', remarks: order.remarks ?? '' })
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [projectAddress, setProjectAddress] = useState('')
+
+  useEffect(() => {
+    if (!order.srNum) return
+    apiFetch(`/api/service-reports/${order.srNum}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(sr => apiFetch(`/api/projects/${sr.projNum}`))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(proj => setProjectAddress(proj.address ?? ''))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Submits the updated PO fields to the API and refreshes the list on success. */
   async function handleUpdatePoSubmit(e) {
@@ -300,7 +312,7 @@ function UpdatePoModal({ order, onRefresh }) {
       </div>
       <div className="modal-body">
         <form id="inv-po-update-form" onSubmit={handleUpdatePoSubmit}>
-          <POFormFields form={form} onChange={e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={errors} />
+          <POFormFields form={form} onChange={e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={errors} projectAddress={projectAddress} />
         </form>
       </div>
       <div className="modal-footer">
@@ -387,12 +399,21 @@ function EditUsageModal({ usage, selectedPart, onRefresh }) {
 }
 
 /** Modal for logging a new part usage against a specific part; enforces max quantity. */
-function LogUsageModal({ selectedPart, availableQty, onRefresh }) {
+function LogUsageModal({ selectedPart, srNumber, availableQty, onRefresh }) {
   const { popModal } = useModal()
   const { apiFetch } = useAuth()
-  const [form, setForm] = useState({ srNumber: '', qtyUsed: '', notes: '' })
+  const [form, setForm] = useState({ qtyUsed: '', notes: '' })
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [srInfo, setSrInfo] = useState(null)
+
+  useEffect(() => {
+    if (!srNumber) return
+    apiFetch(`/api/service-reports/${srNumber}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setSrInfo(d))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Posts the new usage entry to the API and triggers a refresh of usage history. */
   async function handleLogUsageSubmit(e) {
@@ -400,7 +421,7 @@ function LogUsageModal({ selectedPart, availableQty, onRefresh }) {
     try {
       const res = await apiFetch('/api/part-usages', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partId: selectedPart.partId, srNumber: form.srNumber ? Number(form.srNumber) : null, qtyUsed: Number(form.qtyUsed), notes: form.notes || null }),
+        body: JSON.stringify({ partId: selectedPart.partId, srNumber: srNumber ?? null, qtyUsed: Number(form.qtyUsed), notes: form.notes || null }),
       })
       if (!res.ok) { setErrors(await parseApiError(res)); notyfError('Log usage failed'); return }
       popModal()
@@ -421,16 +442,38 @@ function LogUsageModal({ selectedPart, availableQty, onRefresh }) {
       <div className="modal-body">
         <form id="inv-log-usage-form" onSubmit={handleLogUsageSubmit}>
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">SR # <span className="text-base-content/50 font-normal">(optional)</span></label>
-              <input type="number" min={1}
-                className={`input input-bordered w-full${errors.srNumber ? ' is-invalid' : ''}`}
-                placeholder="Leave blank if not tied to an SR"
-                value={form.srNumber} onChange={e => setForm(p => ({ ...p, srNumber: e.target.value }))} />
-              {errors.srNumber && <span className="helper-text">{errors.srNumber}</span>}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 bg-base-200/60 rounded-box px-4 py-3 text-sm">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Qty Ordered</span>
+                <span className="font-medium">{selectedPart.quantityOrdered} {selectedPart.quantityType}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Available</span>
+                <span className="font-medium">{availableQty} {selectedPart.quantityType}</span>
+              </div>
             </div>
+            {srNumber && (
+              <div className="bg-base-200/60 rounded-box px-4 py-3 flex flex-col gap-1 text-sm">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Logging against SR #{srNumber}</span>
+                {srInfo ? (
+                  <>
+                    <span className="font-medium">{srInfo.projectName}</span>
+                    {srInfo.complaint && <span className="text-base-content/60 text-xs line-clamp-2">{srInfo.complaint}</span>}
+                    {srInfo.scheduleDate && <span className="text-base-content/50 text-xs">{formatDate(srInfo.scheduleDate)}</span>}
+                  </>
+                ) : (
+                  <span className="text-base-content/40 text-xs">Loading SR info…</span>
+                )}
+              </div>
+            )}
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
+              <div className="flex items-center justify-between">
+                <label className="label-text font-medium">Quantity Used <span className="text-error">*</span></label>
+                <button type="button" className="btn btn-xs btn-soft btn-primary"
+                  onClick={() => setForm(p => ({ ...p, qtyUsed: availableQty }))}>
+                  Use All
+                </button>
+              </div>
               <input type="number" min={1} max={availableQty} required
                 className={`input input-bordered w-full${errors.qtyUsed ? ' is-invalid' : ''}`}
                 value={form.qtyUsed} onChange={e => setForm(p => ({ ...p, qtyUsed: e.target.value }))} />
@@ -566,7 +609,7 @@ function UpdatePartModal({ part, onRefresh }) {
 }
 
 /** Modal showing full part details, usage history, and manage actions (update/log usage). */
-function PartDetailModal({ part, canEdit, onRefreshTable }) {
+function PartDetailModal({ part, srNumber, canEdit, onRefreshTable }) {
   const { popModal, pushModal } = useModal()
   const { apiFetch } = useAuth()
   const [history, setHistory] = useState([])
@@ -661,7 +704,7 @@ function PartDetailModal({ part, canEdit, onRefreshTable }) {
                 <button type="button"
                   className={`group w-full${availableQty === 0 ? ' cursor-not-allowed opacity-40' : ''}`}
                   disabled={availableQty === 0}
-                  onClick={() => pushModal(<LogUsageModal selectedPart={part} availableQty={availableQty} onRefresh={() => { setRefreshKey(k => k + 1); onRefreshTable() }} />)}>
+                  onClick={() => pushModal(<LogUsageModal selectedPart={part} srNumber={srNumber} availableQty={availableQty} onRefresh={() => { setRefreshKey(k => k + 1); onRefreshTable() }} />)}>
                   <div className={`card bg-base-100 border border-base-300 h-full${availableQty > 0 ? ' transition-transform duration-300 group-hover:-translate-y-2' : ''}`}>
                     <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
                       <span className="icon-[tabler--tool] size-8 text-primary"></span>
@@ -727,7 +770,7 @@ function PartsPanelModal({ order, canEdit, onRefreshOrderList }) {
         </button>
       </div>
       <div className="modal-body flex flex-col gap-4">
-        <PartsTable parts={parts} loading={loading} onSelectPart={p => pushModal(<PartDetailModal part={p} canEdit={canEdit} onRefreshTable={() => setRefreshKey(k => k + 1)} />)} />
+        <PartsTable parts={parts} loading={loading} onSelectPart={p => pushModal(<PartDetailModal part={p} srNumber={order.srNumber} canEdit={canEdit} onRefreshTable={() => setRefreshKey(k => k + 1)} />)} />
         {canEdit && !addPartOpen && (
           <button type="button" className="btn btn-soft btn-primary btn-sm w-full" onClick={() => { setAddPartOpen(true); setPartForm(EMPTY_PART_FORM); setPartFormError({}); setSupplierDisplay('') }}>
             <span className="icon-[tabler--plus] size-4"></span>Add Part
@@ -1086,11 +1129,377 @@ function ContactsPanelModal({ order, canEdit }) {
   )
 }
 
+/** Modal listing all ordered parts for a PO so the user can mark them received one by one. */
+function ReceivePartsModal({ order, onRefreshList }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [parts, setParts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [receivingId, setReceivingId] = useState(null)
+
+  /** Fetches parts for this PO and filters to only those still ordered. */
+  function fetchParts() {
+    setLoading(true)
+    apiFetch(`/api/parts?poNum=${order.poNum}&size=100&sort=partId,asc`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setParts((d.content ?? []).filter(p => p.status === 'ordered')))
+      .catch(() => setParts([]))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchParts() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Marks a single part as received via PUT, then removes it from the visible list. */
+  async function handleReceive(part) {
+    setReceivingId(part.partId)
+    try {
+      const res = await apiFetch(`/api/parts/${part.partId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: part.name,
+          quantityOrdered: part.quantityOrdered,
+          quantityType: part.quantityType,
+          unitPrice: part.unitPrice,
+          supplierId: part.supplierId,
+          poNum: part.poNum,
+          orderDate: part.orderDate,
+          status: 'received',
+        }),
+      })
+      if (!res.ok) { notyfError('Failed to receive part'); return }
+      setParts(prev => prev.filter(p => p.partId !== part.partId))
+      notyfSuccess(`Part #${part.partId} — ${part.name} marked as received.`)
+      onRefreshList()
+    } catch {
+      notyfError('Failed to receive part')
+    } finally {
+      setReceivingId(null)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto shadow-xl">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Receive Ordered Parts</h3>
+          <span className="text-sm text-base-content/50">PO {order.poNum} · {order.purpose}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <span className="loading loading-spinner loading-md text-primary"></span>
+          </div>
+        ) : parts.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-base-content/40">
+            <span className="icon-[tabler--circle-check] size-12 text-success"></span>
+            <p className="text-sm font-medium">All parts have been received.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300">
+            <table className="table table-zebra table-sm w-full">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Qty</th>
+                  <th>Unit Price</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parts.map(p => (
+                  <tr key={p.partId}>
+                    <td className="font-mono font-semibold">{p.partId}</td>
+                    <td className="font-medium max-w-40"><span className="line-clamp-1" title={p.name}>{p.name}</span></td>
+                    <td className="text-sm">{p.quantityOrdered} {p.quantityType}</td>
+                    <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
+                    <td><span className="badge badge-soft badge-neutral text-xs">ordered</span></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-success btn-sm"
+                        disabled={receivingId === p.partId}
+                        onClick={() => handleReceive(p)}
+                      >
+                        {receivingId === p.partId
+                          ? <span className="loading loading-spinner loading-xs"></span>
+                          : <span className="icon-[tabler--check] size-4"></span>
+                        }
+                        Receive
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-ghost" onClick={popModal}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal for logging usage of a received part and marking it as used in one step. */
+function UsePartModal({ part, srNumber, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [usageHistory, setUsageHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+  const [srInfo, setSrInfo] = useState(null)
+  const [form, setForm] = useState({ qtyUsed: '', notes: '' })
+  const [errors, setErrors] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    apiFetch(`/api/part-usages?partId=${part.partId}&size=100&sort=usedOn,desc`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setUsageHistory(d.content ?? []))
+      .catch(() => setUsageHistory([]))
+      .finally(() => setHistoryLoading(false))
+    if (srNumber) {
+      apiFetch(`/api/service-reports/${srNumber}`)
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => setSrInfo(d))
+        .catch(() => {})
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const availableQty = (part.quantityOrdered ?? 0) - usageHistory.reduce((s, u) => s + u.qtyUsed, 0)
+
+  /** Posts the usage entry then marks the part as used; closes and notifies the parent list on success. */
+  async function handleSubmit(e) {
+    e.preventDefault(); setErrors({}); setSubmitting(true)
+    try {
+      const usageRes = await apiFetch('/api/part-usages', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partId: part.partId, srNumber: srNumber ?? null, qtyUsed: Number(form.qtyUsed), notes: form.notes || null }),
+      })
+      if (!usageRes.ok) { setErrors(await parseApiError(usageRes)); notyfError('Log usage failed'); return }
+
+      await apiFetch(`/api/parts/${part.partId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: part.name, quantityOrdered: part.quantityOrdered, quantityType: part.quantityType,
+          unitPrice: part.unitPrice, supplierId: part.supplierId, poNum: part.poNum,
+          orderDate: part.orderDate, status: 'used',
+        }),
+      })
+
+      popModal()
+      notyfSuccess(`Part #${part.partId} — ${part.name} usage logged and marked as used.`)
+      onSuccess(part.partId)
+    } catch (err) { setErrors({ _general: err.message }) }
+    finally { setSubmitting(false) }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm shadow-xl">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Log Use — Part #{part.partId}</h3>
+          <span className="text-sm text-base-content/50">{part.name}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="inv-use-part-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 bg-base-200/60 rounded-box px-4 py-3 text-sm">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Qty Ordered</span>
+                <span className="font-medium">{part.quantityOrdered} {part.quantityType}</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Available</span>
+                <span className="font-medium">
+                  {historyLoading ? '…' : availableQty} {part.quantityType}
+                </span>
+              </div>
+            </div>
+            {srNumber && (
+              <div className="bg-base-200/60 rounded-box px-4 py-3 flex flex-col gap-1 text-sm">
+                <span className="text-xs text-base-content/50 uppercase tracking-wide">Logging against SR #{srNumber}</span>
+                {srInfo ? (
+                  <>
+                    <span className="font-medium">{srInfo.projectName}</span>
+                    {srInfo.complaint && <span className="text-base-content/60 text-xs line-clamp-2">{srInfo.complaint}</span>}
+                    {srInfo.scheduleDate && <span className="text-base-content/50 text-xs">{formatDate(srInfo.scheduleDate)}</span>}
+                  </>
+                ) : (
+                  <span className="text-base-content/40 text-xs">Loading SR info…</span>
+                )}
+              </div>
+            )}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <label className="label-text font-medium">Quantity Used <span className="text-error">*</span></label>
+                <button type="button" className="btn btn-xs btn-soft btn-primary"
+                  disabled={historyLoading}
+                  onClick={() => setForm(p => ({ ...p, qtyUsed: availableQty }))}>
+                  Use All
+                </button>
+              </div>
+              <input type="number" min={1} max={historyLoading ? undefined : availableQty} required
+                className={`input input-bordered w-full${errors.qtyUsed ? ' is-invalid' : ''}`}
+                value={form.qtyUsed} onChange={e => setForm(p => ({ ...p, qtyUsed: e.target.value }))} />
+              {errors.qtyUsed
+                ? <span className="helper-text">{errors.qtyUsed}</span>
+                : <span className="text-xs text-base-content/40">
+                    {historyLoading ? 'Loading available qty…' : `Max: ${availableQty} ${part.quantityType}`}
+                  </span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Notes</label>
+              <input type="text" maxLength={255}
+                className="input input-bordered w-full"
+                value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+            </div>
+            {errors._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{errors._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="inv-use-part-form" className="btn btn-primary" disabled={submitting || historyLoading}>
+          {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--tool] size-4"></span>}
+          Log &amp; Mark Used
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal listing all received parts for a PO so the user can log usage and mark them used one by one. */
+function UsePartsListModal({ order, onRefreshList }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [parts, setParts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  function fetchParts() {
+    setLoading(true)
+    apiFetch(`/api/parts?poNum=${order.poNum}&size=100&sort=partId,asc`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setParts((d.content ?? []).filter(p => p.status === 'received')))
+      .catch(() => setParts([]))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => { fetchParts() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Removes the part from the visible list after it has been used; also notifies the PO list. */
+  function handlePartUsed(partId) {
+    setParts(prev => prev.filter(p => p.partId !== partId))
+    onRefreshList()
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto shadow-xl">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Log Use of Parts</h3>
+          <span className="text-sm text-base-content/50">PO {order.poNum} · {order.purpose}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <span className="loading loading-spinner loading-md text-primary"></span>
+          </div>
+        ) : parts.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-base-content/40">
+            <span className="icon-[tabler--package-off] size-12"></span>
+            <p className="text-sm font-medium">No received parts available to log usage for.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300">
+            <table className="table table-zebra table-sm w-full">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Qty</th>
+                  <th>Unit Price</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parts.map(p => (
+                  <tr key={p.partId}>
+                    <td className="font-mono font-semibold">{p.partId}</td>
+                    <td className="font-medium max-w-40"><span className="line-clamp-1" title={p.name}>{p.name}</span></td>
+                    <td className="text-sm">{p.quantityOrdered} {p.quantityType}</td>
+                    <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
+                    <td><span className="badge badge-soft badge-success text-xs">received</span></td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => pushModal(<UsePartModal part={p} srNumber={order.srNum} onSuccess={handlePartUsed} />)}
+                      >
+                        <span className="icon-[tabler--tool] size-4"></span>
+                        Use
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-ghost" onClick={popModal}>Close</button>
+      </div>
+    </div>
+  )
+}
+
 /** Layer 1 manage panel for a purchase order; shows metadata summary and pushes sub-modals for each action. */
 function ManagePurchaseOrderModal({ order, hasRole, onRefreshList }) {
   const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
   const navigate = useNavigate()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+  const [hasOrderedParts, setHasOrderedParts] = useState(false)
+  const [hasReceivedParts, setHasReceivedParts] = useState(false)
+  const [partsRefreshKey, setPartsRefreshKey] = useState(0)
+
+  /** Re-fetches parts status whenever partsRefreshKey changes (e.g. after add/receive/use). */
+  useEffect(() => {
+    if (!order.srNum) return
+    apiFetch(`/api/parts?poNum=${order.poNum}&size=100&sort=partId,asc`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const parts = d.content ?? []
+        setHasOrderedParts(parts.some(p => p.status === 'ordered'))
+        setHasReceivedParts(parts.some(p => p.status === 'received'))
+      })
+      .catch(() => {})
+  }, [partsRefreshKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Refreshes both the PO list and the parts status indicators. */
+  function refreshAll() { onRefreshList(); setPartsRefreshKey(k => k + 1) }
 
   /** Dispatches the selected action key to push the appropriate sub-modal or navigate away. */
   function handleMenuSelect(key) {
@@ -1103,7 +1512,11 @@ function ManagePurchaseOrderModal({ order, hasRole, onRefreshList }) {
         : `/inventory/purchase-orders/${order.poNum}/documents`
       navigate(url)
     } else if (key === 'parts') {
-      pushModal(<PartsPanelModal order={order} canEdit={canEdit} onRefreshOrderList={onRefreshList} />)
+      pushModal(<PartsPanelModal order={order} canEdit={canEdit} onRefreshOrderList={refreshAll} />)
+    } else if (key === 'receive') {
+      pushModal(<ReceivePartsModal order={order} onRefreshList={refreshAll} />)
+    } else if (key === 'use-parts') {
+      pushModal(<UsePartsListModal order={order} onRefreshList={refreshAll} />)
     } else if (key === 'equipment') {
       pushModal(<EquipmentPanelModal order={order} canEdit={canEdit} />)
     } else if (key === 'contacts') {
@@ -1150,7 +1563,11 @@ function ManagePurchaseOrderModal({ order, hasRole, onRefreshList }) {
         <div className="border-t border-base-200 pt-4">
           <ModalNav
             title="Available Operations"
-            items={getPoMenuItems(order)}
+            items={[
+              ...getPoMenuItems(order),
+              ...(hasOrderedParts ? [{ key: 'receive', label: 'Receive Ordered Parts', icon: 'icon-[tabler--package-import]', roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] }] : []),
+              ...(hasReceivedParts ? [{ key: 'use-parts', label: 'Log Use of Parts', icon: 'icon-[tabler--tool]', roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] }] : []),
+            ]}
             hasRole={hasRole}
             onSelect={handleMenuSelect}
           />
@@ -1169,6 +1586,16 @@ function NewPoContextModal({ srNum, onRefresh }) {
   const [submitting, setSubmitting] = useState(false)
   const [contacts, setContacts] = useState([])
   const [parts, setParts] = useState([])
+  const [projectAddress, setProjectAddress] = useState('')
+
+  useEffect(() => {
+    apiFetch(`/api/service-reports/${srNum}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(sr => apiFetch(`/api/projects/${sr.projNum}`))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(proj => setProjectAddress(proj.address ?? ''))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Creates the PO then sequentially posts any staged contacts and parts; closes modal on success. */
   async function handleNewPoSubmit(e) {
@@ -1212,7 +1639,7 @@ function NewPoContextModal({ srNum, onRefresh }) {
       </div>
       <div className="modal-body flex flex-col gap-5">
         <form id="inv-new-po-form" onSubmit={handleNewPoSubmit}>
-          <POFormFields form={form} onChange={e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={errors} />
+          <POFormFields form={form} onChange={e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={errors} projectAddress={projectAddress} />
         </form>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -1385,6 +1812,31 @@ function NewPoWizardModal({ onRefresh }) {
     finally { setSubmitting(false) }
   }
 
+  /** Handles file selection for a document record; rejects non-image/PDF files. */
+  function handleDocFileChange(e) {
+    const file = e.target.files?.[0] ?? null
+    if (file && !ACCEPTED_TYPES.includes(file.type)) {
+      setDocFormError(prev => ({ ...prev, file: 'Only images and PDFs are accepted.' }))
+      e.target.value = ''
+      return
+    }
+    setDocFormError(prev => { const n = { ...prev }; delete n.file; return n })
+    setDocForm(prev => ({ ...prev, file }))
+  }
+
+  /** Validates the doc form and stages the record to docList. */
+  function handleAddDocToList(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!docForm.invoiceId.trim()) errors.invoiceId = 'Invoice ID is required.'
+    if (Object.keys(errors).length > 0) { setDocFormError(errors); return }
+    setDocFormError({})
+    setDocList(prev => [...prev, { ...docForm, _key: Date.now() }])
+    setDocForm({ invoiceId: '', file: null })
+    if (docFileRef.current) docFileRef.current.value = ''
+    setAddingDoc(false)
+  }
+
   return (
     <div className="modal-content w-full max-w-2xl my-auto shadow-xl">
       <div className="modal-header">
@@ -1432,7 +1884,7 @@ function NewPoWizardModal({ onRefresh }) {
         {step === 4 && type === 'sr' && (
           <div className="flex flex-col gap-4">
             <form id="inv-wizard-po-form" onSubmit={handleWizardSrSubmit}>
-              <POFormFields form={srPoForm} onChange={e => setSrPoForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={srPoError} />
+              <POFormFields form={srPoForm} onChange={e => setSrPoForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={srPoError} projectAddress={project?.address ?? ''} />
             </form>
             <div className="flex justify-between items-center"><span className="text-sm font-medium">Parts</span><button type="button" className="btn btn-xs btn-outline" onClick={() => pushModal(<NewPoAddPartModal onAdd={p => setSrParts(l => [...l, p])} />)}>Add Part</button></div>
             {srParts.map(p => <div key={p._tempId} className="text-xs bg-base-200 p-1.5 rounded flex justify-between"><span>{p.name} ({p.quantityOrdered})</span><button type="button" className="text-error" onClick={() => setSrParts(l => l.filter(x => x._tempId !== p._tempId))}>Remove</button></div>)}
@@ -1445,23 +1897,141 @@ function NewPoWizardModal({ onRefresh }) {
 
         {step === 3 && type === 'equipment' && (
           <div className="flex flex-col gap-3">
-            {equipList.map(item => <div key={item._key} className="text-sm bg-base-100 p-2 border rounded flex justify-between"><span>{item.name}</span><button type="button" className="text-error" onClick={() => setEquipList(l => l.filter(x => x._key !== item._key))}>Remove</button></div>)}
+            {equipList.length === 0 && !addingEquip && (
+              <p className="text-sm text-base-content/40 text-center py-2">No equipment added yet.</p>
+            )}
+            {equipList.map(item => (
+              <div key={item._key} className="flex items-center justify-between bg-base-100 border border-base-300 rounded p-2 gap-2">
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-sm font-medium truncate">{item.name}</span>
+                  <span className="text-xs text-base-content/50">{item.type} · Stock: {item.stock}{item.model ? ` · ${item.model}` : ''}</span>
+                </div>
+                <button type="button" className="btn btn-xs btn-soft btn-error shrink-0" onClick={() => setEquipList(l => l.filter(x => x._key !== item._key))}>Remove</button>
+              </div>
+            ))}
+            {equipFormError._general && !addingEquip && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{equipFormError._general}</span>
+              </div>
+            )}
             {addingEquip ? (
-              <form onSubmit={e => { e.preventDefault(); setEquipList(l => [...l, { ...equipForm, _key: Date.now() }]); setAddingEquip(false); setEquipForm(EMPTY_WIZARD_EQUIP) }} className="border p-3 rounded bg-base-200/40">
-                <input type="text" placeholder="Equip Name" required className="input input-sm input-bordered w-full mb-2" value={equipForm.name} onChange={e => setEquipForm(p => ({ ...p, name: e.target.value }))} />
-                <div className="flex justify-end gap-1"><button type="button" className="btn btn-xs" onClick={() => setAddingEquip(false)}>Cancel</button><button type="submit" className="btn btn-xs btn-primary">Add to List</button></div>
+              <form id="wizard-equip-form" onSubmit={e => {
+                e.preventDefault()
+                setEquipList(l => [...l, { ...equipForm, _key: Date.now() }])
+                setAddingEquip(false)
+                setEquipForm(EMPTY_WIZARD_EQUIP)
+                setEquipFormError({})
+              }} className="card border border-base-300 bg-base-200/40">
+                <div className="card-body gap-3">
+                  <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide">New Equipment</p>
+                  <EquipFormFields form={equipForm} onChange={e => setEquipForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={equipFormError} showStatus={false} />
+                  <div className="flex gap-2 justify-end mt-1">
+                    <button type="button" className="btn btn-soft btn-secondary btn-sm" onClick={() => { setAddingEquip(false); setEquipFormError({}) }}>Cancel</button>
+                    <button type="submit" form="wizard-equip-form" className="btn btn-primary btn-sm">Add to List</button>
+                  </div>
+                </div>
               </form>
-            ) : <button type="button" className="btn btn-sm btn-soft btn-primary" onClick={() => setAddingEquip(true)}>Add Equipment Item</button>}
+            ) : (
+              <button type="button" className="btn btn-sm btn-soft btn-primary" onClick={() => { setAddingEquip(true); setEquipFormError({}) }}>
+                <span className="icon-[tabler--plus] size-4"></span>Add Equipment Item
+              </button>
+            )}
           </div>
         )}
 
         {step === 4 && type === 'equipment' && (
-          <div className="flex flex-col gap-3">
-            <p className="text-sm">Attach invoice documents if available:</p>
-            {docList.map(d => <div key={d._key} className="text-xs bg-base-200 p-2 rounded flex justify-between"><span>{d.invoiceId}</span></div>)}
-            <input type="text" placeholder="Invoice ID" className="input input-bordered w-full" value={docForm.invoiceId} onChange={e => setDocForm(p => ({ ...p, invoiceId: e.target.value }))} />
-            <input type="file" ref={docFileRef} accept={ACCEPTED_EXTENSIONS} onChange={e => setDocForm(p => ({ ...p, file: e.target.files[0] }))} />
-            <button type="button" className="btn btn-sm btn-outline" onClick={() => { if(docForm.invoiceId) { setDocList(l => [...l, { ...docForm, _key: Date.now() }]); setDocForm({ invoiceId:'', file:null }) } }}>Add Document</button>
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">
+              Step 4 — Invoice Documents <span className="text-base-content/30 font-normal normal-case">(optional)</span>
+            </p>
+
+            {docList.length === 0 ? (
+              <p className="text-sm text-base-content/40">No documents added. You can skip this step.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {docList.map((doc, idx) => (
+                  <div key={doc._key} className="card border border-base-300 bg-base-100">
+                    <div className="card-body py-2 px-3 gap-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm font-mono">{doc.invoiceId}</p>
+                          <p className="text-xs text-base-content/50">
+                            {doc.file
+                              ? <><span className="icon-[tabler--paperclip] size-3 inline-block mr-0.5"></span>{doc.file.name}</>
+                              : 'No file attached'
+                            }
+                          </p>
+                        </div>
+                        <button type="button" className="btn btn-error btn-xs btn-square shrink-0"
+                          title={`Remove document ${idx + 1}`}
+                          onClick={() => setDocList(prev => prev.filter(d => d._key !== doc._key))}>
+                          <span className="icon-[tabler--x] size-3.5"></span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {addingDoc ? (
+              <div className="card border border-base-300 bg-base-200/40">
+                <div className="card-body gap-3">
+                  <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide">New Document Record</p>
+                  <form id="add-doc-form" onSubmit={handleAddDocToList}>
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1">
+                        <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+                        <input type="text" maxLength={16} required
+                          className={`input input-bordered w-full${docFormError.invoiceId ? ' is-invalid' : ''}`}
+                          placeholder="e.g. INV-001"
+                          value={docForm.invoiceId}
+                          onChange={e => setDocForm(prev => ({ ...prev, invoiceId: e.target.value }))} />
+                        {docFormError.invoiceId && <span className="helper-text">{docFormError.invoiceId}</span>}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="label-text font-medium">
+                          File <span className="text-base-content/40 font-normal">(optional — images or PDF)</span>
+                        </label>
+                        <input ref={docFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleDocFileChange} />
+                        <button type="button"
+                          className={`btn btn-outline w-full justify-start font-normal${docFormError.file ? ' btn-error' : ''}`}
+                          onClick={() => docFileRef.current?.click()}>
+                          <span className="icon-[tabler--paperclip] size-4"></span>
+                          {docForm.file ? docForm.file.name : 'Choose file…'}
+                        </button>
+                        {docFormError.file && <span className="helper-text">{docFormError.file}</span>}
+                        {docForm.file && <span className="text-xs text-base-content/50">{(docForm.file.size / 1024).toFixed(1)} KB</span>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end mt-3">
+                      <button type="button" className="btn btn-soft btn-secondary btn-sm"
+                        onClick={() => { setAddingDoc(false); setDocForm({ invoiceId: '', file: null }); setDocFormError({}); if (docFileRef.current) docFileRef.current.value = '' }}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary btn-sm">
+                        <span className="icon-[tabler--plus] size-4"></span>
+                        Add to List
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-soft btn-primary btn-sm w-full"
+                onClick={() => { setAddingDoc(true); setDocForm({ invoiceId: '', file: null }); setDocFormError({}) }}>
+                <span className="icon-[tabler--plus] size-4"></span>
+                Add Document Record
+              </button>
+            )}
+
+            {submitError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{submitError._general}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1469,7 +2039,7 @@ function NewPoWizardModal({ onRefresh }) {
         {step > 1 && <button type="button" className="btn btn-soft btn-secondary me-auto" onClick={() => { setStep(s => s - 1) }}>Back</button>}
         <button type="button" className="btn btn-ghost" onClick={popModal}>Cancel</button>
         {step === 2 && type === 'equipment' && <button type="button" className="btn btn-primary" onClick={() => { if(equipPoForm.purpose && equipPoForm.terms) setStep(3) }}>Next</button>}
-        {step === 3 && type === 'equipment' && <button type="button" className="btn btn-primary" onClick={() => { if(equipList.length > 0) setStep(4) }}>Next</button>}
+        {step === 3 && type === 'equipment' && <button type="button" className="btn btn-primary" onClick={() => { if (equipList.length > 0) { setEquipFormError({}); setStep(4) } else { setEquipFormError({ _general: 'Add at least one equipment item before proceeding.' }) } }}>Next</button>}
         {step === 4 && type === 'equipment' && <button type="button" className="btn btn-primary" disabled={submitting} onClick={handleWizardEquipSubmit}>Finish &amp; Save</button>}
         {step === 4 && type === 'sr' && <button type="submit" form="inv-wizard-po-form" className="btn btn-primary" disabled={submitting}>Create Purchase Order</button>}
       </div>
@@ -1513,6 +2083,7 @@ export default function InventoryPurchaseOrders() {
 
   useEffect(() => {
     if (canEdit && searchParams.get('newPO') === '1') {
+      navigate({ search: '' }, { replace: true })
       pushModal(<NewPoWizardModal onRefresh={() => setRefreshKey(k => k + 1)} />)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1603,7 +2174,7 @@ export default function InventoryPurchaseOrders() {
               <table className="table table-zebra w-full">
                 <thead>
                   <tr>
-                    <th>PO Number</th><th>Purpose</th><th>Terms</th><th>Total Cost</th><th>SR #</th><th>Added On</th><th>Actions</th>
+                    <th>PO Number</th><th>Purpose</th><th>Type</th><th>Total Cost</th><th>SR #</th><th>Added On</th><th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1611,7 +2182,7 @@ export default function InventoryPurchaseOrders() {
                     <tr key={o.poNum}>
                       <td className="font-mono font-semibold text-sm">{o.poNum}</td>
                       <td className="max-w-48"><span className="line-clamp-1 text-sm font-medium" title={o.purpose}>{o.purpose}</span></td>
-                      <td className="text-sm">{o.terms ?? <span className="text-base-content/40">—</span>}</td>
+                      <td><span className={`badge badge-soft text-xs ${o.srNum ? 'badge-primary' : 'badge-accent'}`}>{o.srNum ? 'Parts' : 'Equipment'}</span></td>
                       <td className="text-sm font-medium">{formatCurrency(o.totalCost)}</td>
                       <td className="text-sm">
                         {o.srNum ? <span className="badge badge-soft badge-neutral text-xs">SR #{o.srNum}</span> : <span className="text-base-content/40">—</span>}
@@ -1662,7 +2233,7 @@ function EquipFormFields({ form, onChange, errors, showStatus }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div className="sm:col-span-2 flex flex-col gap-1">
         <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-        <input type="text" name="name" maxLength={150} required className={`input input-bordered w-full${errors.name ? ' is-invalid' : ''}`} value={form.name} onChange={onChange} />
+        <input type="text" name="name" maxLength={150} required placeholder="e.g. Industrial Air Compressor" className={`input input-bordered w-full${errors.name ? ' is-invalid' : ''}`} value={form.name} onChange={onChange} />
         {errors.name && <span className="helper-text">{errors.name}</span>}
       </div>
       <div className="flex flex-col gap-1">
@@ -1674,20 +2245,20 @@ function EquipFormFields({ form, onChange, errors, showStatus }) {
       </div>
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">Stock <span className="text-error">*</span></label>
-        <input type="number" name="stock" min={0} required className={`input input-bordered w-full${errors.stock ? ' is-invalid' : ''}`} value={form.stock} onChange={onChange} />
+        <input type="number" name="stock" min={0} required placeholder="e.g. 2" className={`input input-bordered w-full${errors.stock ? ' is-invalid' : ''}`} value={form.stock} onChange={onChange} />
         {errors.stock && <span className="helper-text">{errors.stock}</span>}
       </div>
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">Model</label>
-        <input type="text" name="model" maxLength={100} className={`input input-bordered w-full${errors.model ? ' is-invalid' : ''}`} value={form.model} onChange={onChange} />
+        <input type="text" name="model" maxLength={100} placeholder="e.g. XR-2000" className={`input input-bordered w-full${errors.model ? ' is-invalid' : ''}`} value={form.model} onChange={onChange} />
       </div>
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">Serial Number</label>
-        <input type="text" name="serialNumber" maxLength={100} className={`input input-bordered w-full${errors.serialNumber ? ' is-invalid' : ''}`} value={form.serialNumber} onChange={onChange} />
+        <input type="text" name="serialNumber" maxLength={100} placeholder="e.g. SN-ABC-123456" className={`input input-bordered w-full${errors.serialNumber ? ' is-invalid' : ''}`} value={form.serialNumber} onChange={onChange} />
       </div>
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">Acquisition Cost</label>
-        <input type="number" name="acquisitionCost" min={0} step="0.01" className={`input input-bordered w-full${errors.acquisitionCost ? ' is-invalid' : ''}`} value={form.acquisitionCost} onChange={onChange} />
+        <input type="number" name="acquisitionCost" min={0} step="0.01" placeholder="e.g. 15000.00" className={`input input-bordered w-full${errors.acquisitionCost ? ' is-invalid' : ''}`} value={form.acquisitionCost} onChange={onChange} />
       </div>
       {showStatus && (
         <div className="flex flex-col gap-1">
@@ -1699,14 +2270,15 @@ function EquipFormFields({ form, onChange, errors, showStatus }) {
       )}
       <div className={`flex flex-col gap-1${showStatus ? '' : ' sm:col-span-2'}`}>
         <label className="label-text font-medium">Description</label>
-        <textarea name="description" maxLength={500} rows={2} className={`textarea textarea-bordered w-full${errors.description ? ' is-invalid' : ''}`} value={form.description} onChange={onChange} />
+        <textarea name="description" maxLength={500} rows={2} placeholder="e.g. Used for pneumatic operations on-site" className={`textarea textarea-bordered w-full${errors.description ? ' is-invalid' : ''}`} value={form.description} onChange={onChange} />
       </div>
     </div>
   )
 }
 
 /** Reusable form field group for purchase order create/edit; includes purpose, terms, payment, and address fields. */
-function POFormFields({ form, onChange, errors }) {
+function POFormFields({ form, onChange, errors, projectAddress }) {
+  const { officeAddress } = useAuth()
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div className="flex flex-col gap-1">
@@ -1728,7 +2300,23 @@ function POFormFields({ form, onChange, errors }) {
         <input type="text" name="paymentDetails" maxLength={60} className="input input-bordered w-full" placeholder="e.g. Account #1234-5678" value={form.paymentDetails} onChange={onChange} />
       </div>
       <div className="sm:col-span-2 flex flex-col gap-1">
-        <label className="label-text font-medium">Delivery Address</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="label-text font-medium">Delivery Address</label>
+          <div className="flex gap-1.5">
+            {projectAddress && (
+              <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                onClick={() => onChange({ target: { name: 'deliveryAddress', value: projectAddress } })}>
+                <span className="icon-[tabler--building] size-3"></span>Same as project
+              </button>
+            )}
+            {officeAddress && (
+              <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                onClick={() => onChange({ target: { name: 'deliveryAddress', value: officeAddress } })}>
+                <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+              </button>
+            )}
+          </div>
+        </div>
         <textarea name="deliveryAddress" maxLength={600} rows={2} className="textarea textarea-bordered w-full" placeholder="Full delivery address" value={form.deliveryAddress} onChange={onChange} />
       </div>
       <div className="sm:col-span-2 flex flex-col gap-1">

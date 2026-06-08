@@ -32,6 +32,7 @@ function formatDate(dt) {
 const PAGE_SIZE = 12
 const PARTS_PAGE_SIZE = 7
 
+
 /** Formats a number as currency (PHP) */
 function formatCurrency(value) {
   if (value == null) return '—'
@@ -465,8 +466,18 @@ const NEW_PO_STEPS = [
 /** Level 1 modal — 4-step wizard for creating a new Purchase Order with parts and delivery contacts */
 function NewPOModal({ srNum, onSuccess }) {
   const { popModal, pushModal } = useModal()
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
   const [step, setStep] = useState(1)
+  const [projectAddress, setProjectAddress] = useState('')
+
+  useEffect(() => {
+    apiFetch(`/api/service-reports/${srNum}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(sr => apiFetch(`/api/projects/${sr.projNum}`))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(proj => setProjectAddress(proj.address ?? ''))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState({})
 
@@ -647,7 +658,23 @@ function NewPOModal({ srNum, onSuccess }) {
             <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Step 3 — Delivery &amp; Remarks</p>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Delivery Address</label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="label-text font-medium">Delivery Address</label>
+                  <div className="flex gap-1.5">
+                    {projectAddress && (
+                      <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => setDelivery(p => ({ ...p, deliveryAddress: projectAddress }))}>
+                        <span className="icon-[tabler--building] size-3"></span>Same as project
+                      </button>
+                    )}
+                    {officeAddress && (
+                      <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => setDelivery(p => ({ ...p, deliveryAddress: officeAddress }))}>
+                        <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <textarea maxLength={600} rows={3}
                   className="textarea textarea-bordered w-full"
                   placeholder="Full delivery address"
@@ -790,7 +817,19 @@ function NewPOModal({ srNum, onSuccess }) {
 /** Modal — form for updating an existing purchase order */
 function UpdatePOModal({ po, onSuccess }) {
   const { popModal } = useModal()
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
+  const [projectAddress, setProjectAddress] = useState('')
+
+  useEffect(() => {
+    if (!po.srNum) return
+    apiFetch(`/api/service-reports/${po.srNum}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(sr => apiFetch(`/api/projects/${sr.projNum}`))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(proj => setProjectAddress(proj.address ?? ''))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [form, setForm] = useState({
     purpose:         po.purpose ?? '',
     terms:           po.terms ?? '',
@@ -876,7 +915,23 @@ function UpdatePOModal({ po, onSuccess }) {
               {formError.paymentDetails && <span className="helper-text">{formError.paymentDetails}</span>}
             </div>
             <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Delivery Address</label>
+              <div className="flex items-center justify-between gap-2">
+                <label className="label-text font-medium">Delivery Address</label>
+                <div className="flex gap-1.5">
+                  {projectAddress && (
+                    <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                      onClick={() => setForm(p => ({ ...p, deliveryAddress: projectAddress }))}>
+                      <span className="icon-[tabler--building] size-3"></span>Same as project
+                    </button>
+                  )}
+                  {officeAddress && (
+                    <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                      onClick={() => setForm(p => ({ ...p, deliveryAddress: officeAddress }))}>
+                      <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                    </button>
+                  )}
+                </div>
+              </div>
               <textarea name="deliveryAddress" maxLength={600} rows={2}
                 className={`textarea textarea-bordered w-full${formError.deliveryAddress ? ' is-invalid' : ''}`}
                 placeholder="Full delivery address"
@@ -1202,10 +1257,10 @@ function UpdatePartModal({ part, onSuccess }) {
 }
 
 /** Modal — form for logging a new usage record for a part */
-function LogUsageModal({ part, availableQty, onSuccess }) {
+function LogUsageModal({ part, srNumber, availableQty, onSuccess }) {
   const { popModal } = useModal()
   const { apiFetch } = useAuth()
-  const [form, setForm] = useState({ srNumber: '', qtyUsed: '', notes: '' })
+  const [form, setForm] = useState({ qtyUsed: '', notes: '' })
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -1219,7 +1274,7 @@ function LogUsageModal({ part, availableQty, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           partId:   part.partId,
-          srNumber: form.srNumber ? Number(form.srNumber) : null,
+          srNumber: srNumber ?? null,
           qtyUsed:  Number(form.qtyUsed),
           notes:    form.notes || null,
         }),
@@ -1253,17 +1308,19 @@ function LogUsageModal({ part, availableQty, onSuccess }) {
       <div className="modal-body">
         <form id="log-usage-form" onSubmit={handleSubmit}>
           <div className="flex flex-col gap-4">
+            {srNumber && (
+              <p className="text-sm text-base-content/60">
+                Usage will be logged against <span className="font-medium">SR #{srNumber}</span>.
+              </p>
+            )}
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">SR # <span className="text-base-content/50 font-normal">(optional)</span></label>
-              <input type="number" min={1}
-                className={`input input-bordered w-full${formError.srNumber ? ' is-invalid' : ''}`}
-                placeholder="Leave blank if not tied to an SR"
-                value={form.srNumber}
-                onChange={e => setForm(p => ({ ...p, srNumber: e.target.value }))} />
-              {formError.srNumber && <span className="helper-text">{formError.srNumber}</span>}
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
+              <div className="flex items-center justify-between">
+                <label className="label-text font-medium">Quantity Used <span className="text-error">*</span></label>
+                <button type="button" className="btn btn-xs btn-soft btn-primary"
+                  onClick={() => setForm(p => ({ ...p, qtyUsed: availableQty }))}>
+                  Use All
+                </button>
+              </div>
               <input type="number" min={1} max={availableQty} required
                 className={`input input-bordered w-full${formError.qtyUsed ? ' is-invalid' : ''}`}
                 placeholder={`Max: ${availableQty}`}
@@ -1442,7 +1499,7 @@ function EditUsageModal({ usage, part, onSuccess }) {
 }
 
 /** Modal — shows part details, usage history, and manage actions (Update / Log Usage) */
-function ManagePartModal({ part: initialPart, onRefreshList }) {
+function ManagePartModal({ part: initialPart, srNumber, onRefreshList }) {
   const { popModal, pushModal } = useModal()
   const { apiFetch, hasRole } = useAuth()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
@@ -1490,7 +1547,7 @@ function ManagePartModal({ part: initialPart, onRefreshList }) {
     }
     if (key === 'log') {
       if (availableQty <= 0) { notyfError('No stock available to log.'); return }
-      pushModal(<LogUsageModal part={part} availableQty={availableQty} onSuccess={() => {
+      pushModal(<LogUsageModal part={part} srNumber={srNumber} availableQty={availableQty} onSuccess={() => {
         setUsageRefreshKey(k => k + 1)
         onRefreshList?.()
       }} />)
@@ -1625,7 +1682,7 @@ function ManagePartsModal({ po, onRefresh }) {
   }
 
   function handleManagePart(p) {
-    pushModal(<ManagePartModal part={p} onRefreshList={refresh} />)
+    pushModal(<ManagePartModal part={p} srNumber={po.srNumber} onRefreshList={refresh} />)
   }
 
   async function handleDeletePart(partId) {

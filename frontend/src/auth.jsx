@@ -11,6 +11,14 @@ const AuthContext = createContext(null)
 /** Provides shared auth state and an apiFetch helper to the entire app */
 export function AuthProvider({ children }) {
   const [accessToken, setAccessToken] = useState(() => localStorage.getItem('accessToken'))
+  const [officeAddress, setOfficeAddress] = useState('')
+
+  useEffect(() => {
+    fetch('/api/config')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => setOfficeAddress(d.officeAddress ?? ''))
+      .catch(() => {})
+  }, [])
   const navigate = useNavigate()
 
   // Ref always holds the latest token — prevents stale closures in apiFetch
@@ -104,7 +112,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, fullName, role, hasRole, accessToken, apiFetch, handleLogin, handleLogout }}>
+    <AuthContext.Provider value={{ user, fullName, role, hasRole, accessToken, apiFetch, handleLogin, handleLogout, officeAddress }}>
       {children}
     </AuthContext.Provider>
   )

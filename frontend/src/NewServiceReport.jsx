@@ -26,6 +26,7 @@ const ACCEPTED_DOC_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
 const EMPTY_REPORT_FORM = {
   projNum: '',
   _projectDisplay: '',
+  _projectAddress: '',
   schedId: '',
   _scheduleDisplay: '',
   engineerEmployeeId: '',
@@ -82,7 +83,7 @@ function findingTypeBadgeClass(type) {
 
 /** Multi-step wizard for creating a new service report with optional findings and purchase orders */
 export default function NewServiceReport() {
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
   const navigate = useNavigate()
 
   const [step, setStep] = useState(1)
@@ -505,7 +506,7 @@ export default function NewServiceReport() {
                     error={reportFormError.projNum}
                     Picker={ProjectPickerModal}
                     onSelect={p => {
-                      setReportForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})`, schedId: '', _scheduleDisplay: '' }))
+                      setReportForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})`, _projectAddress: p.address ?? '', schedId: '', _scheduleDisplay: '' }))
                       setReportFormError(e => ({ ...e, projNum: undefined, schedId: undefined }))
                     }}
                     className="sm:col-span-2"
@@ -821,7 +822,23 @@ export default function NewServiceReport() {
                         </div>
 
                         <div className="sm:col-span-2 flex flex-col gap-1">
-                          <label className="label-text font-medium">Delivery Address</label>
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="label-text font-medium">Delivery Address</label>
+                            <div className="flex gap-1.5">
+                              {reportForm._projectAddress && (
+                                <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                                  onClick={() => setPoForm(p => ({ ...p, deliveryAddress: reportForm._projectAddress }))}>
+                                  <span className="icon-[tabler--building] size-3"></span>Same as project
+                                </button>
+                              )}
+                              {officeAddress && (
+                                <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                                  onClick={() => setPoForm(p => ({ ...p, deliveryAddress: officeAddress }))}>
+                                  <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                                </button>
+                              )}
+                            </div>
+                          </div>
                           <textarea name="deliveryAddress"
                             className={`textarea textarea-bordered w-full${poFormError.deliveryAddress ? ' is-invalid' : ''}`}
                             placeholder="Full delivery address" maxLength={600} rows={2}

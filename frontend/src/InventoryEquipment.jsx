@@ -5,7 +5,10 @@ import { useModal } from './modals/index.js'
 import Layout from './Layout'
 import ModalNav from './modals/ModalNav.jsx'
 import AnySchedulePickerModal from './AnySchedulePickerModal'
+import PickerInput from './PickerInput'
+import ProjectPickerModal from './ProjectPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
+
 
 async function parseApiError(res) {
   const data = await res.json().catch(() => ({}))
@@ -401,7 +404,7 @@ function LogDeploymentModal({ equipment, onSuccess }) {
   )
 }
 
-/** Layer 2 — update equipment details; replaces ManageEquipmentModal in the stack */
+/** Layer 2 — update equipment details; sits on top of ManageEquipmentModal */
 function UpdateEquipmentModal({ equipment, onRefresh }) {
   const { popModal } = useModal()
   const { apiFetch } = useAuth()
@@ -479,7 +482,7 @@ function UpdateEquipmentModal({ equipment, onRefresh }) {
 
 /** Layer 1 — manage equipment: details, deployment history, and action menu */
 function ManageEquipmentModal({ equipment, onRefresh }) {
-  const { pushModal, replaceModal, popModal } = useModal()
+  const { pushModal, popModal } = useModal()
   const { hasRole, apiFetch } = useAuth()
   const canEdit = hasRole('ADMIN', 'STAFF')
   const [deployHistory, setDeployHistory]   = useState([])
@@ -503,7 +506,7 @@ function ManageEquipmentModal({ equipment, onRefresh }) {
     : EQUIPMENT_MENU_ITEMS
 
   function handleAction(key) {
-    if (key === 'update')     replaceModal(<UpdateEquipmentModal equipment={equipment} onRefresh={onRefresh} />)
+    if (key === 'update')     pushModal(<UpdateEquipmentModal equipment={equipment} onRefresh={onRefresh} />)
     if (key === 'log-deploy') pushModal(<LogDeploymentModal equipment={equipment} onSuccess={() => { setDeployRefreshKey(k => k + 1); onRefresh?.() }} />)
   }
 
@@ -605,9 +608,11 @@ function ManageEquipmentModal({ equipment, onRefresh }) {
 /** Layer 1 — 3-step wizard to add equipment via a new purchase order */
 function AddEquipmentModal({ onSuccess }) {
   const { popModal } = useModal()
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
 
   const [addStep, setAddStep]                             = useState(1)
+  const [addProjectAddress, setAddProjectAddress]         = useState('')
+  const [addProjectDisplay, setAddProjectDisplay]         = useState('')
   const [addPoForm, setAddPoForm]                         = useState(EMPTY_PO_FORM)
   const [addPoFormError, setAddPoFormError]               = useState({})
   const [addEquipList, setAddEquipList]                   = useState([])
@@ -819,6 +824,16 @@ function AddEquipmentModal({ onSuccess }) {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
+              <PickerInput
+                label="Project (optional)"
+                displayValue={addProjectDisplay}
+                placeholder="None selected"
+                buttonLabel="Select Project"
+                Picker={ProjectPickerModal}
+                onSelect={p => { setAddProjectAddress(p.address ?? ''); setAddProjectDisplay(`${p.name} (#${p.projNum})`) }}
+                className="sm:col-span-2"
+              />
+
               <div className="flex flex-col gap-1">
                 <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
                 <input type="text" name="purpose" maxLength={30} required
@@ -860,7 +875,23 @@ function AddEquipmentModal({ onSuccess }) {
               </div>
 
               <div className="sm:col-span-2 flex flex-col gap-1">
-                <label className="label-text font-medium">Delivery Address</label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="label-text font-medium">Delivery Address</label>
+                  <div className="flex gap-1.5">
+                    {addProjectAddress && (
+                      <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => handleAddPoChange({ target: { name: 'deliveryAddress', value: addProjectAddress } })}>
+                        <span className="icon-[tabler--building] size-3"></span>Same as project
+                      </button>
+                    )}
+                    {officeAddress && (
+                      <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => handleAddPoChange({ target: { name: 'deliveryAddress', value: officeAddress } })}>
+                        <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <textarea name="deliveryAddress" maxLength={600} rows={2}
                   className={`textarea textarea-bordered w-full${addPoFormError.deliveryAddress ? ' is-invalid' : ''}`}
                   placeholder="Full delivery address"

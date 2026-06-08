@@ -2,6 +2,8 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
+import PickerInput from './PickerInput'
+import ProjectPickerModal from './ProjectPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
 const STEPS = [
@@ -34,13 +36,15 @@ async function parseApiError(res) {
 
 /** Page for creating a new Purchase Order with equipment items and optional documents */
 export default function NewEquipmentPO() {
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
   const navigate = useNavigate()
 
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
 
   // Step 1: PO form
+  const [projectAddress, setProjectAddress] = useState('')
+  const [projectDisplay, setProjectDisplay] = useState('')
   const [poForm, setPoForm] = useState(EMPTY_PO_FORM)
   const [poFormError, setPoFormError] = useState({})
 
@@ -261,6 +265,16 @@ export default function NewEquipmentPO() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
+                  <PickerInput
+                    label="Project (optional)"
+                    displayValue={projectDisplay}
+                    placeholder="None selected"
+                    buttonLabel="Select Project"
+                    Picker={ProjectPickerModal}
+                    onSelect={p => { setProjectAddress(p.address ?? ''); setProjectDisplay(`${p.name} (#${p.projNum})`) }}
+                    className="sm:col-span-2"
+                  />
+
                   <div className="flex flex-col gap-1">
                     <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
                     <input type="text" name="purpose" maxLength={30} required
@@ -302,7 +316,23 @@ export default function NewEquipmentPO() {
                   </div>
 
                   <div className="sm:col-span-2 flex flex-col gap-1">
-                    <label className="label-text font-medium">Delivery Address</label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="label-text font-medium">Delivery Address</label>
+                      <div className="flex gap-1.5">
+                        {projectAddress && (
+                          <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                            onClick={() => handlePoChange({ target: { name: 'deliveryAddress', value: projectAddress } })}>
+                            <span className="icon-[tabler--building] size-3"></span>Same as project
+                          </button>
+                        )}
+                        {officeAddress && (
+                          <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                            onClick={() => handlePoChange({ target: { name: 'deliveryAddress', value: officeAddress } })}>
+                            <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <textarea name="deliveryAddress" maxLength={600} rows={2}
                       className={`textarea textarea-bordered w-full${poFormError.deliveryAddress ? ' is-invalid' : ''}`}
                       placeholder="Full delivery address"
