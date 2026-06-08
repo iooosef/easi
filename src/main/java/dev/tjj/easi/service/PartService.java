@@ -7,7 +7,9 @@ import dev.tjj.easi.entity.PurchaseOrder;
 import dev.tjj.easi.entity.Supplier;
 import dev.tjj.easi.repository.PartRepository;
 import dev.tjj.easi.repository.PartUsageRepository;
+import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.PurchaseOrderRepository;
+import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.SupplierRepository;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
@@ -18,7 +20,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /** Handles part business logic: creation, updates, and retrieval. */
 @Service
@@ -28,17 +32,23 @@ public class PartService {
     private final SupplierRepository supplierRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PartUsageRepository partUsageRepository;
+    private final ServiceReportBillingItemRepository billingItemRepository;
+    private final PaymentLogRepository paymentLogRepository;
     private final LogService logService;
 
     public PartService(PartRepository partRepository,
                        SupplierRepository supplierRepository,
                        PurchaseOrderRepository purchaseOrderRepository,
                        PartUsageRepository partUsageRepository,
+                       ServiceReportBillingItemRepository billingItemRepository,
+                       PaymentLogRepository paymentLogRepository,
                        LogService logService) {
         this.partRepository = partRepository;
         this.supplierRepository = supplierRepository;
         this.purchaseOrderRepository = purchaseOrderRepository;
         this.partUsageRepository = partUsageRepository;
+        this.billingItemRepository = billingItemRepository;
+        this.paymentLogRepository = paymentLogRepository;
         this.logService = logService;
     }
 
@@ -54,13 +64,18 @@ public class PartService {
         return toResponse(saved);
     }
 
-    /** Updates an existing part record by ID. */
+    /** Updates an existing part record by ID.
+     *  Rejects the update if lowering the unit price would make any linked SR's grand total fall below its total paid. */
     @Transactional
     public PartResponse update(Integer partId, PartRequest request) {
         Part part = partRepository.findById(partId)
                 .orElseThrow(() -> new IllegalArgumentException("Part not found."));
         applyRequest(part, request);
         Part saved = partRepository.save(part);
+        List<Integer> affectedSrNums = partUsageRepository.findDistinctSrNumbersByPartId(saved.getPartId());
+        for (Integer srNum : affectedSrNums) {
+            validateSrNotOverpaid(srNum);
+        }
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "Part", String.valueOf(partId), "Updated part #" + partId, null);
         return toResponse(saved);
     }
@@ -94,6 +109,18 @@ public class PartService {
     private String getEmail() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth != null ? auth.getName() : null;
+    }
+
+    /** Throws if the SR's grand total (billing items + part usages) is less than what has already been paid. */
+    private void validateSrNotOverpaid(Integer srNumber) {
+        BigDecimal grandTotal = billingItemRepository.sumTotalBySrNumber(srNumber)
+                .add(partUsageRepository.sumTotalCostBySrNumber(srNumber));
+        BigDecimal paid = paymentLogRepository.sumPaidBySrNumber(srNumber);
+        if (paid.compareTo(grandTotal) > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot reduce total for SR #" + srNumber + " below the amount already paid. " +
+                    "Total paid: ₱" + paid.toPlainString() + ", new total would be: ₱" + grandTotal.toPlainString() + ".");
+        }
     }
 
     /** Applies request fields onto the part entity. */
