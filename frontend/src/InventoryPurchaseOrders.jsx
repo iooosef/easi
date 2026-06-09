@@ -54,7 +54,18 @@ function getPoMenuItems(order) {
   ]
 }
 
-const EMPTY_PO_FORM = { purpose: '', terms: '', paymentMethod: '', paymentDetails: '', deliveryAddress: '', remarks: '' }
+const EMPTY_PO_FORM = { purpose: '', terms: '', paymentMethod: '', ewalletType: '', paymentDetails: '', deliveryAddress: '', remarks: '' }
+
+function parsePoPaymentMethod(stored) {
+  if (!stored) return { method: '', ewalletType: '' }
+  const lower = stored.toLowerCase()
+  if (lower === 'cash') return { method: 'cash', ewalletType: '' }
+  if (lower === 'check') return { method: 'check', ewalletType: '' }
+  if (lower === 'bank' || lower === 'bank transfer') return { method: 'bank', ewalletType: '' }
+  if (lower === 'gcash') return { method: 'ewallet', ewalletType: 'GCash' }
+  if (lower.startsWith('ewallet:')) return { method: 'ewallet', ewalletType: stored.slice(8) }
+  return { method: '', ewalletType: '' }
+}
 const EMPTY_PART_FORM = { name: '', quantityOrdered: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
 const EMPTY_CONTACT_FORM = { contactName: '', contactNumber: '' }
 const EMPTY_EQUIP_FORM = { name: '', type: 'durable', model: '', serialNumber: '', description: '', stock: '1', acquisitionCost: '', status: 'active' }
@@ -344,7 +355,10 @@ function PartsTable({ parts, loading, onSelectPart }) {
 function UpdatePoModal({ order, onRefresh }) {
   const { popModal } = useModal()
   const { apiFetch } = useAuth()
-  const [form, setForm] = useState({ purpose: order.purpose ?? '', terms: order.terms ?? '', paymentMethod: order.paymentMethod ?? '', paymentDetails: order.paymentDetails ?? '', deliveryAddress: order.deliveryAddress ?? '', remarks: order.remarks ?? '' })
+  const [form, setForm] = useState(() => {
+    const { method, ewalletType } = parsePoPaymentMethod(order.paymentMethod)
+    return { purpose: order.purpose ?? '', terms: order.terms ?? '', paymentMethod: method, ewalletType, paymentDetails: order.paymentDetails ?? '', deliveryAddress: order.deliveryAddress ?? '', remarks: order.remarks ?? '' }
+  })
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [projectAddress, setProjectAddress] = useState('')
@@ -365,7 +379,7 @@ function UpdatePoModal({ order, onRefresh }) {
     try {
       const res = await apiFetch(`/api/purchase-orders/${order.poNum}`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, poNum: order.poNum, srNum: order.srNum }),
+        body: JSON.stringify({ ...form, ewalletType: undefined, paymentMethod: form.paymentMethod === 'ewallet' ? `ewallet:${form.ewalletType}` : form.paymentMethod || null, poNum: order.poNum, srNum: order.srNum }),
       })
       if (!res.ok) { setErrors(await parseApiError(res)); notyfError('Update failed'); return }
       popModal()
@@ -1681,7 +1695,7 @@ function NewPoContextModal({ srNum, onRefresh }) {
     try {
       const res = await apiFetch('/api/purchase-orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, srNum }),
+        body: JSON.stringify({ ...form, ewalletType: undefined, paymentMethod: form.paymentMethod === 'ewallet' ? `ewallet:${form.ewalletType}` : form.paymentMethod || null, srNum }),
       })
       if (!res.ok) { setErrors(await parseApiError(res)); notyfError('Failed to create purchase order'); return }
       const createdPo = await res.json()
@@ -1833,7 +1847,7 @@ function NewPoWizardModal({ onRefresh }) {
     try {
       const poRes = await apiFetch('/api/purchase-orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...equipPoForm, srNum: null }),
+        body: JSON.stringify({ ...equipPoForm, ewalletType: undefined, paymentMethod: equipPoForm.paymentMethod === 'ewallet' ? `ewallet:${equipPoForm.ewalletType}` : equipPoForm.paymentMethod || null, srNum: null }),
       })
       if (!poRes.ok) { setSubmitError(await parseApiError(poRes)); return }
       const createdPo = await poRes.json()
@@ -1873,7 +1887,7 @@ function NewPoWizardModal({ onRefresh }) {
     try {
       const res = await apiFetch('/api/purchase-orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...srPoForm, srNum: sr.srNumber }),
+        body: JSON.stringify({ ...srPoForm, ewalletType: undefined, paymentMethod: srPoForm.paymentMethod === 'ewallet' ? `ewallet:${srPoForm.ewalletType}` : srPoForm.paymentMethod || null, srNum: sr.srNumber }),
       })
       if (!res.ok) { setSrPoError(await parseApiError(res)); return }
       const createdPo = await res.json()
@@ -2452,9 +2466,32 @@ function POFormFields({ form, onChange, errors, projectAddress }) {
         <input type="text" name="terms" maxLength={16} required className={`input input-bordered w-full${errors.terms ? ' is-invalid' : ''}`} placeholder="e.g. Net 30" value={form.terms} onChange={onChange} />
         {errors.terms ? <span className="helper-text">{errors.terms}</span> : <span className="text-xs text-base-content/40">{form.terms.length}/16</span>}
       </div>
-      <div className="flex flex-col gap-1">
+      <div className={`flex flex-col gap-1${form.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
         <label className="label-text font-medium">Payment Method</label>
-        <input type="text" name="paymentMethod" maxLength={16} className="input input-bordered w-full" placeholder="e.g. Bank Transfer" value={form.paymentMethod} onChange={onChange} />
+        <div className="flex gap-2">
+          <select name="paymentMethod"
+            className={`select select-bordered${form.paymentMethod === 'ewallet' ? '' : ' w-full'}${errors?.paymentMethod ? ' is-invalid' : ''}`}
+            value={form.paymentMethod} onChange={onChange}>
+            <option value="">— None —</option>
+            <option value="cash">Cash</option>
+            <option value="check">Check</option>
+            <option value="ewallet">E-Wallet</option>
+            <option value="bank">Bank Transfer</option>
+          </select>
+          {form.paymentMethod === 'ewallet' && (
+            <select name="ewalletType" required
+              className={`select select-bordered flex-1${errors?.ewalletType ? ' is-invalid' : ''}`}
+              value={form.ewalletType} onChange={onChange}>
+              <option value="">— Select —</option>
+              <option value="GCash">GCash</option>
+              <option value="Maya">Maya</option>
+              <option value="ShopeePay">ShopeePay</option>
+              <option value="GrabPay">GrabPay</option>
+            </select>
+          )}
+        </div>
+        {errors?.paymentMethod && <span className="helper-text">{errors.paymentMethod}</span>}
+        {form.paymentMethod === 'ewallet' && errors?.ewalletType && <span className="helper-text">{errors.ewalletType}</span>}
       </div>
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">Payment Details</label>

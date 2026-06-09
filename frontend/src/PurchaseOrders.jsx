@@ -8,6 +8,18 @@ import { notyfSuccess, notyfError } from './notyf'
 import SupplierPickerModal from './SupplierPickerModal'
 import ServiceReportPickerModal from './ServiceReportPickerModal'
 
+/** Parses a stored PO paymentMethod into { method, ewalletType } for form state */
+function parsePoPaymentMethod(stored) {
+  if (!stored) return { method: '', ewalletType: '' }
+  const lower = stored.toLowerCase()
+  if (lower === 'cash') return { method: 'cash', ewalletType: '' }
+  if (lower === 'check') return { method: 'check', ewalletType: '' }
+  if (lower === 'bank' || lower === 'bank transfer') return { method: 'bank', ewalletType: '' }
+  if (lower === 'gcash') return { method: 'ewallet', ewalletType: 'GCash' }
+  if (lower.startsWith('ewallet:')) return { method: 'ewallet', ewalletType: stored.slice(8) }
+  return { method: '', ewalletType: '' }
+}
+
 /** Parses a failed API response into field-level or general errors. */
 async function parseApiError(res) {
   const data = await res.json().catch(() => ({}))
@@ -483,7 +495,7 @@ function NewPOModal({ srNum, onSuccess }) {
 
   const [poInfo, setPoInfo] = useState({ purpose: '', terms: '' })
   const [poInfoError, setPoInfoError] = useState({})
-  const [payment, setPayment] = useState({ paymentMethod: '', paymentDetails: '' })
+  const [payment, setPayment] = useState({ paymentMethod: '', ewalletType: '', paymentDetails: '' })
   const [delivery, setDelivery] = useState({ deliveryAddress: '', remarks: '' })
   const [partsList, setPartsList] = useState([])
   const [contactsList, setContactsList] = useState([])
@@ -515,7 +527,7 @@ function NewPOModal({ srNum, onSuccess }) {
         body: JSON.stringify({
           purpose: poInfo.purpose,
           terms: poInfo.terms,
-          paymentMethod: payment.paymentMethod || null,
+          paymentMethod: payment.paymentMethod === 'ewallet' ? `ewallet:${payment.ewalletType}` : payment.paymentMethod || null,
           paymentDetails: payment.paymentDetails || null,
           deliveryAddress: delivery.deliveryAddress || null,
           remarks: delivery.remarks || null,
@@ -632,13 +644,32 @@ function NewPOModal({ srNum, onSuccess }) {
           <div className="flex flex-col gap-4">
             <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Step 2 — Payment</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
+              <div className={`flex flex-col gap-1${payment.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
                 <label className="label-text font-medium">Payment Method</label>
-                <input type="text" maxLength={16}
-                  className="input input-bordered w-full"
-                  placeholder="e.g. Bank Transfer"
-                  value={payment.paymentMethod}
-                  onChange={e => setPayment(p => ({ ...p, paymentMethod: e.target.value }))} />
+                <div className="flex gap-2">
+                  <select
+                    className={`select select-bordered${payment.paymentMethod === 'ewallet' ? '' : ' w-full'}`}
+                    value={payment.paymentMethod}
+                    onChange={e => setPayment(p => ({ ...p, paymentMethod: e.target.value }))}>
+                    <option value="">— None —</option>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="ewallet">E-Wallet</option>
+                    <option value="bank">Bank Transfer</option>
+                  </select>
+                  {payment.paymentMethod === 'ewallet' && (
+                    <select name="ewalletType" required
+                      className="select select-bordered flex-1"
+                      value={payment.ewalletType}
+                      onChange={e => setPayment(p => ({ ...p, ewalletType: e.target.value }))}>
+                      <option value="">— Select —</option>
+                      <option value="GCash">GCash</option>
+                      <option value="Maya">Maya</option>
+                      <option value="ShopeePay">ShopeePay</option>
+                      <option value="GrabPay">GrabPay</option>
+                    </select>
+                  )}
+                </div>
               </div>
               <div className="sm:col-span-2 flex flex-col gap-1">
                 <label className="label-text font-medium">Payment Details</label>
@@ -830,13 +861,17 @@ function UpdatePOModal({ po, onSuccess }) {
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const [form, setForm] = useState({
-    purpose:         po.purpose ?? '',
-    terms:           po.terms ?? '',
-    paymentMethod:   po.paymentMethod ?? '',
-    paymentDetails:  po.paymentDetails ?? '',
-    deliveryAddress: po.deliveryAddress ?? '',
-    remarks:         po.remarks ?? '',
+  const [form, setForm] = useState(() => {
+    const { method, ewalletType } = parsePoPaymentMethod(po.paymentMethod)
+    return {
+      purpose:         po.purpose ?? '',
+      terms:           po.terms ?? '',
+      paymentMethod:   method,
+      ewalletType,
+      paymentDetails:  po.paymentDetails ?? '',
+      deliveryAddress: po.deliveryAddress ?? '',
+      remarks:         po.remarks ?? '',
+    }
   })
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -849,7 +884,7 @@ function UpdatePOModal({ po, onSuccess }) {
       const res = await apiFetch(`/api/purchase-orders/${po.poNum}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, poNum: po.poNum, srNum: po.srNum }),
+        body: JSON.stringify({ ...form, ewalletType: undefined, paymentMethod: form.paymentMethod === 'ewallet' ? `ewallet:${form.ewalletType}` : form.paymentMethod || null, poNum: po.poNum, srNum: po.srNum }),
       })
       if (!res.ok) {
         setFormError(await parseApiError(res))
@@ -898,13 +933,32 @@ function UpdatePOModal({ po, onSuccess }) {
                 value={form.terms} onChange={handleChange} />
               {formError.terms && <span className="helper-text">{formError.terms}</span>}
             </div>
-            <div className="flex flex-col gap-1">
+            <div className={`flex flex-col gap-1${form.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
               <label className="label-text font-medium">Payment Method</label>
-              <input type="text" name="paymentMethod" maxLength={16}
-                className={`input input-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
-                placeholder="e.g. cash"
-                value={form.paymentMethod} onChange={handleChange} />
+              <div className="flex gap-2">
+                <select name="paymentMethod"
+                  className={`select select-bordered${form.paymentMethod === 'ewallet' ? '' : ' w-full'}${formError.paymentMethod ? ' is-invalid' : ''}`}
+                  value={form.paymentMethod} onChange={handleChange}>
+                  <option value="">— None —</option>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="ewallet">E-Wallet</option>
+                  <option value="bank">Bank Transfer</option>
+                </select>
+                {form.paymentMethod === 'ewallet' && (
+                  <select name="ewalletType" required
+                    className={`select select-bordered flex-1${formError.ewalletType ? ' is-invalid' : ''}`}
+                    value={form.ewalletType} onChange={handleChange}>
+                    <option value="">— Select —</option>
+                    <option value="GCash">GCash</option>
+                    <option value="Maya">Maya</option>
+                    <option value="ShopeePay">ShopeePay</option>
+                    <option value="GrabPay">GrabPay</option>
+                  </select>
+                )}
+              </div>
               {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+              {form.paymentMethod === 'ewallet' && formError.ewalletType && <span className="helper-text">{formError.ewalletType}</span>}
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Payment Details</label>

@@ -17,7 +17,7 @@ const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
 
 const EMPTY_PO_FORM = {
   purpose: '', terms: '', deliveryAddress: '', remarks: '',
-  paymentMethod: '', paymentDetails: '',
+  paymentMethod: '', ewalletType: '', paymentDetails: '',
 }
 
 const EMPTY_EQUIP = {
@@ -153,7 +153,7 @@ export default function NewEquipmentPO() {
           terms: poForm.terms,
           deliveryAddress: poForm.deliveryAddress || null,
           remarks: poForm.remarks || null,
-          paymentMethod: poForm.paymentMethod || null,
+          paymentMethod: poForm.paymentMethod === 'ewallet' ? `ewallet:${poForm.ewalletType}` : poForm.paymentMethod || null,
           paymentDetails: poForm.paymentDetails || null,
           srNum: null,
         }),
@@ -297,13 +297,32 @@ export default function NewEquipmentPO() {
                       : <span className="text-xs text-base-content/40">{poForm.terms.length}/16</span>}
                   </div>
 
-                  <div className="flex flex-col gap-1">
+                  <div className={`flex flex-col gap-1${poForm.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
                     <label className="label-text font-medium">Payment Method</label>
-                    <input type="text" name="paymentMethod" maxLength={16}
-                      className={`input input-bordered w-full${poFormError.paymentMethod ? ' is-invalid' : ''}`}
-                      placeholder="e.g. Bank Transfer"
-                      value={poForm.paymentMethod} onChange={handlePoChange} />
+                    <div className="flex gap-2">
+                      <select name="paymentMethod"
+                        className={`select select-bordered${poForm.paymentMethod === 'ewallet' ? '' : ' w-full'}${poFormError.paymentMethod ? ' is-invalid' : ''}`}
+                        value={poForm.paymentMethod} onChange={handlePoChange}>
+                        <option value="">— None —</option>
+                        <option value="cash">Cash</option>
+                        <option value="check">Check</option>
+                        <option value="ewallet">E-Wallet</option>
+                        <option value="bank">Bank Transfer</option>
+                      </select>
+                      {poForm.paymentMethod === 'ewallet' && (
+                        <select name="ewalletType" required
+                          className={`select select-bordered flex-1${poFormError.ewalletType ? ' is-invalid' : ''}`}
+                          value={poForm.ewalletType} onChange={handlePoChange}>
+                          <option value="">— Select —</option>
+                          <option value="GCash">GCash</option>
+                          <option value="Maya">Maya</option>
+                          <option value="ShopeePay">ShopeePay</option>
+                          <option value="GrabPay">GrabPay</option>
+                        </select>
+                      )}
+                    </div>
                     {poFormError.paymentMethod && <span className="helper-text">{poFormError.paymentMethod}</span>}
+                    {poForm.paymentMethod === 'ewallet' && poFormError.ewalletType && <span className="helper-text">{poFormError.ewalletType}</span>}
                   </div>
 
                   <div className="flex flex-col gap-1">
