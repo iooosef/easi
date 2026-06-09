@@ -101,7 +101,7 @@ export function BillingManageModal({ report, onSuccess }) {
   }, [apiFetch, report.srNumber])
 
   return (
-    <div className="modal-content w-full max-w-3xl my-auto">
+    <div className="modal-content w-full max-w-4xl my-auto">
       <div className="modal-header">
         <div>
           <h3 className="modal-title">Manage Billing — SR #{report.srNumber}</h3>
@@ -111,13 +111,14 @@ export function BillingManageModal({ report, onSuccess }) {
           <span className="icon-[tabler--x] size-4"></span>
         </button>
       </div>
-      <div className="modal-body flex flex-col gap-4">
+      <div className="modal-body overflow-x-auto">
+        <div className="flex flex-col gap-4 min-w-0">
         {loading ? (
           <div className="flex justify-center py-8"><span className="loading loading-spinner loading-sm text-primary"></span></div>
         ) : items.length === 0 ? (
           <div className="text-center py-8 text-base-content/40 text-sm">No billing items yet.</div>
         ) : (
-          <div className="overflow-x-auto rounded-box border border-base-300">
+          <div className="rounded-box border border-base-300">
             <table className="table table-zebra table-sm w-full">
               <thead>
                 <tr><th>#</th><th>Description</th><th className="text-right">Qty</th><th className="text-right">Unit Price</th><th className="text-right">Amount</th><th>Action</th></tr>
@@ -155,7 +156,7 @@ export function BillingManageModal({ report, onSuccess }) {
         ) : parts.length > 0 && (
           <>
             <div className="divider my-2 text-xs text-base-content/40">Parts Used</div>
-            <div className="overflow-x-auto rounded-box border border-base-300">
+            <div className="rounded-box border border-base-300">
               <table className="table table-zebra table-sm w-full">
                 <thead>
                   <tr><th>Part</th><th className="text-right">Qty Used</th><th className="text-right">Unit Price</th><th className="text-right">Amount</th></tr>
@@ -186,7 +187,7 @@ export function BillingManageModal({ report, onSuccess }) {
         {!paymentsLoading && payments.length > 0 && (
           <>
             <div className="divider my-2 text-xs text-base-content/40">Payments</div>
-            <div className="overflow-x-auto rounded-box border border-base-300">
+            <div className="rounded-box border border-base-300">
               <table className="table table-zebra table-sm w-full">
                 <thead>
                   <tr><th>Receipt Date</th><th>Paid By</th><th>Method</th><th>Receipt #</th><th className="text-right">Amount</th><th>Action</th></tr>
@@ -212,6 +213,7 @@ export function BillingManageModal({ report, onSuccess }) {
             </div>
           </>
         )}
+        </div>
       </div>
       <div className="modal-footer">
         <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>

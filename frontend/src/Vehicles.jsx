@@ -312,8 +312,8 @@ function VehicleStillOutModal({ vehicle, incompleteLog }) {
 function AddVehicleLogModal({ vehicle, prefillOdo, onSuccess }) {
   const { pushModal, popModal } = useModal()
   const { apiFetch } = useAuth()
-  const odoLocked = prefillOdo !== ''
-  const [form, setForm] = useState({ ...EMPTY_LOG_FORM, odometerStart: prefillOdo })
+  const odoMin = prefillOdo !== '' ? Number(prefillOdo) : 0
+  const [form, setForm] = useState({ ...EMPTY_LOG_FORM, odometerStart: prefillOdo, date: new Date().toISOString().slice(0, 10) })
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -358,6 +358,7 @@ function AddVehicleLogModal({ vehicle, prefillOdo, onSuccess }) {
           odometerStart:    form.odometerStart !== '' ? Number(form.odometerStart) : null,
           odometerEnd:      form.odometerEnd !== '' ? Number(form.odometerEnd) : null,
           status:           form.status,
+          date:             form.date || null,
         }),
       })
       if (!res.ok) {
@@ -387,6 +388,14 @@ function AddVehicleLogModal({ vehicle, prefillOdo, onSuccess }) {
       <div className="modal-body">
         <form id="add-vehicle-log-form" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Date <span className="text-error">*</span></label>
+              <input type="date" name="date" required
+                className={`input input-bordered w-full${formError.date ? ' is-invalid' : ''}`}
+                value={form.date} onChange={handleChange} />
+              {formError.date && <span className="helper-text">{formError.date}</span>}
+            </div>
 
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
@@ -445,19 +454,17 @@ function AddVehicleLogModal({ vehicle, prefillOdo, onSuccess }) {
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">
                 Odometer Start (km) <span className="text-error">*</span>
-                {odoLocked && (
+                {odoMin > 0 && (
                   <span className="ml-2 text-xs font-normal text-base-content/40">
-                    <span className="icon-[tabler--lock] size-3 inline-block align-middle mr-0.5"></span>
-                    from previous log
+                    min {odoMin.toLocaleString()} km
                   </span>
                 )}
               </label>
-              <input type="number" name="odometerStart" min={0} required
-                readOnly={odoLocked}
-                className={`input input-bordered w-full${odoLocked ? ' bg-base-200 cursor-not-allowed' : ''}${formError.odometerStart ? ' is-invalid' : ''}`}
+              <input type="number" name="odometerStart" min={odoMin} required
+                className={`input input-bordered w-full${formError.odometerStart ? ' is-invalid' : ''}`}
                 placeholder="e.g. 12500"
                 value={form.odometerStart}
-                onChange={odoLocked ? undefined : handleChange} />
+                onChange={handleChange} />
               {formError.odometerStart && <span className="helper-text">{formError.odometerStart}</span>}
             </div>
 

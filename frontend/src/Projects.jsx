@@ -12,7 +12,7 @@ const PROJECT_MENU_ITEMS = [
   { key: 'update',          label: 'Update Details',          icon: 'icon-[tabler--pencil]',      roles: ['ADMIN', 'STAFF'] },
   { key: 'service-reports', label: 'Project Service Reports', icon: 'icon-[tabler--file-report]', roles: ['ADMIN', 'STAFF', 'ACCOUNTING', 'CREW'] },
   { key: 'schedule',        label: 'Manage Schedule',         icon: 'icon-[tabler--calendar]',    roles: null },
-  { key: 'documents',       label: 'Manage Documents',        icon: 'icon-[tabler--files]',       roles: null },
+  { key: 'documents',       label: 'Manage Documents',        icon: 'icon-[tabler--files]',       roles: ['ADMIN', 'ACCOUNTING', 'STAFF', 'CREW'] },
   { key: 'ac',              label: 'Manage Air Conditioners', icon: 'icon-[tabler--snowflake]',   roles: null },
 ]
 

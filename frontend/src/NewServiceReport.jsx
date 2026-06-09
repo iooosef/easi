@@ -515,16 +515,18 @@ export default function NewServiceReport() {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
                       <label className="label-text font-medium">Location <span className="text-error">*</span></label>
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-soft btn-secondary"
-                        onClick={() => {
-                          setReportForm(prev => ({ ...prev, location: 'same as project location' }))
-                          setReportFormError(e => ({ ...e, location: undefined }))
-                        }}
-                      >
-                        Click if Same as project
-                      </button>
+                      {reportForm._projectAddress && (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-soft btn-secondary"
+                          onClick={() => {
+                            setReportForm(prev => ({ ...prev, location: prev._projectAddress }))
+                            setReportFormError(e => ({ ...e, location: undefined }))
+                          }}
+                        >
+                          <span className="icon-[tabler--building] size-3"></span>Use Project Address
+                        </button>
+                      )}
                     </div>
                     <input type="text" name="location" maxLength={255}
                       className={`input input-bordered w-full${reportFormError.location ? ' is-invalid' : ''}`}

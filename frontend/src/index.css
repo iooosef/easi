@@ -63,3 +63,7 @@
   --depth: 0;
   --noise: 0;
 }
+
+.modal-footer {
+  @apply pt-4;
+}
