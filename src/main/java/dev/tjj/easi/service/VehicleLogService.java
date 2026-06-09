@@ -117,6 +117,7 @@ public class VehicleLogService {
         log.setDriverEmployee(driver);
         log.setOdometerStart(request.odometerStart());
         log.setOdometerEnd(request.odometerEnd());
+        log.setDate(request.date());
 
         if (request.status() != null && !request.status().isBlank()) {
             log.setStatus(request.status());
@@ -138,6 +139,7 @@ public class VehicleLogService {
                 l.getOdometerStart(),
                 l.getOdometerEnd(),
                 l.getStatus(),
+                l.getDate(),
                 l.getAddedOn()
         );
     }

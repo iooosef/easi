@@ -760,6 +760,7 @@ public class DataInitializer implements CommandLineRunner {
         vl.setOdometerStart(odoStart);
         vl.setOdometerEnd(odoEnd);
         vl.setStatus(status);
+        vl.setDate(addedOn.toLocalDate());
         vl.setAddedOn(addedOn);
         return vehicleLogRepository.save(vl);
     }

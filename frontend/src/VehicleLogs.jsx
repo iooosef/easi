@@ -24,6 +24,7 @@ const EMPTY_FORM = {
   odometerStart: '',
   odometerEnd: '',
   status: 'driving',
+  date: '',
 }
 
 const EMPTY_GAS_FORM = { invoiceId: '', amount: '' }
@@ -94,11 +95,11 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
   const { apiFetch } = useAuth()
   const [checking, setChecking] = useState(true)
   const [incompleteLog, setIncompleteLog] = useState(null)
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState({ ...EMPTY_FORM, date: new Date().toISOString().slice(0, 10) })
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [driverLabel, setDriverLabel] = useState('')
-  const [odoStartLocked, setOdoStartLocked] = useState(false)
+  const [odoMin, setOdoMin] = useState(0)
 
   /** Check for ongoing trip and prefill odometer on mount. */
   useEffect(() => {
@@ -121,7 +122,7 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
           if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
         }
         if (!active) return
-        setOdoStartLocked(prefillOdo !== '')
+        if (prefillOdo !== '') setOdoMin(Number(prefillOdo))
         setForm(prev => ({ ...prev, odometerStart: prefillOdo }))
       } finally {
         if (active) setChecking(false)
@@ -147,6 +148,7 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
       odometerStart:    f.odometerStart !== '' ? Number(f.odometerStart) : null,
       odometerEnd:      f.odometerEnd !== '' ? Number(f.odometerEnd) : null,
       status:           f.status,
+      date:             f.date || null,
     }
   }
 
@@ -249,7 +251,7 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
             onChange={handleFormChange}
             onSetForm={setForm}
             driverLabel={driverLabel}
-            odoStartLocked={odoStartLocked}
+            odoMin={odoMin}
             onOpenSchedulePicker={() => pushModal(
               <SchedulePickerLayer onSelect={s => {
                 const display = `Sched #${s.schedId} · Project #${s.projNum} · ${s.date ?? '—'}`
@@ -373,10 +375,23 @@ function UpdateLogModal({ log, onRefresh }) {
     odometerStart:    String(log.odometerStart),
     odometerEnd:      log.odometerEnd != null ? String(log.odometerEnd) : '',
     status:           log.status,
+    date:             log.date ?? '',
   })
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [driverLabel, setDriverLabel] = useState(log.driverName)
+  const [odoMin, setOdoMin] = useState(0)
+
+  /** Fetch the previous log for this vehicle to determine the minimum odometer start. */
+  useEffect(() => {
+    apiFetch(`/api/vehicle-logs?vehiclesId=${log.vehiclesId}&sort=vehicleLogId,desc&size=50`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const prev = (data.content ?? []).find(l => l.vehicleLogId < log.vehicleLogId && l.odometerEnd != null)
+        if (prev) setOdoMin(prev.odometerEnd)
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleFormChange(e) {
     const { name, value } = e.target
@@ -394,6 +409,7 @@ function UpdateLogModal({ log, onRefresh }) {
       odometerStart:    f.odometerStart !== '' ? Number(f.odometerStart) : null,
       odometerEnd:      f.odometerEnd !== '' ? Number(f.odometerEnd) : null,
       status:           f.status,
+      date:             f.date || null,
     }
   }
 
@@ -443,6 +459,7 @@ function UpdateLogModal({ log, onRefresh }) {
             onChange={handleFormChange}
             onSetForm={setForm}
             driverLabel={driverLabel}
+            odoMin={odoMin}
             onOpenSchedulePicker={() => pushModal(
               <SchedulePickerLayer onSelect={s => {
                 const display = `Sched #${s.schedId} · Project #${s.projNum} · ${s.date ?? '—'}`
@@ -1243,9 +1260,22 @@ export default function VehicleLogs() {
 }
 
 /** Shared form fields used by both add and edit log modals. */
-function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoStartLocked, onOpenSchedulePicker, onOpenDriverPicker }) {
+function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoMin = 0, onOpenSchedulePicker, onOpenDriverPicker }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Date <span className="text-error">*</span></label>
+        <input
+          type="date"
+          name="date"
+          required
+          className={`input input-bordered w-full${formError.date ? ' is-invalid' : ''}`}
+          value={form.date}
+          onChange={onChange}
+        />
+        {formError.date && <span className="helper-text">{formError.date}</span>}
+      </div>
 
       <div className="sm:col-span-2 flex flex-col gap-1">
         <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
@@ -1325,23 +1355,21 @@ function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoS
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">
           Odometer Start (km) <span className="text-error">*</span>
-          {odoStartLocked && (
+          {odoMin > 0 && (
             <span className="ml-2 text-xs font-normal text-base-content/40">
-              <span className="icon-[tabler--lock] size-3 inline-block align-middle mr-0.5"></span>
-              from previous log
+              min {odoMin.toLocaleString()} km
             </span>
           )}
         </label>
         <input
           type="number"
           name="odometerStart"
-          min={0}
+          min={odoMin}
           required
-          readOnly={odoStartLocked}
-          className={`input input-bordered w-full${odoStartLocked ? ' bg-base-200 cursor-not-allowed' : ''}${formError.odometerStart ? ' is-invalid' : ''}`}
+          className={`input input-bordered w-full${formError.odometerStart ? ' is-invalid' : ''}`}
           placeholder="e.g. 12500"
           value={form.odometerStart}
-          onChange={odoStartLocked ? undefined : onChange}
+          onChange={onChange}
         />
         {formError.odometerStart && <span className="helper-text">{formError.odometerStart}</span>}
       </div>
