@@ -220,6 +220,79 @@ function NewPoAddPartModal({ onAdd }) {
   )
 }
 
+/** Modal for adding a document record (invoice ID + optional file) to a new purchase order before it is saved. */
+function NewPoAddDocModal({ onAdd }) {
+  const { popModal } = useModal()
+  const [form, setForm] = useState({ invoiceId: '', file: null })
+  const [formError, setFormError] = useState({})
+  const fileRef = useRef(null)
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!form.invoiceId.trim()) errors.invoiceId = 'Invoice ID is required.'
+    if (Object.keys(errors).length > 0) { setFormError(errors); return }
+    onAdd({ ...form, _key: Date.now() })
+    popModal()
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Document Record</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="inv-new-po-doc-modal-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+              <input type="text" maxLength={16} required
+                className={`input input-bordered w-full${formError.invoiceId ? ' is-invalid' : ''}`}
+                placeholder="e.g. INV-001"
+                value={form.invoiceId}
+                onChange={e => setForm(p => ({ ...p, invoiceId: e.target.value }))} />
+              {formError.invoiceId && <span className="helper-text">{formError.invoiceId}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">
+                File <span className="text-base-content/40 font-normal">(optional — images or PDF)</span>
+              </label>
+              <input ref={fileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden"
+                onChange={e => {
+                  const file = e.target.files?.[0] ?? null
+                  if (file && !ACCEPTED_TYPES.includes(file.type)) {
+                    setFormError(prev => ({ ...prev, file: 'Only images and PDFs are accepted.' }))
+                    e.target.value = ''
+                    return
+                  }
+                  setFormError(prev => { const n = { ...prev }; delete n.file; return n })
+                  setForm(prev => ({ ...prev, file }))
+                }} />
+              <button type="button"
+                className={`btn btn-outline w-full justify-start font-normal${formError.file ? ' btn-error' : ''}`}
+                onClick={() => fileRef.current?.click()}>
+                <span className="icon-[tabler--paperclip] size-4"></span>
+                {form.file ? form.file.name : 'Choose file…'}
+              </button>
+              {formError.file && <span className="helper-text">{formError.file}</span>}
+              {form.file && <span className="text-xs text-base-content/50">{(form.file.size / 1024).toFixed(1)} KB</span>}
+            </div>
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="inv-new-po-doc-modal-form" className="btn btn-primary">
+          <span className="icon-[tabler--plus] size-4"></span>Add
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /** Paginated table of parts with a total cost summary row; clicking Manage opens the part detail modal. */
 function PartsTable({ parts, loading, onSelectPart }) {
   const [partsPage, setPartsPage] = useState(0)
@@ -1718,6 +1791,11 @@ function NewPoWizardModal({ onRefresh }) {
   const [srPoError, setSrPoError] = useState({})
   const [srContacts, setSrContacts] = useState([])
   const [srParts, setSrParts] = useState([])
+  const [srDocs, setSrDocs] = useState([])
+  const [srDocForm, setSrDocForm] = useState({ invoiceId: '', file: null })
+  const [srDocFormError, setSrDocFormError] = useState({})
+  const [addingSrDoc, setAddingSrDoc] = useState(false)
+  const srDocFileRef = useRef(null)
 
   useEffect(() => {
     if (step !== 2 || type === 'equipment') return
@@ -1745,7 +1823,13 @@ function NewPoWizardModal({ onRefresh }) {
 
   /** Creates the equipment PO then posts each staged equipment item and document; closes wizard on success. */
   async function handleWizardEquipSubmit() {
-    setSubmitError({}); setSubmitting(true)
+    setSubmitError({})
+    const poErrors = {}
+    if (!equipPoForm.purpose.trim()) poErrors.purpose = 'Purpose is required.'
+    if (!equipPoForm.terms.trim()) poErrors.terms = 'Terms are required.'
+    if (Object.keys(poErrors).length > 0) { setEquipPoError(poErrors); return }
+    if (equipList.length === 0) { setEquipFormError({ _general: 'Add at least one equipment item before saving.' }); return }
+    setSubmitting(true)
     try {
       const poRes = await apiFetch('/api/purchase-orders', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1805,6 +1889,18 @@ function NewPoWizardModal({ onRefresh }) {
           body: JSON.stringify({ poNum: createdPo.poNum, name: p.name, quantityOrdered: Number(p.quantityOrdered), quantityType: p.quantityType, unitPrice: Number(p.unitPrice), supplierId: Number(p.supplierId), orderDate: p.orderDate || null, status: 'ordered' }),
         })
       }
+      for (const doc of srDocs) {
+        let docuId = null
+        if (doc.file) {
+          const fd = new FormData(); fd.append('file', doc.file)
+          const up = await apiFetch('/api/documents', { method: 'POST', body: fd })
+          if (up.ok) { const u = await up.json(); docuId = u.docuId }
+        }
+        await apiFetch('/api/purchase-order-documents', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ poNum: createdPo.poNum, invoiceId: doc.invoiceId, docuId }),
+        })
+      }
       popModal()
       notyfSuccess(`Purchase Order ${createdPo.poNum} created.`)
       onRefresh()
@@ -1845,8 +1941,8 @@ function NewPoWizardModal({ onRefresh }) {
       </div>
       <div className="modal-body flex flex-col gap-4">
         <div className="flex items-center gap-x-1">
-          {[1,2,3,4].map(n => <div key={n} className={`progress-step transition-colors ${step >= n ? 'bg-primary' : 'bg-primary/10'}`} />)}
-          <p className="text-xs text-primary ms-1 font-medium">{step}/4</p>
+          {(type === 'equipment' ? [1,2] : [1,2,3,4]).map(n => <div key={n} className={`progress-step transition-colors ${step >= n ? 'bg-primary' : 'bg-primary/10'}`} />)}
+          <p className="text-xs text-primary ms-1 font-medium">{step}/{type === 'equipment' ? 2 : 4}</p>
         </div>
 
         {step === 1 && (
@@ -1882,149 +1978,183 @@ function NewPoWizardModal({ onRefresh }) {
         )}
 
         {step === 4 && type === 'sr' && (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
             <form id="inv-wizard-po-form" onSubmit={handleWizardSrSubmit}>
               <POFormFields form={srPoForm} onChange={e => setSrPoForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={srPoError} projectAddress={project?.address ?? ''} />
             </form>
-            <div className="flex justify-between items-center"><span className="text-sm font-medium">Parts</span><button type="button" className="btn btn-xs btn-outline" onClick={() => pushModal(<NewPoAddPartModal onAdd={p => setSrParts(l => [...l, p])} />)}>Add Part</button></div>
-            {srParts.map(p => <div key={p._tempId} className="text-xs bg-base-200 p-1.5 rounded flex justify-between"><span>{p.name} ({p.quantityOrdered})</span><button type="button" className="text-error" onClick={() => setSrParts(l => l.filter(x => x._tempId !== p._tempId))}>Remove</button></div>)}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Delivery Contacts</span>
+                <button type="button" className="btn btn-soft btn-accent btn-sm"
+                  onClick={() => pushModal(<NewPoAddContactModal onAdd={c => setSrContacts(l => [...l, c])} />)}>
+                  <span className="icon-[tabler--address-book] size-4"></span>Add Contact
+                </button>
+              </div>
+              {srContacts.length === 0 ? (
+                <p className="text-sm text-base-content/40">No delivery contacts added yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-box border border-base-300">
+                  <table className="table table-sm">
+                    <tbody>
+                      {srContacts.map((c, i) => (
+                        <tr key={c._tempId}>
+                          <td>{i + 1}</td>
+                          <td>{c.contactName}</td>
+                          <td>{c.contactNumber}</td>
+                          <td>
+                            <button type="button" className="btn btn-error btn-xs"
+                              onClick={() => setSrContacts(l => l.filter(x => x._tempId !== c._tempId))}>Remove</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Parts</span>
+                <button type="button" className="btn btn-soft btn-accent btn-sm"
+                  onClick={() => pushModal(<NewPoAddPartModal onAdd={p => setSrParts(l => [...l, p])} />)}>
+                  <span className="icon-[tabler--package] size-4"></span>Add Part
+                </button>
+              </div>
+              {srParts.length === 0 ? (
+                <p className="text-sm text-base-content/40">No parts added yet.</p>
+              ) : (
+                <div className="overflow-x-auto rounded-box border border-base-300">
+                  <table className="table table-sm">
+                    <tbody>
+                      {srParts.map((p, i) => (
+                        <tr key={p._tempId}>
+                          <td>{i + 1}</td>
+                          <td>{p.name}</td>
+                          <td>{p.quantityOrdered}</td>
+                          <td>{p._supplierName}</td>
+                          <td>
+                            <button type="button" className="btn btn-error btn-xs"
+                              onClick={() => setSrParts(l => l.filter(x => x._tempId !== p._tempId))}>Remove</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Documents <span className="text-base-content/40 font-normal text-xs">(optional)</span></span>
+                <button type="button" className="btn btn-soft btn-accent btn-sm"
+                  onClick={() => pushModal(<NewPoAddDocModal onAdd={d => setSrDocs(l => [...l, d])} />)}>
+                  <span className="icon-[tabler--files] size-4"></span>Add Document Record
+                </button>
+              </div>
+              {srDocs.length === 0 ? (
+                <p className="text-sm text-base-content/40">No documents added yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {srDocs.map((doc, idx) => (
+                    <div key={doc._key} className="card border border-base-300 bg-base-100">
+                      <div className="card-body py-2 px-3 gap-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm font-mono">{doc.invoiceId}</p>
+                            <p className="text-xs text-base-content/50">
+                              {doc.file
+                                ? <><span className="icon-[tabler--paperclip] size-3 inline-block mr-0.5"></span>{doc.file.name}</>
+                                : 'No file attached'
+                              }
+                            </p>
+                          </div>
+                          <button type="button" className="btn btn-error btn-xs btn-square shrink-0"
+                            title={`Remove document ${idx + 1}`}
+                            onClick={() => setSrDocs(prev => prev.filter(d => d._key !== doc._key))}>
+                            <span className="icon-[tabler--x] size-3.5"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {step === 2 && type === 'equipment' && (
-          <POFormFields form={equipPoForm} onChange={e => setEquipPoForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={equipPoError} />
-        )}
-
-        {step === 3 && type === 'equipment' && (
-          <div className="flex flex-col gap-3">
-            {equipList.length === 0 && !addingEquip && (
-              <p className="text-sm text-base-content/40 text-center py-2">No equipment added yet.</p>
-            )}
-            {equipList.map(item => (
-              <div key={item._key} className="flex items-center justify-between bg-base-100 border border-base-300 rounded p-2 gap-2">
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-sm font-medium truncate">{item.name}</span>
-                  <span className="text-xs text-base-content/50">{item.type} · Stock: {item.stock}{item.model ? ` · ${item.model}` : ''}</span>
-                </div>
-                <button type="button" className="btn btn-xs btn-soft btn-error shrink-0" onClick={() => setEquipList(l => l.filter(x => x._key !== item._key))}>Remove</button>
+          <div className="flex flex-col gap-5">
+            <form id="inv-wizard-equip-po-form" onSubmit={e => e.preventDefault()}>
+              <POFormFields form={equipPoForm} onChange={e => setEquipPoForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={equipPoError} />
+            </form>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Equipment Items</span>
+                <button type="button" className="btn btn-soft btn-accent btn-sm"
+                  onClick={() => pushModal(<NewPoAddEquipModal onAdd={item => setEquipList(l => [...l, item])} />)}>
+                  <span className="icon-[tabler--tool] size-4"></span>Add Equipment Item
+                </button>
               </div>
-            ))}
-            {equipFormError._general && !addingEquip && (
-              <div className="alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{equipFormError._general}</span>
-              </div>
-            )}
-            {addingEquip ? (
-              <form id="wizard-equip-form" onSubmit={e => {
-                e.preventDefault()
-                setEquipList(l => [...l, { ...equipForm, _key: Date.now() }])
-                setAddingEquip(false)
-                setEquipForm(EMPTY_WIZARD_EQUIP)
-                setEquipFormError({})
-              }} className="card border border-base-300 bg-base-200/40">
-                <div className="card-body gap-3">
-                  <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide">New Equipment</p>
-                  <EquipFormFields form={equipForm} onChange={e => setEquipForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={equipFormError} showStatus={false} />
-                  <div className="flex gap-2 justify-end mt-1">
-                    <button type="button" className="btn btn-soft btn-secondary btn-sm" onClick={() => { setAddingEquip(false); setEquipFormError({}) }}>Cancel</button>
-                    <button type="submit" form="wizard-equip-form" className="btn btn-primary btn-sm">Add to List</button>
+              {equipList.length === 0 ? (
+                <p className="text-sm text-base-content/40">No equipment added yet.</p>
+              ) : (
+                equipList.map(item => (
+                  <div key={item._key} className="flex items-center justify-between bg-base-100 border border-base-300 rounded p-2 gap-2">
+                    <div className="flex flex-col gap-0.5 min-w-0">
+                      <span className="text-sm font-medium truncate">{item.name}</span>
+                      <span className="text-xs text-base-content/50">{item.type} · Stock: {item.stock}{item.model ? ` · ${item.model}` : ''}</span>
+                    </div>
+                    <button type="button" className="btn btn-xs btn-soft btn-error shrink-0" onClick={() => setEquipList(l => l.filter(x => x._key !== item._key))}>Remove</button>
                   </div>
+                ))
+              )}
+              {equipFormError._general && (
+                <div className="alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{equipFormError._general}</span>
                 </div>
-              </form>
-            ) : (
-              <button type="button" className="btn btn-sm btn-soft btn-primary" onClick={() => { setAddingEquip(true); setEquipFormError({}) }}>
-                <span className="icon-[tabler--plus] size-4"></span>Add Equipment Item
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </div>
 
-        {step === 4 && type === 'equipment' && (
-          <div className="flex flex-col gap-4">
-            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">
-              Step 4 — Invoice Documents <span className="text-base-content/30 font-normal normal-case">(optional)</span>
-            </p>
-
-            {docList.length === 0 ? (
-              <p className="text-sm text-base-content/40">No documents added. You can skip this step.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {docList.map((doc, idx) => (
-                  <div key={doc._key} className="card border border-base-300 bg-base-100">
-                    <div className="card-body py-2 px-3 gap-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm font-mono">{doc.invoiceId}</p>
-                          <p className="text-xs text-base-content/50">
-                            {doc.file
-                              ? <><span className="icon-[tabler--paperclip] size-3 inline-block mr-0.5"></span>{doc.file.name}</>
-                              : 'No file attached'
-                            }
-                          </p>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Documents <span className="text-base-content/40 font-normal text-xs">(optional)</span></span>
+                <button type="button" className="btn btn-soft btn-accent btn-sm"
+                  onClick={() => pushModal(<NewPoAddDocModal onAdd={d => setDocList(l => [...l, d])} />)}>
+                  <span className="icon-[tabler--files] size-4"></span>Add Document Record
+                </button>
+              </div>
+              {docList.length === 0 ? (
+                <p className="text-sm text-base-content/40">No documents added yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {docList.map((doc, idx) => (
+                    <div key={doc._key} className="card border border-base-300 bg-base-100">
+                      <div className="card-body py-2 px-3 gap-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm font-mono">{doc.invoiceId}</p>
+                            <p className="text-xs text-base-content/50">
+                              {doc.file
+                                ? <><span className="icon-[tabler--paperclip] size-3 inline-block mr-0.5"></span>{doc.file.name}</>
+                                : 'No file attached'
+                              }
+                            </p>
+                          </div>
+                          <button type="button" className="btn btn-error btn-xs btn-square shrink-0"
+                            title={`Remove document ${idx + 1}`}
+                            onClick={() => setDocList(prev => prev.filter(d => d._key !== doc._key))}>
+                            <span className="icon-[tabler--x] size-3.5"></span>
+                          </button>
                         </div>
-                        <button type="button" className="btn btn-error btn-xs btn-square shrink-0"
-                          title={`Remove document ${idx + 1}`}
-                          onClick={() => setDocList(prev => prev.filter(d => d._key !== doc._key))}>
-                          <span className="icon-[tabler--x] size-3.5"></span>
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {addingDoc ? (
-              <div className="card border border-base-300 bg-base-200/40">
-                <div className="card-body gap-3">
-                  <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide">New Document Record</p>
-                  <form id="add-doc-form" onSubmit={handleAddDocToList}>
-                    <div className="flex flex-col gap-3">
-                      <div className="flex flex-col gap-1">
-                        <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
-                        <input type="text" maxLength={16} required
-                          className={`input input-bordered w-full${docFormError.invoiceId ? ' is-invalid' : ''}`}
-                          placeholder="e.g. INV-001"
-                          value={docForm.invoiceId}
-                          onChange={e => setDocForm(prev => ({ ...prev, invoiceId: e.target.value }))} />
-                        {docFormError.invoiceId && <span className="helper-text">{docFormError.invoiceId}</span>}
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <label className="label-text font-medium">
-                          File <span className="text-base-content/40 font-normal">(optional — images or PDF)</span>
-                        </label>
-                        <input ref={docFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleDocFileChange} />
-                        <button type="button"
-                          className={`btn btn-outline w-full justify-start font-normal${docFormError.file ? ' btn-error' : ''}`}
-                          onClick={() => docFileRef.current?.click()}>
-                          <span className="icon-[tabler--paperclip] size-4"></span>
-                          {docForm.file ? docForm.file.name : 'Choose file…'}
-                        </button>
-                        {docFormError.file && <span className="helper-text">{docFormError.file}</span>}
-                        {docForm.file && <span className="text-xs text-base-content/50">{(docForm.file.size / 1024).toFixed(1)} KB</span>}
-                      </div>
-                    </div>
-                    <div className="flex gap-2 justify-end mt-3">
-                      <button type="button" className="btn btn-soft btn-secondary btn-sm"
-                        onClick={() => { setAddingDoc(false); setDocForm({ invoiceId: '', file: null }); setDocFormError({}); if (docFileRef.current) docFileRef.current.value = '' }}>
-                        Cancel
-                      </button>
-                      <button type="submit" className="btn btn-primary btn-sm">
-                        <span className="icon-[tabler--plus] size-4"></span>
-                        Add to List
-                      </button>
-                    </div>
-                  </form>
+                  ))}
                 </div>
-              </div>
-            ) : (
-              <button type="button" className="btn btn-soft btn-primary btn-sm w-full"
-                onClick={() => { setAddingDoc(true); setDocForm({ invoiceId: '', file: null }); setDocFormError({}) }}>
-                <span className="icon-[tabler--plus] size-4"></span>
-                Add Document Record
-              </button>
-            )}
+              )}
+            </div>
 
             {submitError._general && (
               <div className="alert alert-error py-2">
@@ -2038,9 +2168,7 @@ function NewPoWizardModal({ onRefresh }) {
       <div className="modal-footer">
         {step > 1 && <button type="button" className="btn btn-soft btn-secondary me-auto" onClick={() => { setStep(s => s - 1) }}>Back</button>}
         <button type="button" className="btn btn-ghost" onClick={popModal}>Cancel</button>
-        {step === 2 && type === 'equipment' && <button type="button" className="btn btn-primary" onClick={() => { if(equipPoForm.purpose && equipPoForm.terms) setStep(3) }}>Next</button>}
-        {step === 3 && type === 'equipment' && <button type="button" className="btn btn-primary" onClick={() => { if (equipList.length > 0) { setEquipFormError({}); setStep(4) } else { setEquipFormError({ _general: 'Add at least one equipment item before proceeding.' }) } }}>Next</button>}
-        {step === 4 && type === 'equipment' && <button type="button" className="btn btn-primary" disabled={submitting} onClick={handleWizardEquipSubmit}>Finish &amp; Save</button>}
+        {step === 2 && type === 'equipment' && <button type="button" className="btn btn-primary" disabled={submitting} onClick={handleWizardEquipSubmit}>Finish &amp; Save</button>}
         {step === 4 && type === 'sr' && <button type="submit" form="inv-wizard-po-form" className="btn btn-primary" disabled={submitting}>Create Purchase Order</button>}
       </div>
     </div>
@@ -2271,6 +2399,39 @@ function EquipFormFields({ form, onChange, errors, showStatus }) {
       <div className={`flex flex-col gap-1${showStatus ? '' : ' sm:col-span-2'}`}>
         <label className="label-text font-medium">Description</label>
         <textarea name="description" maxLength={500} rows={2} placeholder="e.g. Used for pneumatic operations on-site" className={`textarea textarea-bordered w-full${errors.description ? ' is-invalid' : ''}`} value={form.description} onChange={onChange} />
+      </div>
+    </div>
+  )
+}
+
+/** Modal for adding a single equipment item to a new equipment PO before it is saved. */
+function NewPoAddEquipModal({ onAdd }) {
+  const { popModal } = useModal()
+  const [form, setForm] = useState(EMPTY_WIZARD_EQUIP)
+  const [formError, setFormError] = useState({})
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Equipment Item</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="inv-new-po-equip-modal-form" onSubmit={e => {
+          e.preventDefault()
+          onAdd({ ...form, _key: Date.now() })
+          popModal()
+        }}>
+          <EquipFormFields form={form} onChange={e => setForm(p => ({ ...p, [e.target.name]: e.target.value }))} errors={formError} showStatus={false} />
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="inv-new-po-equip-modal-form" className="btn btn-primary">
+          <span className="icon-[tabler--plus] size-4"></span>Add
+        </button>
       </div>
     </div>
   )
