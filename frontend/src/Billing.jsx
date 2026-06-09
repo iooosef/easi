@@ -415,13 +415,17 @@ function UpdatePaymentModal({ payment, items, parts = [], payments, srNumber, on
   const updateBalance = Math.max(0, grandTotal -
     payments.reduce((s, p) => s + (p.logId !== payment.logId ? Number(p.amount ?? 0) : 0), 0))
 
-  const [form, setForm] = useState({
-    paidBy:        payment.paidBy ?? '',
-    amount:        payment.amount ?? '',
-    paymentMethod: payment.paymentMethod ?? 'cash',
-    receiptDate:   payment.receiptDate ? String(payment.receiptDate).slice(0, 10) : '',
-    receiptNumber: payment.receiptNumber ?? '',
-    notes:         payment.notes ?? '',
+  const [form, setForm] = useState(() => {
+    const { method, ewalletType } = parsePaymentMethod(payment.paymentMethod)
+    return {
+      paidBy:        payment.paidBy ?? '',
+      amount:        payment.amount ?? '',
+      paymentMethod: method,
+      ewalletType,
+      receiptDate:   payment.receiptDate ? String(payment.receiptDate).slice(0, 10) : '',
+      receiptNumber: payment.receiptNumber ?? '',
+      notes:         payment.notes ?? '',
+    }
   })
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
@@ -449,7 +453,7 @@ function UpdatePaymentModal({ payment, items, parts = [], payments, srNumber, on
           srNumber,
           paidBy:        form.paidBy,
           amount:        Number(form.amount),
-          paymentMethod: form.paymentMethod,
+          paymentMethod: form.paymentMethod === 'ewallet' ? `ewallet:${form.ewalletType}` : form.paymentMethod,
           receiptDate:   form.receiptDate,
           receiptNumber: form.receiptNumber || null,
           notes:         form.notes || null,
@@ -506,17 +510,31 @@ function UpdatePaymentModal({ payment, items, parts = [], payments, srNumber, on
                 value={form.amount} onChange={handleChange} />
               {formError.amount && <span className="helper-text">{formError.amount}</span>}
             </div>
-            <div className="flex flex-col gap-1">
+            <div className={`flex flex-col gap-1${form.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
               <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
-              <select name="paymentMethod" required
-                className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
-                value={form.paymentMethod} onChange={handleChange}>
-                <option value="cash">Cash</option>
-                <option value="check">Check</option>
-                <option value="gcash">GCash</option>
-                <option value="bank">Bank Transfer</option>
-              </select>
+              <div className="flex gap-2">
+                <select name="paymentMethod" required
+                  className={`select select-bordered${form.paymentMethod === 'ewallet' ? '' : ' w-full'}${formError.paymentMethod ? ' is-invalid' : ''}`}
+                  value={form.paymentMethod} onChange={handleChange}>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="ewallet">E-Wallet</option>
+                  <option value="bank">Bank Transfer</option>
+                </select>
+                {form.paymentMethod === 'ewallet' && (
+                  <select name="ewalletType" required
+                    className={`select select-bordered flex-1${formError.ewalletType ? ' is-invalid' : ''}`}
+                    value={form.ewalletType} onChange={handleChange}>
+                    <option value="">— Select —</option>
+                    <option value="GCash">GCash</option>
+                    <option value="Maya">Maya</option>
+                    <option value="ShopeePay">ShopeePay</option>
+                    <option value="GrabPay">GrabPay</option>
+                  </select>
+                )}
+              </div>
               {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+              {form.paymentMethod === 'ewallet' && formError.ewalletType && <span className="helper-text">{formError.ewalletType}</span>}
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>
@@ -703,10 +721,12 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
   }
 
   function openUpdatePayment(p) {
+    const { method, ewalletType } = parsePaymentMethod(p.paymentMethod)
     setUpdatePaymentForm({
       paidBy:        p.paidBy ?? '',
       amount:        p.amount ?? '',
-      paymentMethod: p.paymentMethod ?? 'cash',
+      paymentMethod: method,
+      ewalletType,
       receiptDate:   p.receiptDate ? String(p.receiptDate).slice(0, 10) : '',
       receiptNumber: p.receiptNumber ?? '',
       notes:         p.notes ?? '',
@@ -747,7 +767,7 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
           srNumber:      report.srNumber,
           paidBy:        updatePaymentForm.paidBy,
           amount:        Number(updatePaymentForm.amount),
-          paymentMethod: updatePaymentForm.paymentMethod,
+          paymentMethod: updatePaymentForm.paymentMethod === 'ewallet' ? `ewallet:${updatePaymentForm.ewalletType}` : updatePaymentForm.paymentMethod,
           receiptDate:   updatePaymentForm.receiptDate,
           receiptNumber: updatePaymentForm.receiptNumber || null,
           notes:         updatePaymentForm.notes || null,
@@ -1062,17 +1082,31 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
                       )
                     })()}
 
-                    <div className="flex flex-col gap-1">
+                    <div className={`flex flex-col gap-1${updatePaymentForm.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
                       <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
-                      <select name="paymentMethod" required
-                        className={`select select-bordered w-full${updatePaymentFormError.paymentMethod ? ' is-invalid' : ''}`}
-                        value={updatePaymentForm.paymentMethod} onChange={handleUpdatePaymentChange}>
-                        <option value="cash">Cash</option>
-                        <option value="check">Check</option>
-                        <option value="gcash">GCash</option>
-                        <option value="bank">Bank Transfer</option>
-                      </select>
+                      <div className="flex gap-2">
+                        <select name="paymentMethod" required
+                          className={`select select-bordered${updatePaymentForm.paymentMethod === 'ewallet' ? '' : ' w-full'}${updatePaymentFormError.paymentMethod ? ' is-invalid' : ''}`}
+                          value={updatePaymentForm.paymentMethod} onChange={handleUpdatePaymentChange}>
+                          <option value="cash">Cash</option>
+                          <option value="check">Check</option>
+                          <option value="ewallet">E-Wallet</option>
+                          <option value="bank">Bank Transfer</option>
+                        </select>
+                        {updatePaymentForm.paymentMethod === 'ewallet' && (
+                          <select name="ewalletType" required
+                            className={`select select-bordered flex-1${updatePaymentFormError.ewalletType ? ' is-invalid' : ''}`}
+                            value={updatePaymentForm.ewalletType} onChange={handleUpdatePaymentChange}>
+                            <option value="">— Select —</option>
+                            <option value="GCash">GCash</option>
+                            <option value="Maya">Maya</option>
+                            <option value="ShopeePay">ShopeePay</option>
+                            <option value="GrabPay">GrabPay</option>
+                          </select>
+                        )}
+                      </div>
                       {updatePaymentFormError.paymentMethod && <span className="helper-text">{updatePaymentFormError.paymentMethod}</span>}
+                      {updatePaymentForm.paymentMethod === 'ewallet' && updatePaymentFormError.ewalletType && <span className="helper-text">{updatePaymentFormError.ewalletType}</span>}
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -1130,8 +1164,20 @@ export function ManageBillingModal({ report, apiFetch, onClose }) {
 /** Formats a payment method string for display */
 function formatPaymentMethod(m) {
   if (!m) return '—'
-  const map = { cash: 'Cash', check: 'Check', gcash: 'GCash', bank: 'Bank Transfer', unset: 'Unset' }
-  return map[m.toLowerCase()] ?? m
+  const lower = m.toLowerCase()
+  if (lower === 'gcash') return 'GCash' // backward compat
+  if (lower.startsWith('ewallet:')) return `E-Wallet (${m.slice(8)})`
+  const map = { cash: 'Cash', check: 'Check', ewallet: 'E-Wallet', bank: 'Bank Transfer', unset: 'Unset' }
+  return map[lower] ?? m
+}
+
+/** Parses a stored paymentMethod value into { method, ewalletType } for form state */
+function parsePaymentMethod(stored) {
+  if (!stored) return { method: 'cash', ewalletType: '' }
+  const lower = stored.toLowerCase()
+  if (lower === 'gcash') return { method: 'ewallet', ewalletType: 'GCash' }
+  if (lower.startsWith('ewallet:')) return { method: 'ewallet', ewalletType: stored.slice(8) }
+  return { method: stored, ewalletType: '' }
 }
 
 // ---------------------------------------------------------------------------
@@ -1453,7 +1499,7 @@ function BillingModal({ report, apiFetch, onClose }) {
   )
 }
 
-const EMPTY_PAYMENT_FORM = { paidBy: '', amount: '', paymentMethod: 'cash', receiptDate: '', receiptNumber: '', notes: '' }
+const EMPTY_PAYMENT_FORM = { paidBy: '', amount: '', paymentMethod: 'cash', ewalletType: '', receiptDate: '', receiptNumber: '', notes: '' }
 
 /** Modal for recording a new payment against an SR */
 function AddPaymentModal({ report, onSuccess }) {
@@ -1487,7 +1533,7 @@ function AddPaymentModal({ report, onSuccess }) {
           srNumber:      report.srNumber,
           paidBy:        form.paidBy,
           amount:        Number(form.amount),
-          paymentMethod: form.paymentMethod,
+          paymentMethod: form.paymentMethod === 'ewallet' ? `ewallet:${form.ewalletType}` : form.paymentMethod,
           receiptDate:   form.receiptDate,
           receiptNumber: form.receiptNumber || null,
           notes:         form.notes || null,
@@ -1552,17 +1598,31 @@ function AddPaymentModal({ report, onSuccess }) {
               {formError.amount && <span className="helper-text">{formError.amount}</span>}
             </div>
 
-            <div className="flex flex-col gap-1">
+            <div className={`flex flex-col gap-1${form.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
               <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
-              <select name="paymentMethod" required
-                className={`select select-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
-                value={form.paymentMethod} onChange={handleChange}>
-                <option value="cash">Cash</option>
-                <option value="check">Check</option>
-                <option value="gcash">GCash</option>
-                <option value="bank">Bank Transfer</option>
-              </select>
+              <div className="flex gap-2">
+                <select name="paymentMethod" required
+                  className={`select select-bordered${form.paymentMethod === 'ewallet' ? '' : ' w-full'}${formError.paymentMethod ? ' is-invalid' : ''}`}
+                  value={form.paymentMethod} onChange={handleChange}>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="ewallet">E-Wallet</option>
+                  <option value="bank">Bank Transfer</option>
+                </select>
+                {form.paymentMethod === 'ewallet' && (
+                  <select name="ewalletType" required
+                    className={`select select-bordered flex-1${formError.ewalletType ? ' is-invalid' : ''}`}
+                    value={form.ewalletType} onChange={handleChange}>
+                    <option value="">— Select —</option>
+                    <option value="GCash">GCash</option>
+                    <option value="Maya">Maya</option>
+                    <option value="ShopeePay">ShopeePay</option>
+                    <option value="GrabPay">GrabPay</option>
+                  </select>
+                )}
+              </div>
               {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+              {form.paymentMethod === 'ewallet' && formError.ewalletType && <span className="helper-text">{formError.ewalletType}</span>}
             </div>
 
             <div className="flex flex-col gap-1">
@@ -1715,7 +1775,7 @@ export function ManageBillingViewModal({ report, withPaymentForm, onSuccess }) {
           srNumber:      report.srNumber,
           paidBy:        payForm.paidBy,
           amount:        Number(payForm.amount),
-          paymentMethod: payForm.paymentMethod,
+          paymentMethod: payForm.paymentMethod === 'ewallet' ? `ewallet:${payForm.ewalletType}` : payForm.paymentMethod,
           receiptDate:   payForm.receiptDate,
           receiptNumber: payForm.receiptNumber || null,
           notes:         payForm.notes || null,
@@ -1944,17 +2004,31 @@ export function ManageBillingViewModal({ report, withPaymentForm, onSuccess }) {
                     value={payForm.amount} onChange={handlePayChange} />
                   {payFormError.amount && <span className="helper-text">{payFormError.amount}</span>}
                 </div>
-                <div className="flex flex-col gap-1">
+                <div className={`flex flex-col gap-1${payForm.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
                   <label className="label-text font-medium">Payment Method <span className="text-error">*</span></label>
-                  <select name="paymentMethod" required
-                    className={`select select-bordered w-full${payFormError.paymentMethod ? ' is-invalid' : ''}`}
-                    value={payForm.paymentMethod} onChange={handlePayChange}>
-                    <option value="cash">Cash</option>
-                    <option value="check">Check</option>
-                    <option value="gcash">GCash</option>
-                    <option value="bank">Bank Transfer</option>
-                  </select>
+                  <div className="flex gap-2">
+                    <select name="paymentMethod" required
+                      className={`select select-bordered${payForm.paymentMethod === 'ewallet' ? '' : ' w-full'}${payFormError.paymentMethod ? ' is-invalid' : ''}`}
+                      value={payForm.paymentMethod} onChange={handlePayChange}>
+                      <option value="cash">Cash</option>
+                      <option value="check">Check</option>
+                      <option value="ewallet">E-Wallet</option>
+                      <option value="bank">Bank Transfer</option>
+                    </select>
+                    {payForm.paymentMethod === 'ewallet' && (
+                      <select name="ewalletType" required
+                        className={`select select-bordered flex-1${payFormError.ewalletType ? ' is-invalid' : ''}`}
+                        value={payForm.ewalletType} onChange={handlePayChange}>
+                        <option value="">— Select —</option>
+                        <option value="GCash">GCash</option>
+                        <option value="Maya">Maya</option>
+                        <option value="ShopeePay">ShopeePay</option>
+                        <option value="GrabPay">GrabPay</option>
+                      </select>
+                    )}
+                  </div>
                   {payFormError.paymentMethod && <span className="helper-text">{payFormError.paymentMethod}</span>}
+                  {payForm.paymentMethod === 'ewallet' && payFormError.ewalletType && <span className="helper-text">{payFormError.ewalletType}</span>}
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="label-text font-medium">Receipt Date <span className="text-error">*</span></label>

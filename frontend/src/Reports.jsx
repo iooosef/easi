@@ -106,6 +106,15 @@ function toSentenceCase(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
 }
 
+function formatPaymentMethod(m) {
+  if (!m) return '—'
+  const lower = m.toLowerCase()
+  if (lower === 'gcash') return 'GCash'
+  if (lower.startsWith('ewallet:')) return `E-Wallet (${m.slice(8)})`
+  const map = { cash: 'Cash', check: 'Check', ewallet: 'E-Wallet', bank: 'Bank Transfer' }
+  return map[lower] ?? toSentenceCase(m)
+}
+
 function computeStatus(billedTotal, paidTotal) {
   if (billedTotal <= 0) return 'UNPAID'
   if (paidTotal >= billedTotal) return 'PAID'
@@ -685,7 +694,7 @@ function buildSrPdfHtml(d, billedTotal, paidTotal, balance, computedStatus, poGr
   ).join('')
 
   const paymentRows = d.payments.map(p =>
-    `<tr><td>${p.logId}</td><td>${p.paidBy ?? '—'}</td><td>${toSentenceCase(p.paymentMethod)}</td>
+    `<tr><td>${p.logId}</td><td>${p.paidBy ?? '—'}</td><td>${formatPaymentMethod(p.paymentMethod)}</td>
      <td>${p.receiptNumber ?? '—'}</td><td>${fmtDateLong(p.receiptDate)}</td>
      <td class="text-right">${fmtCurrency(p.amount)}</td></tr>`
   ).join('')
@@ -1890,7 +1899,7 @@ export default function Reports() {
             : <ReportTable head={['Payment #', 'Paid By', 'Method', 'Receipt #', 'Receipt Date', 'Amount']}>
                 {srData.payments.map(p => (
                   <tr key={p.logId} className="even:bg-gray-50">
-                    <Td>{p.logId}</Td><Td>{p.paidBy}</Td><Td>{toSentenceCase(p.paymentMethod)}</Td>
+                    <Td>{p.logId}</Td><Td>{p.paidBy}</Td><Td>{formatPaymentMethod(p.paymentMethod)}</Td>
                     <Td>{p.receiptNumber}</Td><Td>{fmtDateLong(p.receiptDate)}</Td><Td right>{fmtCurrency(p.amount)}</Td>
                   </tr>
                 ))}
