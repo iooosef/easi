@@ -545,12 +545,18 @@ function ManagePartModal({ part, onRefresh }) {
   const { pushModal, popModal } = useModal()
   const { hasRole, apiFetch } = useAuth()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+  const [partData, setPartData] = useState(part)
   const [usageHistory, setUsageHistory] = useState([])
   const [usageLoading, setUsageLoading] = useState(false)
-  const [usageRefreshKey, setUsageRefreshKey] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
 
+  // Re-fetch both part and usage history when refreshKey changes
   useEffect(() => {
     let active = true
+    apiFetch(`/api/parts/${part.partId}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setPartData(data) })
+      .catch(() => {})
     setUsageLoading(true)
     apiFetch(`/api/part-usages?partId=${part.partId}&size=50&sort=usedOn,desc`)
       .then(res => res.ok ? res.json() : Promise.reject())
@@ -558,29 +564,34 @@ function ManagePartModal({ part, onRefresh }) {
       .catch(() => { if (active) setUsageHistory([]) })
       .finally(() => { if (active) setUsageLoading(false) })
     return () => { active = false }
-  }, [apiFetch, part.partId, usageRefreshKey])
+  }, [apiFetch, part.partId, refreshKey])
+
+  function handleRefresh() {
+    setRefreshKey(k => k + 1)
+    onRefresh?.()
+  }
 
   // Log Usage is only available when there is stock; filter it out when qty is 0.
-  const navItems = part.availableQty === 0
+  const navItems = partData.availableQty === 0
     ? PART_MENU_ITEMS.filter(item => item.key !== 'log-usage')
     : PART_MENU_ITEMS
 
   function handleAction(key) {
-    if (key === 'update') pushModal(<UpdatePartModal part={part} onRefresh={onRefresh} />)
-    // Log Usage sits on top; closing it reveals this modal with refreshed history.
-    if (key === 'log-usage') pushModal(<LogUsageModal part={part} onSuccess={() => { setUsageRefreshKey(k => k + 1); onRefresh?.() }} />)
+    if (key === 'update') pushModal(<UpdatePartModal part={partData} onRefresh={handleRefresh} />)
+    // Log Usage sits on top; closing it reveals this modal with refreshed data.
+    if (key === 'log-usage') pushModal(<LogUsageModal part={partData} onSuccess={handleRefresh} />)
   }
 
   function handleEditUsage(u) {
-    pushModal(<EditUsageModal usage={u} onSuccess={() => { setUsageRefreshKey(k => k + 1); onRefresh?.() }} />)
+    pushModal(<EditUsageModal usage={u} onSuccess={handleRefresh} />)
   }
 
   return (
     <div className="modal-content w-full max-w-2xl my-auto">
       <div className="modal-header">
         <div>
-          <h3 className="modal-title">Part #{part.partId}</h3>
-          <span className="text-sm text-base-content/50 line-clamp-1">{part.name}</span>
+          <h3 className="modal-title">Part #{partData.partId}</h3>
+          <span className="text-sm text-base-content/50 line-clamp-1">{partData.name}</span>
         </div>
         <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
           <span className="icon-[tabler--x] size-4"></span>
@@ -590,19 +601,19 @@ function ManagePartModal({ part, onRefresh }) {
 
         {/* Details grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <DetailItem label="Part ID"     value={part.partId} />
-          <DetailItem label="Status"      value={<span className={`badge badge-soft ${partStatusBadge(part.status)} text-xs`}>{part.status}</span>} />
-          <DetailItem label="PO Number"   value={part.poNum} />
-          <DetailItem label="Qty Ordered" value={`${part.quantityOrdered} ${part.quantityType}`} />
-          <DetailItem label="Available"   value={<span className={part.availableQty === 0 ? 'text-error font-semibold' : ''}>{part.availableQty} {part.quantityType}</span>} />
-          <DetailItem label="Unit Price"  value={formatCurrency(part.unitPrice)} />
-          <DetailItem label="Subtotal"    value={<span className="text-primary font-semibold">{formatCurrency(Number(part.quantityOrdered) * Number(part.unitPrice ?? 0))}</span>} />
-          <DetailItem label="Supplier"    value={`(${part.supplierId}) ${part.supplierName ?? '—'}`} />
-          <DetailItem label="Order Date"  value={formatDate(part.orderDate)} />
-          <DetailItem label="Added On"    value={formatDate(part.addedOn)} />
+          <DetailItem label="Part ID"     value={partData.partId} />
+          <DetailItem label="Status"      value={<span className={`badge badge-soft ${partStatusBadge(partData.status)} text-xs`}>{partData.status}</span>} />
+          <DetailItem label="PO Number"   value={partData.poNum} />
+          <DetailItem label="Qty Ordered" value={`${partData.quantityOrdered} ${partData.quantityType}`} />
+          <DetailItem label="Available"   value={<span className={partData.availableQty === 0 ? 'text-error font-semibold' : ''}>{partData.availableQty} {partData.quantityType}</span>} />
+          <DetailItem label="Unit Price"  value={formatCurrency(partData.unitPrice)} />
+          <DetailItem label="Subtotal"    value={<span className="text-primary font-semibold">{formatCurrency(Number(partData.quantityOrdered) * Number(partData.unitPrice ?? 0))}</span>} />
+          <DetailItem label="Supplier"    value={`(${partData.supplierId}) ${partData.supplierName ?? '—'}`} />
+          <DetailItem label="Order Date"  value={formatDate(partData.orderDate)} />
+          <DetailItem label="Added On"    value={formatDate(partData.addedOn)} />
           <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
             <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
-            <span className="text-sm font-medium">{part.name}</span>
+            <span className="text-sm font-medium">{partData.name}</span>
           </div>
         </div>
 
@@ -657,7 +668,7 @@ function ManagePartModal({ part, onRefresh }) {
         </div>
 
         {/* Action menu */}
-        {part.availableQty === 0 && canEdit && (
+        {partData.availableQty === 0 && canEdit && (
           <p className="text-xs text-warning">Log Usage is unavailable — no stock remaining.</p>
         )}
         <ModalNav items={navItems} hasRole={hasRole} onSelect={handleAction} cols={2} />
