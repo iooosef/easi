@@ -16,7 +16,8 @@ const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
 
 const SR_MENU_ITEMS = [
-  { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF'] },
+  { key: 'update',    label: 'Update Details',    icon: 'icon-[tabler--pencil]',          roles: ['ADMIN', 'STAFF'] },
+  { key: 'work-done', label: 'Record Work Done',  icon: 'icon-[tabler--clipboard-check]', roles: ['ADMIN', 'STAFF', 'CREW'] },
   { key: 'findings', label: 'Add & Manage Findings', icon: 'icon-[tabler--checklist]', roles: ['ADMIN', 'STAFF', 'CREW'] },
   { key: 'billing', label: 'Add & Manage Billing Items', icon: 'icon-[tabler--receipt]', roles: null },
   { key: 'purchase-order', label: 'Add & Manage Purchase Order', icon: 'icon-[tabler--file-invoice]', roles: null },
@@ -113,7 +114,8 @@ export function ManageSRModal({ report: initialReport, onRefresh, onNavigate }) 
   ]
 
   function handleAction(key) {
-    if (key === 'update') pushModal(<UpdateSRModal report={report} onSuccess={refreshReport} />)
+    if (key === 'update')    pushModal(<UpdateSRModal report={report} onSuccess={refreshReport} />)
+    if (key === 'work-done') pushModal(<RecordWorkDoneModal report={report} onSuccess={refreshReport} />)
     if (key === 'findings') pushModal(<FindingsModal report={report} onRefresh={onRefresh} />)
     if (key === 'billing') pushModal(<BillingManageModal report={report} onSuccess={refreshReport} />)
     if (key === 'purchase-order') { clearModals(); onNavigate(`/inventory/purchase-orders?srNum=${report.srNumber}`) }
@@ -179,6 +181,95 @@ export function ManageSRModal({ report: initialReport, onRefresh, onNavigate }) 
         {hasBilling === null && (
           <p className="text-xs text-base-content/40 text-center">Checking for billing...</p>
         )}
+      </div>
+    </div>
+  )
+}
+
+/** Layer 2 — edit only the Work Done field of a service report. */
+function RecordWorkDoneModal({ report, onSuccess }) {
+  const { apiFetch } = useAuth()
+  const { popModal } = useModal()
+  const [workDone, setWorkDone] = useState(report.workDone ?? '')
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  /** Submits only workDone, preserving all other SR fields. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/service-reports/${report.srNumber}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          complaint:          report.complaint,
+          workDone:           workDone,
+          engineerEmployeeId: report.engineerEmployeeId ?? null,
+          location:           report.location ?? null,
+          schedId:            report.schedId ?? null,
+          docuId:             report.docuId ?? null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      popModal()
+      setTimeout(() => notyfSuccess(`Work done recorded for SR #${report.srNumber}.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Record Work Done — SR #{report.srNumber}</h3>
+          <span className="text-sm text-base-content/50">{report.projectName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="record-work-done-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Work Done <span className="text-error">*</span></label>
+              <textarea
+                rows={6} maxLength={900} required
+                className={`textarea textarea-bordered w-full${formError.workDone ? ' is-invalid' : ''}`}
+                placeholder="Describe the work performed..."
+                value={workDone}
+                onChange={e => setWorkDone(e.target.value)}
+              />
+              {formError.workDone && <span className="helper-text">{formError.workDone}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="record-work-done-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--clipboard-check] size-4"></span>
+          }
+          Save
+        </button>
       </div>
     </div>
   )

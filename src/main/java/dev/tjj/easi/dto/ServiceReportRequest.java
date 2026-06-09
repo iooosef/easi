@@ -10,7 +10,6 @@ public record ServiceReportRequest(
         @Size(max = 900, message = "Complaint must not exceed 900 characters")
         String complaint,
 
-        @NotBlank(message = "Work done is required")
         @Size(max = 900, message = "Work done must not exceed 900 characters")
         String workDone,
 
