@@ -17,7 +17,6 @@ import dev.tjj.easi.entity.VehicleLog;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
 import dev.tjj.easi.entity.Role;
-import dev.tjj.easi.entity.ScheduleVehicle;
 import dev.tjj.easi.entity.ServiceAssignment;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.entity.ServiceReportFinding;
@@ -47,7 +46,6 @@ import dev.tjj.easi.repository.SupplierRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.ProjectRepository;
-import dev.tjj.easi.repository.ScheduleVehicleRepository;
 import dev.tjj.easi.repository.ServiceAssignmentRepository;
 import dev.tjj.easi.repository.ServiceReportFindingRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
@@ -88,8 +86,6 @@ public class DataInitializer implements CommandLineRunner {
     private final PaymentLogRepository paymentLogRepository;
     private final EquipmentRepository equipmentRepository;
     private final EquipmentUsageRepository equipmentUsageRepository;
-    private final ScheduleVehicleRepository scheduleVehicleRepository;
-
     /** Creates the default admin employee and user if they do not yet exist. */
     @Override
     public void run(String... args) {
@@ -101,7 +97,6 @@ public class DataInitializer implements CommandLineRunner {
             seedProjectData();
             seedServiceAssignments();
             seedVehicles();
-            seedScheduleVehicles();
             seedSuppliers();
             seedPurchaseOrders();
             seedBillingItems();
@@ -676,65 +671,6 @@ public class DataInitializer implements CommandLineRunner {
         vehicleGasLog(vt5, new BigDecimal("3500.00"), "INV-2026-TRK-031");
 
         log.info("Vehicle seed completed: 2 vehicles, 12 vehicle logs, 6 gas logs.");
-    }
-
-    /**
-     * Seeds one vehicle assignment per schedule: van for Project 1 & 2 schedules,
-     * truck for Project 3 schedules. Skips if any assignments already exist.
-     */
-    private void seedScheduleVehicles() {
-        if (scheduleVehicleRepository.count() > 0) {
-            log.info("Schedule vehicle data already exists, skipping.");
-            return;
-        }
-
-        java.util.List<Vehicle> vehicles = vehicleRepository.findAll(
-                org.springframework.data.domain.PageRequest.of(0, 2,
-                        org.springframework.data.domain.Sort.by("vehiclesId").ascending()))
-                .getContent();
-        if (vehicles.size() < 2) {
-            log.warn("Not enough vehicles to seed schedule vehicle assignments, skipping.");
-            return;
-        }
-
-        java.util.List<ServiceSchedule> schedules = serviceScheduleRepository.findAll(
-                org.springframework.data.domain.Sort.by("schedId").ascending());
-        if (schedules.isEmpty()) {
-            log.warn("No schedules found for schedule vehicle seed, skipping.");
-            return;
-        }
-
-        var projects = projectRepository.findAll(
-                org.springframework.data.domain.PageRequest.of(0, 3,
-                        org.springframework.data.domain.Sort.by("projNum").ascending()))
-                .getContent();
-        if (projects.size() < 3) {
-            log.warn("Not enough projects for schedule vehicle seed, skipping.");
-            return;
-        }
-
-        Vehicle van   = vehicles.get(0);
-        Vehicle truck = vehicles.get(1);
-        Integer p3Id  = projects.get(2).getProjNum();
-
-        int count = 0;
-        for (ServiceSchedule schedule : schedules) {
-            // Truck for project 3, van for the rest
-            Vehicle chosen = schedule.getProject().getProjNum().equals(p3Id) ? truck : van;
-            scheduleVehicle(chosen, schedule);
-            count++;
-        }
-
-        log.info("Schedule vehicle seed completed: {} assignments created.", count);
-    }
-
-    /** Creates and saves a ScheduleVehicle linking a vehicle to a schedule. */
-    private void scheduleVehicle(Vehicle vehicle, ServiceSchedule schedule) {
-        ScheduleVehicle sv = new ScheduleVehicle();
-        sv.setVehicle(vehicle);
-        sv.setServiceSchedule(schedule);
-        sv.setAddedOn(schedule.getAddedOn());
-        scheduleVehicleRepository.save(sv);
     }
 
     /** Creates and saves a Vehicle. */

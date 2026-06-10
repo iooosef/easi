@@ -187,6 +187,16 @@ const CONTACTS = [
     role: 'Full-Stack Developer',
     email: 'josence22+easi@gmail.com',
   },
+  {
+    name: 'John Michael Dublin Palaganas',
+    role: 'Developer',
+    email: 'Jmdublinpalaganas@gmail.com',
+  },
+  {
+    name: 'Tristian James Moreno Cabalar',
+    role: 'Developer',
+    email: 'tristianjamesm.c.01@gmail.com',
+  },
 ]
 
 // ---------------------------------------------------------------------------
