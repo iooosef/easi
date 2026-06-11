@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
 import { notyfSuccess, notyfError } from './notyf'
 
@@ -20,8 +21,198 @@ function formatDate(dt) {
 const PAGE_SIZE = 10
 const EMPTY_SUPPLIER_FORM = { name: '', address: '' }
 
+/** Modal component for updating an existing supplier. */
+function UpdateSupplierModal({ supplier, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ name: supplier.name, address: supplier.address })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/suppliers/${supplier.supplierId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      notyfSuccess(`Supplier #${supplier.supplierId} updated successfully.`)
+      popModal()
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Update Supplier #{supplier.supplierId}</h3>
+          <span className="text-sm text-base-content/50">{supplier.name}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="supplier-update-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" name="name"
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+                maxLength={120} required
+                value={form.name} onChange={handleChange} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+              <textarea name="address"
+                className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
+                maxLength={600} rows={3} required
+                value={form.address} onChange={handleChange} />
+              {formError.address && <span className="helper-text">{formError.address}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>
+          Cancel
+        </button>
+        <button type="submit" form="supplier-update-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal component for adding a new supplier. */
+function AddSupplierModal({ onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState(EMPTY_SUPPLIER_FORM)
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/suppliers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add supplier failed')
+        return
+      }
+      notyfSuccess('Supplier added successfully.')
+      popModal()
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Supplier</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="supplier-add-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" name="name"
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+                placeholder="e.g. ABC Industrial Supply" maxLength={120} required
+                value={form.name} onChange={handleChange} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+              <textarea name="address"
+                className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
+                placeholder="Full address" maxLength={600} rows={3} required
+                value={form.address} onChange={handleChange} />
+              {formError.address && <span className="helper-text">{formError.address}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>
+          Cancel
+        </button>
+        <button type="submit" form="supplier-add-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Supplier
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function InventorySuppliers() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
   const [searchParams] = useSearchParams()
 
@@ -33,25 +224,14 @@ export default function InventorySuppliers() {
   const [totalElements, setTotalElements] = useState(0)
   const [refreshKey, setRefreshKey]     = useState(0)
 
-  // Add Supplier inline panel
-  const [addOpen, setAddOpen]                   = useState(false)
-  const [supplierForm, setSupplierForm]         = useState(EMPTY_SUPPLIER_FORM)
-  const [supplierFormError, setSupplierFormError] = useState({})
-  const [supplierFormSubmitting, setSupplierFormSubmitting] = useState(false)
-
-  // Update Supplier sub-modal
-  const [updateOpen, setUpdateOpen]                   = useState(false)
-  const [updatingSupplier, setUpdatingSupplier]       = useState(null)
-  const [updateForm, setUpdateForm]                   = useState({})
-  const [updateFormError, setUpdateFormError]         = useState({})
-  const [updateSubmitting, setUpdateSubmitting]       = useState(false)
+  function openAddSupplier() {
+    pushModal(<AddSupplierModal onSuccess={() => { setPage(0); setRefreshKey(k => k + 1) }} />)
+  }
 
   // Auto-open Add Supplier modal when ?addSupplier=1 is in the URL
   useEffect(() => {
     if (canEdit && searchParams.get('addSupplier') === '1') {
-      setSupplierForm(EMPTY_SUPPLIER_FORM)
-      setSupplierFormError({})
-      setAddOpen(true)
+      openAddSupplier()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -81,81 +261,8 @@ export default function InventorySuppliers() {
     return () => { active = false }
   }, [apiFetch, page, refreshKey])
 
-  function handleSupplierFormChange(e) {
-    const { name, value } = e.target
-    setSupplierForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  async function handleAddSubmit(e) {
-    e.preventDefault()
-    setSupplierFormError({})
-    setSupplierFormSubmitting(true)
-    try {
-      const res = await apiFetch('/api/suppliers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(supplierForm),
-      })
-      if (!res.ok) {
-        setSupplierFormError(await parseApiError(res))
-        notyfError('Add supplier failed')
-        return
-      }
-      setAddOpen(false)
-      setSupplierForm(EMPTY_SUPPLIER_FORM)
-      setSupplierFormError({})
-      notyfSuccess('Supplier added successfully.')
-      setPage(0)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setSupplierFormError({ _general: err.message })
-    } finally {
-      setSupplierFormSubmitting(false)
-    }
-  }
-
   function openUpdate(s) {
-    setUpdateForm({ name: s.name, address: s.address })
-    setUpdatingSupplier(s)
-    setUpdateFormError({})
-    setUpdateOpen(true)
-  }
-
-  function closeUpdate() {
-    setUpdateOpen(false)
-    setUpdatingSupplier(null)
-    setUpdateForm({})
-    setUpdateFormError({})
-  }
-
-  function handleUpdateFormChange(e) {
-    const { name, value } = e.target
-    setUpdateForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  async function handleUpdateSubmit(e) {
-    e.preventDefault()
-    setUpdateFormError({})
-    setUpdateSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/suppliers/${updatingSupplier.supplierId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateForm),
-      })
-      if (!res.ok) {
-        setUpdateFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeUpdate()
-      notyfSuccess(`Supplier #${updatingSupplier.supplierId} updated successfully.`)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setUpdateFormError({ _general: err.message })
-    } finally {
-      setUpdateSubmitting(false)
-    }
+    pushModal(<UpdateSupplierModal supplier={s} onSuccess={() => setRefreshKey(k => k + 1)} />)
   }
 
   return (
@@ -170,76 +277,13 @@ export default function InventorySuppliers() {
           <button
             type="button"
             className="btn btn-primary h-full min-h-0"
-            onClick={() => { setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}); setAddOpen(true) }}
+            onClick={openAddSupplier}
           >
             <span className="icon-[tabler--plus] size-4"></span>
             Add Supplier
           </button>
         )}
       </div>
-
-      {/* Add Supplier Modal */}
-      {addOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-40"
-            onClick={() => { setAddOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-md shadow-xl">
-              <div className="modal-header">
-                <h3 className="modal-title">Add Supplier</h3>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-                  onClick={() => { setAddOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="supplier-add-form" onSubmit={handleAddSubmit}>
-                  <div className="flex flex-col gap-4">
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-                      <input type="text" name="name"
-                        className={`input input-bordered w-full${supplierFormError.name ? ' is-invalid' : ''}`}
-                        placeholder="e.g. ABC Industrial Supply" maxLength={120} required
-                        value={supplierForm.name} onChange={handleSupplierFormChange} />
-                      {supplierFormError.name && <span className="helper-text">{supplierFormError.name}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-                      <textarea name="address"
-                        className={`textarea textarea-bordered w-full${supplierFormError.address ? ' is-invalid' : ''}`}
-                        placeholder="Full address" maxLength={600} rows={3} required
-                        value={supplierForm.address} onChange={handleSupplierFormChange} />
-                      {supplierFormError.address && <span className="helper-text">{supplierFormError.address}</span>}
-                    </div>
-
-                    {supplierFormError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{supplierFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary"
-                  onClick={() => { setAddOpen(false); setSupplierForm(EMPTY_SUPPLIER_FORM); setSupplierFormError({}) }}>
-                  Cancel
-                </button>
-                <button type="submit" form="supplier-add-form" className="btn btn-primary" disabled={supplierFormSubmitting}>
-                  {supplierFormSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--plus] size-4"></span>
-                  }
-                  Add Supplier
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* Loading */}
       {loading && (
@@ -287,8 +331,8 @@ export default function InventorySuppliers() {
                       <td className="font-medium max-w-48">
                         <span className="line-clamp-1" title={s.name}>{s.name}</span>
                       </td>
-                      <td className="max-w-64 text-base-content/70">
-                        <span className="line-clamp-1" title={s.address}>{s.address}</span>
+                      <td className="max-w-64 text-base-content/70 whitespace-pre-wrap break-words">
+                        {s.address}
                       </td>
                       <td className="text-sm">{formatDate(s.addedOn)}</td>
                       {canEdit && (
@@ -325,68 +369,6 @@ export default function InventorySuppliers() {
         </>
       )}
 
-      {/* Update Supplier Sub-modal */}
-      {updateOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[45]" onClick={closeUpdate} />
-          <div className="fixed inset-0 z-[50] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-md shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Update Supplier #{updatingSupplier?.supplierId}</h3>
-                  <span className="text-sm text-base-content/50">{updatingSupplier?.name}</span>
-                </div>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdate}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="supplier-update-form" onSubmit={handleUpdateSubmit}>
-                  <div className="flex flex-col gap-4">
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-                      <input type="text" name="name"
-                        className={`input input-bordered w-full${updateFormError.name ? ' is-invalid' : ''}`}
-                        maxLength={120} required
-                        value={updateForm.name} onChange={handleUpdateFormChange} />
-                      {updateFormError.name && <span className="helper-text">{updateFormError.name}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-                      <textarea name="address"
-                        className={`textarea textarea-bordered w-full${updateFormError.address ? ' is-invalid' : ''}`}
-                        maxLength={600} rows={3} required
-                        value={updateForm.address} onChange={handleUpdateFormChange} />
-                      {updateFormError.address && <span className="helper-text">{updateFormError.address}</span>}
-                    </div>
-
-                    {updateFormError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{updateFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdate}>
-                  Cancel
-                </button>
-                <button type="submit" form="supplier-update-form" className="btn btn-primary" disabled={updateSubmitting}>
-                  {updateSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--device-floppy] size-4"></span>
-                  }
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </Layout>
   )
 }

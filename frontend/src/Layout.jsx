@@ -1,4 +1,4 @@
-import { useEffect, Fragment } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
 import { useAuth } from './auth'
 import logoImg from './assets/logo.png'
@@ -6,8 +6,8 @@ import logoImg from './assets/logo.png'
 export const NAV_ITEMS = [
   { page: 'home',            label: 'Home',             icon: 'icon-[tabler--home]',        path: '/',                 roles: null },
   { page: 'projects',        label: 'Projects',         icon: 'icon-[tabler--folder]',       path: '/projects',         roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
-  { page: 'service-report',  label: 'Service Report',   icon: 'icon-[tabler--file-report]',  path: '/service-report',   roles: ['ADMIN','STAFF','ACCOUNTING','CREW'] },
   { page: 'schedules',       label: 'Schedules',        icon: 'icon-[tabler--calendar]',     path: '/schedules',        roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
+  { page: 'service-report',  label: 'Service Report',   icon: 'icon-[tabler--file-report]',  path: '/service-report',   roles: ['ADMIN','STAFF','ACCOUNTING','CREW'] },
   {
     page: 'inventory',
     label: 'Inventory',
@@ -27,7 +27,6 @@ export const NAV_ITEMS = [
   { page: 'reports',         label: 'Reports',          icon: 'icon-[tabler--chart-bar]',    path: '/reports',          roles: ['ADMIN','STAFF','ACCOUNTING'] },
   { page: 'maintenance',     label: 'Maintenance',      icon: 'icon-[tabler--tool]',         path: '/maintenance',      roles: ['ADMIN'] },
   { page: 'help',            label: 'Help',             icon: 'icon-[tabler--help-circle]',  path: '/help',             roles: ['ADMIN','STAFF','ACCOUNTING','HR','CREW'] },
-  { page: 'account-settings',label: 'Account Settings', icon: 'icon-[tabler--settings]',    path: '/account-settings', roles: null },
 ]
 
 /**
@@ -35,6 +34,26 @@ export const NAV_ITEMS = [
  * @param {string} activePage - Page key matching one of the NAV_ITEMS entries.
  * @param {React.ReactNode} children - Content rendered inside the main area.
  */
+/** Ticking clock — updates every second using system time */
+function Clock() {
+  const [now, setNow] = useState(() => new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const date = now.toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+  const time = now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="text-base-content/50">{date}</span>
+      <span className="font-mono font-medium text-base-content">{time}</span>
+    </div>
+  )
+}
+
 export default function Layout({ activePage, children }) {
   const { fullName, hasRole, handleLogout } = useAuth()
   const { pathname } = useLocation()
@@ -57,7 +76,9 @@ export default function Layout({ activePage, children }) {
             <img src={logoImg} alt="EASI Logo" className="h-10" />
           </a>
         </div>
-        <div className="navbar-end flex items-center pe-2">
+        <div className="navbar-end flex items-center gap-4 pe-2">
+          <Clock />
+          <div className="w-px h-5 bg-base-content/25"></div>
           <span className="text-sm font-medium text-base-content">{fullName}</span>
         </div>
       </nav>
@@ -105,26 +126,6 @@ export default function Layout({ activePage, children }) {
                   )
                 }
 
-                // Account Settings gets Sign Out appended after it
-                if (page === 'account-settings') {
-                  return (
-                    <Fragment key={page}>
-                      <li>
-                        <Link to={path} className={currentPage === page ? 'menu-active' : ''}>
-                          <span className={`${icon} size-5`}></span>
-                          {label}
-                        </Link>
-                      </li>
-                      <li>
-                        <button className="w-full" onClick={handleLogout}>
-                          <span className="icon-[tabler--logout-2] size-5"></span>
-                          Sign Out
-                        </button>
-                      </li>
-                    </Fragment>
-                  )
-                }
-
                 // Regular nav item
                 return (
                   <li key={page}>
@@ -135,6 +136,12 @@ export default function Layout({ activePage, children }) {
                   </li>
                 )
               })}
+              <li>
+                <button className="w-full" onClick={handleLogout}>
+                  <span className="icon-[tabler--logout-2] size-5"></span>
+                  Sign Out
+                </button>
+              </li>
             </ul>
           </div>
         </aside>

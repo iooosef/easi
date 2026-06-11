@@ -18,10 +18,17 @@ import { useAuth } from './auth'
  *   searchPlaceholder - optional input placeholder (default: 'Search...')
  *   emptyText         - optional empty-state message (default: 'No items found.')
  */
+/**
+ * When asLayer is true the component renders as a bare modal-content box
+ * so the ModalProvider backdrop and z-index handling take over.
+ * Pass isOpen={true} when using asLayer — the component is always visible
+ * while it is mounted in the modal stack.
+ */
 export default function PickerModal({
   isOpen, onClose, onSelect,
   title, fetchUrl, searchFilter, renderCard,
   searchPlaceholder = 'Search...', emptyText = 'No items found.',
+  asLayer = false,
 }) {
   const { apiFetch } = useAuth()
   const [inputValue, setInputValue] = useState('')  // live text input
@@ -61,16 +68,10 @@ export default function PickerModal({
 
   const filtered = items.filter(item => searchFilter(item, search))
 
-  if (!isOpen) return null
+  if (!asLayer && !isOpen) return null
 
-  return (
-    <>
-      {/* Backdrop — above edit modal (z-50) */}
-      <div className="fixed inset-0 bg-base-300/70 z-[60]" onClick={onClose} />
-
-      {/* Picker modal */}
-      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-        <div className="modal-content w-full max-w-xl">
+  const box = (
+    <div className="modal-content w-full max-w-xl my-auto">
 
           <div className="modal-header">
             <h3 className="modal-title">{title}</h3>
@@ -145,6 +146,16 @@ export default function PickerModal({
             )}
           </div>
         </div>
+  )
+
+  if (asLayer) return box
+
+  return (
+    <>
+      {/* Backdrop — above edit modal (z-50) */}
+      <div className="fixed inset-0 bg-base-300/70 z-[60]" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+        {box}
       </div>
     </>
   )

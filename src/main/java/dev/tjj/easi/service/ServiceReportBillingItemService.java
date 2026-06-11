@@ -4,6 +4,8 @@ import dev.tjj.easi.dto.ServiceReportBillingItemRequest;
 import dev.tjj.easi.dto.ServiceReportBillingItemResponse;
 import dev.tjj.easi.entity.ServiceReport;
 import dev.tjj.easi.entity.ServiceReportBillingItem;
+import dev.tjj.easi.repository.PartUsageRepository;
+import dev.tjj.easi.repository.PaymentLogRepository;
 import dev.tjj.easi.repository.ServiceReportBillingItemRepository;
 import dev.tjj.easi.repository.ServiceReportRepository;
 import dev.tjj.easi.entity.LogSeverity;
@@ -15,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** Handles service report billing item business logic: creation, updates, and retrieval. */
@@ -23,13 +26,19 @@ public class ServiceReportBillingItemService {
 
     private final ServiceReportBillingItemRepository billingItemRepository;
     private final ServiceReportRepository serviceReportRepository;
+    private final PaymentLogRepository paymentLogRepository;
+    private final PartUsageRepository partUsageRepository;
     private final LogService logService;
 
     public ServiceReportBillingItemService(ServiceReportBillingItemRepository billingItemRepository,
                                            ServiceReportRepository serviceReportRepository,
+                                           PaymentLogRepository paymentLogRepository,
+                                           PartUsageRepository partUsageRepository,
                                            LogService logService) {
         this.billingItemRepository = billingItemRepository;
         this.serviceReportRepository = serviceReportRepository;
+        this.paymentLogRepository = paymentLogRepository;
+        this.partUsageRepository = partUsageRepository;
         this.logService = logService;
     }
 
@@ -44,13 +53,23 @@ public class ServiceReportBillingItemService {
         return toResponse(saved);
     }
 
-    /** Updates an existing service report billing item record by ID. */
+    /** Updates an existing service report billing item record by ID.
+     *  Rejects the update if the resulting grand total would fall below the amount already paid. */
     @Transactional
     public ServiceReportBillingItemResponse update(Integer srBillingNum, ServiceReportBillingItemRequest request) {
         ServiceReportBillingItem item = billingItemRepository.findById(srBillingNum)
                 .orElseThrow(() -> new IllegalArgumentException("Service report billing item not found."));
         applyRequest(item, request);
         ServiceReportBillingItem saved = billingItemRepository.save(item);
+        Integer srNumber = saved.getServiceReport().getSrNumber();
+        BigDecimal newGrandTotal = billingItemRepository.sumTotalBySrNumber(srNumber)
+                .add(partUsageRepository.sumTotalCostBySrNumber(srNumber));
+        BigDecimal paid = paymentLogRepository.sumPaidBySrNumber(srNumber);
+        if (paid.compareTo(newGrandTotal) > 0) {
+            throw new IllegalArgumentException(
+                    "Cannot reduce total below the amount already paid. Total paid: ₱"
+                    + paid.toPlainString() + ", new total would be: ₱" + newGrandTotal.toPlainString() + ".");
+        }
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "UPDATE", "ServiceReportBillingItem", String.valueOf(srBillingNum), "Updated billing item #" + srBillingNum, null);
         return toResponse(saved);
     }

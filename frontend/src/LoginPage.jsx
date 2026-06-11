@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
 import logoImg from './assets/logo.png'
 
 export default function LoginPage() {
   const { handleLogin } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -99,11 +98,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-sm">
-            <a className="link link-primary cursor-pointer" onClick={() => navigate('/forgot-password')}>
-              Forgot password?
-            </a>
-          </p>
         </div>
       </div>
     </div>

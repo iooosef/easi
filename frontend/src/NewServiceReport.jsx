@@ -26,6 +26,7 @@ const ACCEPTED_DOC_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
 const EMPTY_REPORT_FORM = {
   projNum: '',
   _projectDisplay: '',
+  _projectAddress: '',
   schedId: '',
   _scheduleDisplay: '',
   engineerEmployeeId: '',
@@ -46,6 +47,7 @@ const EMPTY_PO_FORM = {
   purpose: '',
   terms: '',
   paymentMethod: '',
+  ewalletType: '',
   paymentDetails: '',
   deliveryAddress: '',
   remarks: '',
@@ -82,7 +84,7 @@ function findingTypeBadgeClass(type) {
 
 /** Multi-step wizard for creating a new service report with optional findings and purchase orders */
 export default function NewServiceReport() {
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
   const navigate = useNavigate()
 
   const [step, setStep] = useState(1)
@@ -380,7 +382,7 @@ export default function NewServiceReport() {
           body: JSON.stringify({
             purpose: po.purpose,
             terms: po.terms,
-            paymentMethod: po.paymentMethod || null,
+            paymentMethod: po.paymentMethod === 'ewallet' ? `ewallet:${po.ewalletType}` : po.paymentMethod || null,
             paymentDetails: po.paymentDetails || null,
             deliveryAddress: po.deliveryAddress || null,
             remarks: po.remarks || null,
@@ -416,7 +418,7 @@ export default function NewServiceReport() {
             body: JSON.stringify({
               poNum: createdPo.poNum,
               name: part.name,
-              quantity: Number(part.quantity),
+              quantityOrdered: Number(part.quantity),
               quantityType: part.quantityType,
               unitPrice: Number(part.unitPrice),
               supplierId: Number(part.supplierId),
@@ -505,7 +507,7 @@ export default function NewServiceReport() {
                     error={reportFormError.projNum}
                     Picker={ProjectPickerModal}
                     onSelect={p => {
-                      setReportForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})`, schedId: '', _scheduleDisplay: '' }))
+                      setReportForm(prev => ({ ...prev, projNum: p.projNum, _projectDisplay: `${p.name} (#${p.projNum})`, _projectAddress: p.address ?? '', schedId: '', _scheduleDisplay: '' }))
                       setReportFormError(e => ({ ...e, projNum: undefined, schedId: undefined }))
                     }}
                     className="sm:col-span-2"
@@ -514,16 +516,18 @@ export default function NewServiceReport() {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
                       <label className="label-text font-medium">Location <span className="text-error">*</span></label>
-                      <button
-                        type="button"
-                        className="btn btn-xs btn-soft btn-secondary"
-                        onClick={() => {
-                          setReportForm(prev => ({ ...prev, location: 'same as project location' }))
-                          setReportFormError(e => ({ ...e, location: undefined }))
-                        }}
-                      >
-                        Click if Same as project
-                      </button>
+                      {reportForm._projectAddress && (
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-soft btn-secondary"
+                          onClick={() => {
+                            setReportForm(prev => ({ ...prev, location: prev._projectAddress }))
+                            setReportFormError(e => ({ ...e, location: undefined }))
+                          }}
+                        >
+                          <span className="icon-[tabler--building] size-3"></span>Use Project Address
+                        </button>
+                      )}
                     </div>
                     <input type="text" name="location" maxLength={255}
                       className={`input input-bordered w-full${reportFormError.location ? ' is-invalid' : ''}`}
@@ -802,13 +806,32 @@ export default function NewServiceReport() {
                           {poFormError.terms && <span className="helper-text">{poFormError.terms}</span>}
                         </div>
 
-                        <div className="flex flex-col gap-1">
+                        <div className={`flex flex-col gap-1${poForm.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
                           <label className="label-text font-medium">Payment Method</label>
-                          <input type="text" name="paymentMethod"
-                            className={`input input-bordered w-full${poFormError.paymentMethod ? ' is-invalid' : ''}`}
-                            placeholder="e.g. cash" maxLength={16}
-                            value={poForm.paymentMethod} onChange={handlePoFormChange} />
+                          <div className="flex gap-2">
+                            <select name="paymentMethod"
+                              className={`select select-bordered${poForm.paymentMethod === 'ewallet' ? '' : ' w-full'}${poFormError.paymentMethod ? ' is-invalid' : ''}`}
+                              value={poForm.paymentMethod} onChange={handlePoFormChange}>
+                              <option value="">— None —</option>
+                              <option value="cash">Cash</option>
+                              <option value="check">Check</option>
+                              <option value="ewallet">E-Wallet</option>
+                              <option value="bank">Bank Transfer</option>
+                            </select>
+                            {poForm.paymentMethod === 'ewallet' && (
+                              <select name="ewalletType" required
+                                className={`select select-bordered flex-1${poFormError.ewalletType ? ' is-invalid' : ''}`}
+                                value={poForm.ewalletType} onChange={handlePoFormChange}>
+                                <option value="">— Select —</option>
+                                <option value="GCash">GCash</option>
+                                <option value="Maya">Maya</option>
+                                <option value="ShopeePay">ShopeePay</option>
+                                <option value="GrabPay">GrabPay</option>
+                              </select>
+                            )}
+                          </div>
                           {poFormError.paymentMethod && <span className="helper-text">{poFormError.paymentMethod}</span>}
+                          {poForm.paymentMethod === 'ewallet' && poFormError.ewalletType && <span className="helper-text">{poFormError.ewalletType}</span>}
                         </div>
 
                         <div className="flex flex-col gap-1">
@@ -821,7 +844,23 @@ export default function NewServiceReport() {
                         </div>
 
                         <div className="sm:col-span-2 flex flex-col gap-1">
-                          <label className="label-text font-medium">Delivery Address</label>
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="label-text font-medium">Delivery Address</label>
+                            <div className="flex gap-1.5">
+                              {reportForm._projectAddress && (
+                                <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                                  onClick={() => setPoForm(p => ({ ...p, deliveryAddress: reportForm._projectAddress }))}>
+                                  <span className="icon-[tabler--building] size-3"></span>Same as project
+                                </button>
+                              )}
+                              {officeAddress && (
+                                <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                                  onClick={() => setPoForm(p => ({ ...p, deliveryAddress: officeAddress }))}>
+                                  <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                                </button>
+                              )}
+                            </div>
+                          </div>
                           <textarea name="deliveryAddress"
                             className={`textarea textarea-bordered w-full${poFormError.deliveryAddress ? ' is-invalid' : ''}`}
                             placeholder="Full delivery address" maxLength={600} rows={2}

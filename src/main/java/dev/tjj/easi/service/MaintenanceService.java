@@ -5,19 +5,24 @@ import dev.tjj.easi.dto.BackupFileResponse;
 import dev.tjj.easi.dto.BackupResponse;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -28,6 +33,8 @@ import java.util.stream.Collectors;
 /** Handles database backup and restore operations via pg_dump / pg_restore. */
 @Service
 public class MaintenanceService {
+
+    private static final Logger log = LoggerFactory.getLogger(MaintenanceService.class);
 
     private final BackupProperties backupProperties;
     private final LogService logService;
@@ -69,15 +76,32 @@ public class MaintenanceService {
 
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO,
                 "BACKUP", "Database", filename, "Initiated database backup", null);
+        log.info("Starting pg_dump for file: {}", filename);
 
         Process process = pb.start();
+
+        StringBuilder output = new StringBuilder();
+        Thread reader = new Thread(() -> {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    log.info("[pg_dump] {}", line);
+                    output.append(line).append('\n');
+                }
+            } catch (IOException ignored) {}
+        });
+        reader.setDaemon(true);
+        reader.start();
+
         int exitCode = process.waitFor();
+        reader.join();
+
         if (exitCode != 0) {
-            String output = new String(process.getInputStream().readAllBytes());
             logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.ERROR,
                     "BACKUP", "Database", filename, "Database backup failed (exit " + exitCode + ")", null);
             throw new RuntimeException("pg_dump failed (exit " + exitCode + "): " + output);
         }
+        log.info("pg_dump completed successfully: {}", filename);
 
         return new BackupResponse(filename, "/api/maintenance/backups/" + filename);
     }
@@ -93,7 +117,7 @@ public class MaintenanceService {
                 .map(f -> new BackupFileResponse(
                         f.getName(),
                         f.length(),
-                        LocalDateTime.ofEpochSecond(f.lastModified() / 1000, 0, ZoneOffset.UTC)
+                        LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(f.lastModified()), ZoneId.systemDefault())
                 ))
                 .collect(Collectors.toList());
     }
@@ -135,13 +159,31 @@ public class MaintenanceService {
             pb.environment().put("PGPASSWORD", dbPassword);
             pb.redirectErrorStream(true);
 
+            log.info("Starting pg_restore for file: {}", originalFilename);
             Process process = pb.start();
+
+            // Drain stdout+stderr on a separate thread to prevent buffer deadlock
+            StringBuilder output = new StringBuilder();
+            Thread reader = new Thread(() -> {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        log.info("[pg_restore] {}", line);
+                        output.append(line).append('\n');
+                    }
+                } catch (IOException ignored) {}
+            });
+            reader.setDaemon(true);
+            reader.start();
+
             int exitCode = process.waitFor();
+            reader.join();
+
             if (exitCode != 0) {
-                String output = new String(process.getInputStream().readAllBytes());
                 throw new RuntimeException("pg_restore failed (exit " + exitCode + "): " + output);
             }
 
+            log.info("pg_restore completed successfully for file: {}", originalFilename);
             logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO,
                     "RESTORE", "Database", originalFilename,
                     "Restored database from backup", null);

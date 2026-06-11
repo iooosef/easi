@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import ManageMenu from './ManageMenu'
-import Modal from './Modal'
+import { useModal } from './modals/index.js'
 import { notyfSuccess, notyfError } from './notyf'
 
 const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
@@ -13,7 +12,7 @@ const PROJECT_MENU_ITEMS = [
   { key: 'update',          label: 'Update Details',          icon: 'icon-[tabler--pencil]',      roles: ['ADMIN', 'STAFF'] },
   { key: 'service-reports', label: 'Project Service Reports', icon: 'icon-[tabler--file-report]', roles: ['ADMIN', 'STAFF', 'ACCOUNTING', 'CREW'] },
   { key: 'schedule',        label: 'Manage Schedule',         icon: 'icon-[tabler--calendar]',    roles: null },
-  { key: 'documents',       label: 'Manage Documents',        icon: 'icon-[tabler--files]',       roles: null },
+  { key: 'documents',       label: 'Manage Documents',        icon: 'icon-[tabler--files]',       roles: ['ADMIN', 'ACCOUNTING', 'STAFF', 'CREW'] },
   { key: 'ac',              label: 'Manage Air Conditioners', icon: 'icon-[tabler--snowflake]',   roles: null },
 ]
 
@@ -31,14 +30,37 @@ const EMPTY_FORM = {
 }
 
 /**
- * Parses a failed API response.
- * Returns { fieldName: message } for validation errors,
- * or { _general: message } for other errors.
+ * Parses a failed API response into a field-error map.
+ * Returns { fieldName: message } for validation errors, { _general: message } otherwise.
  */
 async function parseApiError(res) {
   const data = await res.json().catch(() => ({}))
   if (data.errors) return data.errors
   return { _general: data.message ?? data.error ?? `Error ${res.status}` }
+}
+
+/** Tiny SVG donut showing installation progress percentage */
+function ProgressDonut({ value = 0 }) {
+  const r = 16
+  const circ = 2 * Math.PI * r
+  const offset = circ * (1 - Math.min(100, Math.max(0, value)) / 100)
+  return (
+    <svg width="44" height="44" viewBox="0 0 44 44" className="shrink-0">
+      <circle cx="22" cy="22" r={r} fill="none" strokeWidth="4" className="stroke-base-300" />
+      <circle
+        cx="22" cy="22" r={r} fill="none"
+        strokeWidth="4"
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        transform="rotate(-90 22 22)"
+        className="stroke-primary transition-all duration-500"
+      />
+      <text x="22" y="26" textAnchor="middle" fontSize="9" fontWeight="700" className="fill-base-content">
+        {value}%
+      </text>
+    </svg>
+  )
 }
 
 /** Returns badge class based on project type */
@@ -59,128 +81,147 @@ function formatDate(dt) {
 
 const PAGE_SIZE = 12
 
-export default function Projects() {
-  const { apiFetch, hasRole } = useAuth()
-  const navigate = useNavigate()
-  const [projects, setProjects]         = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [error, setError]               = useState(null)
-  const [search, setSearch]             = useState('')
-  const [statusFilter, setStatusFilter] = useState('All Status')
-  const [page, setPage]                 = useState(0)
-  const [totalPages, setTotalPages]     = useState(0)
-  const [totalElements, setTotalElements] = useState(0)
+// ---------------------------------------------------------------------------
+// Shared sub-components
+// ---------------------------------------------------------------------------
 
-  // Create modal state
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
+/** Label + value cell used in the Manage modal details grid */
+function DetailField({ label, value }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-xs text-base-content/50 uppercase tracking-wide">{label}</span>
+      <span className="text-sm font-medium text-base-content">{value ?? '—'}</span>
+    </div>
+  )
+}
+
+/** Shared project form fields used by both New and Edit modals */
+function ProjectFormFields({ form, formError, onChange }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      <div className="sm:col-span-2 flex flex-col gap-1">
+        <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
+        <input type="text" name="name"
+          className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+          placeholder="e.g. ABC Corporation HVAC" maxLength={255} required
+          value={form.name} onChange={onChange} />
+        {formError.name && <span className="helper-text">{formError.name}</span>}
+      </div>
+
+      <div className="sm:col-span-2 flex flex-col gap-1">
+        <label className="label-text font-medium">Address <span className="text-error">*</span></label>
+        <textarea name="address"
+          className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
+          placeholder="Full project site address" maxLength={600} rows={2} required
+          value={form.address} onChange={onChange} />
+        {formError.address && <span className="helper-text">{formError.address}</span>}
+      </div>
+
+      <div className="sm:col-span-2 flex flex-col gap-1">
+        <label className="label-text font-medium">Type <span className="text-error">*</span></label>
+        <select name="type"
+          className={`select select-bordered w-full${formError.type ? ' is-invalid' : ''}`}
+          required value={form.type} onChange={onChange}>
+          <option value="" disabled>Select type</option>
+          {TYPE_OPTIONS.map(t => (
+            <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
+          ))}
+        </select>
+        {formError.type && <span className="helper-text">{formError.type}</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+        <input type="text" name="contactName"
+          className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
+          placeholder="e.g. Juan Dela Cruz" maxLength={300} required
+          value={form.contactName} onChange={onChange} />
+        {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+        <input type="tel" name="contactNumber"
+          className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
+          placeholder="e.g. +63 912 345 6789" maxLength={16} required
+          value={form.contactNumber} onChange={onChange} />
+        {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
+      </div>
+
+      <div className="sm:col-span-2 flex flex-col gap-1">
+        <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
+        <input type="email" name="contactEmail"
+          className={`input input-bordered w-full${formError.contactEmail ? ' is-invalid' : ''}`}
+          placeholder="e.g. contact@example.com" maxLength={255} required
+          value={form.contactEmail} onChange={onChange} />
+        {formError.contactEmail && <span className="helper-text">{formError.contactEmail}</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <label className="label-text font-medium">Installation Progress</label>
+          <span className="text-sm font-semibold text-primary">{form.installationProgress}%</span>
+        </div>
+        <input type="range" name="installationProgress"
+          className="range range-primary range-sm"
+          min={0} max={100} step={1}
+          value={form.installationProgress} onChange={onChange} />
+        {formError.installationProgress && <span className="helper-text">{formError.installationProgress}</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Status</label>
+        <select name="status"
+          className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
+          value={form.status} onChange={onChange}>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        {formError.status && <span className="helper-text">{formError.status}</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Warranty Status</label>
+        <select name="warrantyStatus"
+          className={`select select-bordered w-full${formError.warrantyStatus ? ' is-invalid' : ''}`}
+          value={form.warrantyStatus} onChange={onChange}>
+          <option value={1}>Active</option>
+          <option value={0}>Expired</option>
+        </select>
+        {formError.warrantyStatus && <span className="helper-text">{formError.warrantyStatus}</span>}
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
+        <input type="date" name="warrantyDate"
+          className={`input input-bordered w-full${formError.warrantyDate ? ' is-invalid' : ''}`}
+          required value={form.warrantyDate} onChange={onChange} />
+        {formError.warrantyDate && <span className="helper-text">{formError.warrantyDate}</span>}
+      </div>
+
+      {formError._general && (
+        <div className="sm:col-span-2 alert alert-error py-2">
+          <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+          <span className="text-sm">{formError._general}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Modal layer components
+// ---------------------------------------------------------------------------
+
+/** New Project — standalone layer 1 modal */
+function NewProjectModal({ onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
-  const [selectedProject, setSelectedProject] = useState(null)
-
-  // Edit modal state
-  const [editModalOpen, setEditModalOpen]   = useState(false)
-  const [editingProjNum, setEditingProjNum] = useState(null)
-
-  function openModal() { setModalOpen(true) }
-
-  function closeModal() {
-    setModalOpen(false)
-    setForm(EMPTY_FORM)
-    setFormError({})
-  }
-
-  function openEditModal(project) {
-    setForm({
-      name:                 project.name,
-      address:              project.address,
-      type:                 project.type,
-      contactName:          project.contactName,
-      contactNumber:        project.contactNumber,
-      contactEmail:         project.contactEmail,
-      installationProgress: project.installationProgress,
-      warrantyStatus:       project.warrantyStatus,
-      warrantyDate:         project.warrantyDate ? project.warrantyDate.slice(0, 10) : '',
-      status:               project.status,
-    })
-    setEditingProjNum(project.projNum)
-    setFormError({})
-    setEditModalOpen(true)
-  }
-
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingProjNum(null)
-    setForm(EMPTY_FORM)
-    setFormError({})
-  }
-
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/projects/${editingProjNum}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          installationProgress: Number(form.installationProgress),
-          warrantyStatus: Number(form.warrantyStatus),
-        }),
-      })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`Project "${data.name}" updated successfully.`), 150)
-      await fetchProjects()
-    } catch (err) {
-      setFormError(err.message)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const canEdit = hasRole('ADMIN', 'STAFF')
-
-  async function fetchProjects() {
-    setLoading(true)
-    setError(null)
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        size: String(PAGE_SIZE),
-        sort: 'addedOn,desc',
-      })
-      const res = await apiFetch(`/api/projects?${params}`)
-      if (!res.ok) throw new Error(`Failed to load projects (${res.status})`)
-      const data = await res.json()
-      setProjects(data.content ?? [])
-      setTotalPages(data.totalPages ?? 0)
-      setTotalElements(data.totalElements ?? 0)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { fetchProjects() }, [apiFetch, page])
-
-  // Client-side filter — will be replaced by server-side search endpoint later
-  const filtered = projects.filter(p => {
-    const matchesSearch =
-      search === '' ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.contactName.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus =
-      statusFilter === 'All Status' || p.status === statusFilter
-    return matchesSearch && matchesStatus
-  })
 
   function handleFormChange(e) {
     const { name, value, type } = e.target
@@ -207,15 +248,292 @@ export default function Projects() {
         return
       }
       const data = await res.json().catch(() => ({}))
-      closeModal()
-      setTimeout(() => notyfSuccess(`Project "${data.name}" created successfully.`), 150)
-      setPage(0)
-      await fetchProjects()
+      popModal()
+      onSuccess(data.name)
     } catch (err) {
-      setFormError(err.message)
+      setFormError({ _general: err.message })
     } finally {
       setSubmitting(false)
     }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New Project</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body overflow-y-auto max-h-[60vh]">
+        <form id="new-project-form" onSubmit={handleSubmit}>
+          <ProjectFormFields form={form} formError={formError} onChange={handleFormChange} />
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="new-project-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Create Project
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Edit Project — layer 2, pushed from ManageProjectModal.
+ * Pops itself on cancel; calls onSuccess on save.
+ */
+function EditProjectModal({ project, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    name:                 project.name,
+    address:              project.address,
+    type:                 project.type,
+    contactName:          project.contactName,
+    contactNumber:        project.contactNumber,
+    contactEmail:         project.contactEmail,
+    installationProgress: project.installationProgress,
+    warrantyStatus:       project.warrantyStatus,
+    warrantyDate:         project.warrantyDate ? project.warrantyDate.slice(0, 10) : '',
+    status:               project.status,
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleFormChange(e) {
+    const { name, value, type } = e.target
+    setForm(prev => ({ ...prev, [name]: type === 'number' ? Number(value) : value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/projects/${project.projNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          installationProgress: Number(form.installationProgress),
+          warrantyStatus: Number(form.warrantyStatus),
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      onSuccess(data.name)
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update Project</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body overflow-y-auto max-h-[60vh]">
+        <form id="edit-project-form" onSubmit={handleSubmit}>
+          <ProjectFormFields form={form} formError={formError} onChange={handleFormChange} />
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="edit-project-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Manage Project — layer 1 modal showing project details and action buttons.
+ * Pushing Update Details opens EditProjectModal as layer 2.
+ * Navigation actions clear all modals before navigating.
+ */
+function ManageProjectModal({ project, onRefresh }) {
+  const { pushModal, popModal, clearModals } = useModal()
+  const { hasRole } = useAuth()
+  const navigate = useNavigate()
+
+  function handleMenuSelect(key) {
+    if (key === 'update') {
+      pushModal(
+        <EditProjectModal
+          project={project}
+          onSuccess={name => {
+            clearModals()
+            setTimeout(() => notyfSuccess(`Project "${name}" updated successfully.`), 150)
+            onRefresh()
+          }}
+        />
+      )
+    } else if (key === 'service-reports') {
+      clearModals()
+      navigate(`/service-report/project/${project.projNum}`, { state: { projectName: project.name } })
+    } else if (key === 'schedule') {
+      clearModals()
+      navigate(`/schedules/project/${project.projNum}`, { state: { projectName: project.name } })
+    } else if (key === 'documents') {
+      clearModals()
+      navigate(`/projects/${project.projNum}/documents`, { state: { projectName: project.name } })
+    } else if (key === 'ac') {
+      clearModals()
+      navigate(`/ac-units/project/${project.projNum}`, { state: { projectName: project.name } })
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">{project.name}</h3>
+          <span className="text-sm text-base-content/50">Project #{project.projNum}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+
+      <div className="modal-body flex flex-col gap-6">
+        {/* Details grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+          <DetailField label="Type"   value={project.type?.charAt(0) + project.type?.slice(1).toLowerCase()} />
+          <DetailField label="Status" value={project.status?.charAt(0).toUpperCase() + project.status?.slice(1)} />
+          <DetailField label="Started" value={formatDate(project.addedOn)} />
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Address</span>
+            <span className="text-sm font-medium text-base-content">{project.address ?? '—'}</span>
+          </div>
+          <DetailField label="Contact Name"   value={project.contactName} />
+          <DetailField label="Contact Number" value={project.contactNumber} />
+          <DetailField label="Contact Email"  value={project.contactEmail} />
+          <DetailField label="Warranty Status" value={project.warrantyStatus === 1 ? 'Active' : 'Expired'} />
+          <DetailField label="Warranty Date"   value={formatDate(project.warrantyDate)} />
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-base-content/50 uppercase tracking-wide">Installation Progress</span>
+              <span className="text-xs font-semibold text-primary">{project.installationProgress}%</span>
+            </div>
+            <div className="w-full bg-base-300 rounded-full h-2">
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-500"
+                style={{ width: `${project.installationProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="divider my-0"></div>
+
+        {/* Action grid */}
+        <div>
+          <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Manage</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {PROJECT_MENU_ITEMS
+              .filter(({ roles }) => roles === null || hasRole(...roles))
+              .map(({ key, label, icon }) => (
+                <button key={key} type="button" className="group w-full"
+                  onClick={() => handleMenuSelect(key)}>
+                  <div className="card bg-base-100 border border-base-300 h-full transition-transform duration-300 group-hover:-translate-y-2">
+                    <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
+                      <span className={`${icon} size-8 text-primary`}></span>
+                      <p className="text-xs font-medium text-base-content leading-tight">{label}</p>
+                    </div>
+                  </div>
+                </button>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page component
+// ---------------------------------------------------------------------------
+
+export default function Projects() {
+  const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
+  const [projects, setProjects]           = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState(null)
+  const [search, setSearch]               = useState('')
+  const [statusFilter, setStatusFilter]   = useState('All Status')
+  const [page, setPage]                   = useState(0)
+  const [totalPages, setTotalPages]       = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+
+  const canEdit = hasRole('ADMIN', 'STAFF')
+
+  async function fetchProjects() {
+    setLoading(true)
+    setError(null)
+    try {
+      const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE), sort: 'addedOn,desc' })
+      const res = await apiFetch(`/api/projects?${params}`)
+      if (!res.ok) throw new Error(`Failed to load projects (${res.status})`)
+      const data = await res.json()
+      setProjects(data.content ?? [])
+      setTotalPages(data.totalPages ?? 0)
+      setTotalElements(data.totalElements ?? 0)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchProjects() }, [apiFetch, page])
+
+  // Client-side filter — will be replaced by server-side search endpoint later
+  const filtered = projects.filter(p => {
+    const matchesSearch =
+      search === '' ||
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.contactName.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus = statusFilter === 'All Status' || p.status === statusFilter
+    return matchesSearch && matchesStatus
+  })
+
+  function openNewProject() {
+    pushModal(
+      <NewProjectModal
+        onSuccess={name => {
+          setTimeout(() => notyfSuccess(`Project "${name}" created successfully.`), 150)
+          setPage(0)
+          fetchProjects()
+        }}
+      />
+    )
+  }
+
+  function openManageProject(project) {
+    pushModal(<ManageProjectModal project={project} onRefresh={fetchProjects} />)
   }
 
   return (
@@ -226,18 +544,13 @@ export default function Projects() {
           <h1 className="text-3xl font-semibold">Projects</h1>
           <p className="text-base-content/60 mt-1">Manage client projects and service records</p>
         </div>
-
         <div className="flex gap-2 items-center h-full">
-        {canEdit && (
-          <button
-            type="button"
-            className="btn btn-primary h-full min-h-0"
-            onClick={openModal}
-          >
-            <span className="icon-[tabler--plus] size-4"></span>
-            New Project
-          </button>
-        )}
+          {canEdit && (
+            <button type="button" className="btn btn-primary h-full min-h-0" onClick={openNewProject}>
+              <span className="icon-[tabler--plus] size-4"></span>
+              New Project
+            </button>
+          )}
         </div>
       </div>
 
@@ -305,9 +618,12 @@ export default function Projects() {
                     <div className="card-body gap-2">
                       <div className="flex items-start justify-between gap-2">
                         <h2 className="card-title text-base">{project.name}</h2>
-                        <span className={`badge badge-soft ${typeBadgeClass(project.type)} shrink-0 text-xs`}>
-                          {project.type}
-                        </span>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <ProgressDonut value={project.installationProgress} />
+                          <span className={`badge badge-soft ${typeBadgeClass(project.type)} text-xs`}>
+                            {project.type}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-sm text-primary line-clamp-2">{project.address}</p>
                       <div className="text-sm text-base-content/70 space-y-0.5">
@@ -317,7 +633,7 @@ export default function Projects() {
                       <div className="card-actions mt-2">
                         <button
                           className="btn btn-soft btn-primary btn-sm flex-1"
-                          onClick={() => setSelectedProject(project)}
+                          onClick={() => openManageProject(project)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           Manage
@@ -345,353 +661,6 @@ export default function Projects() {
           )}
         </>
       )}
-
-      {/* Manage Project Modal */}
-      <ManageMenu
-        title={selectedProject?.name}
-        subtitle={`Project #${selectedProject?.projNum}`}
-        item={selectedProject}
-        details={selectedProject ? [
-          { label: 'Type',   value: selectedProject.type?.charAt(0) + selectedProject.type?.slice(1).toLowerCase() },
-          { label: 'Status', value: selectedProject.status?.charAt(0).toUpperCase() + selectedProject.status?.slice(1) },
-          { label: 'Started', value: formatDate(selectedProject.addedOn) },
-          { label: 'Address', value: selectedProject.address, fullWidth: true },
-          { label: 'Contact Name',   value: selectedProject.contactName },
-          { label: 'Contact Number', value: selectedProject.contactNumber },
-          { label: 'Contact Email',  value: selectedProject.contactEmail },
-          { label: 'Warranty Status', value: selectedProject.warrantyStatus === 1 ? 'Active' : 'Expired' },
-          { label: 'Warranty Date',   value: formatDate(selectedProject.warrantyDate) },
-          {
-            fullWidth: true,
-            component: (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-base-content/50 uppercase tracking-wide">Installation Progress</span>
-                  <span className="text-xs font-semibold text-primary">{selectedProject.installationProgress}%</span>
-                </div>
-                <div className="w-full bg-base-300 rounded-full h-2">
-                  <div
-                    className="bg-primary h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${selectedProject.installationProgress}%` }}
-                  />
-                </div>
-              </div>
-            ),
-          },
-        ] : []}
-        isOpen={!!selectedProject}
-        onClose={() => setSelectedProject(null)}
-        hasRole={hasRole}
-        menuItems={PROJECT_MENU_ITEMS}
-        onMenuSelect={(key, project) => {
-          if (key === 'update') {
-            setSelectedProject(null)
-            openEditModal(project)
-          } else if (key === 'service-reports') {
-            setSelectedProject(null)
-            navigate(`/service-report/project/${project.projNum}`, { state: { projectName: project.name } })
-          } else if (key === 'schedule') {
-            setSelectedProject(null)
-            navigate(`/schedules/project/${project.projNum}`, { state: { projectName: project.name } })
-          } else if (key === 'documents') {
-            setSelectedProject(null)
-            navigate(`/projects/${project.projNum}/documents`, { state: { projectName: project.name } })
-          } else if (key === 'ac') {
-            setSelectedProject(null)
-            navigate(`/ac-units/project/${project.projNum}`, { state: { projectName: project.name } })
-          }
-        }}
-      />
-
-      {/* Edit Project Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title="Update Project"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="edit-project-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="edit-project-form" onSubmit={handleUpdate}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
-              <input type="text" name="name" className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
-                placeholder="e.g. ABC Corporation HVAC" maxLength={255} required
-                value={form.name} onChange={handleFormChange} />
-              {formError.name && <span className="helper-text">{formError.name}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-              <textarea name="address" className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
-                placeholder="Full project site address" maxLength={600} rows={2} required
-                value={form.address} onChange={handleFormChange} />
-              {formError.address && <span className="helper-text">{formError.address}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Type <span className="text-error">*</span></label>
-              <select name="type" className={`select select-bordered w-full${formError.type ? ' is-invalid' : ''}`} required
-                value={form.type} onChange={handleFormChange}>
-                <option value="" disabled>Select type</option>
-                {TYPE_OPTIONS.map(t => (
-                  <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
-                ))}
-              </select>
-              {formError.type && <span className="helper-text">{formError.type}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-              <input type="text" name="contactName" className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
-                placeholder="e.g. Juan Dela Cruz" maxLength={300} required
-                value={form.contactName} onChange={handleFormChange} />
-              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-              <input type="tel" name="contactNumber" className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
-                placeholder="e.g. +63 912 345 6789" maxLength={16} required
-                value={form.contactNumber} onChange={handleFormChange} />
-              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
-              <input type="email" name="contactEmail" className={`input input-bordered w-full${formError.contactEmail ? ' is-invalid' : ''}`}
-                placeholder="e.g. contact@example.com" maxLength={255} required
-                value={form.contactEmail} onChange={handleFormChange} />
-              {formError.contactEmail && <span className="helper-text">{formError.contactEmail}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center justify-between">
-                <label className="label-text font-medium">Installation Progress</label>
-                <span className="text-sm font-semibold text-primary">{form.installationProgress}%</span>
-              </div>
-              <input
-                type="range"
-                name="installationProgress"
-                className="range range-primary range-sm"
-                min={0} max={100} step={1}
-                value={form.installationProgress}
-                onChange={handleFormChange}
-              />
-              {formError.installationProgress && <span className="helper-text">{formError.installationProgress}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select name="status" className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
-                value={form.status} onChange={handleFormChange}>
-                <option value="active">Active</option>
-                <option value="completed">Completed</option>
-                <option value="inactive">Inactive</option>
-              </select>
-              {formError.status && <span className="helper-text">{formError.status}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Warranty Status</label>
-              <select name="warrantyStatus" className={`select select-bordered w-full${formError.warrantyStatus ? ' is-invalid' : ''}`}
-                value={form.warrantyStatus} onChange={handleFormChange}>
-                <option value={1}>Active</option>
-                <option value={0}>Expired</option>
-              </select>
-              {formError.warrantyStatus && <span className="helper-text">{formError.warrantyStatus}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
-              <input type="date" name="warrantyDate" className={`input input-bordered w-full${formError.warrantyDate ? ' is-invalid' : ''}`} required
-                value={form.warrantyDate} onChange={handleFormChange} />
-              {formError.warrantyDate && <span className="helper-text">{formError.warrantyDate}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* New Project Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title="New Project"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeModal}>
-              Cancel
-            </button>
-            <button type="submit" form="new-project-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Create Project
-            </button>
-          </>
-        }
-      >
-        <form id="new-project-form" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            {/* Project Name */}
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Project Name <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="name"
-                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
-                placeholder="e.g. ABC Corporation HVAC"
-                maxLength={255}
-                required
-                value={form.name}
-                onChange={handleFormChange}
-              />
-              {formError.name && <span className="helper-text">{formError.name}</span>}
-            </div>
-
-            {/* Address */}
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Address <span className="text-error">*</span></label>
-              <textarea
-                name="address"
-                className={`textarea textarea-bordered w-full${formError.address ? ' is-invalid' : ''}`}
-                placeholder="Full project site address"
-                maxLength={600}
-                rows={2}
-                required
-                value={form.address}
-                onChange={handleFormChange}
-              />
-              {formError.address && <span className="helper-text">{formError.address}</span>}
-            </div>
-
-            {/* Type */}
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Type <span className="text-error">*</span></label>
-              <select
-                name="type"
-                className={`select select-bordered w-full${formError.type ? ' is-invalid' : ''}`}
-                required
-                value={form.type}
-                onChange={handleFormChange}
-              >
-                <option value="" disabled>Select type</option>
-                {TYPE_OPTIONS.map(t => (
-                  <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>
-                ))}
-              </select>
-              {formError.type && <span className="helper-text">{formError.type}</span>}
-            </div>
-
-            {/* Contact Name */}
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="contactName"
-                className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
-                placeholder="e.g. Juan Dela Cruz"
-                maxLength={300}
-                required
-                value={form.contactName}
-                onChange={handleFormChange}
-              />
-              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
-            </div>
-
-            {/* Contact Number */}
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-              <input
-                type="tel"
-                name="contactNumber"
-                className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
-                placeholder="e.g. +63 912 345 6789"
-                maxLength={16}
-                required
-                value={form.contactNumber}
-                onChange={handleFormChange}
-              />
-              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
-            </div>
-
-            {/* Contact Email */}
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Contact Email <span className="text-error">*</span></label>
-              <input
-                type="email"
-                name="contactEmail"
-                className={`input input-bordered w-full${formError.contactEmail ? ' is-invalid' : ''}`}
-                placeholder="e.g. contact@example.com"
-                maxLength={255}
-                required
-                value={form.contactEmail}
-                onChange={handleFormChange}
-              />
-              {formError.contactEmail && <span className="helper-text">{formError.contactEmail}</span>}
-            </div>
-
-            {/* Warranty Status */}
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Warranty Status <span className="text-error">*</span></label>
-              <select
-                name="warrantyStatus"
-                className={`select select-bordered w-full${formError.warrantyStatus ? ' is-invalid' : ''}`}
-                value={form.warrantyStatus}
-                onChange={handleFormChange}
-              >
-                <option value={1}>Active</option>
-                <option value={0}>Expired</option>
-              </select>
-              {formError.warrantyStatus && <span className="helper-text">{formError.warrantyStatus}</span>}
-            </div>
-
-            {/* Warranty Date */}
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Warranty Date <span className="text-error">*</span></label>
-              <input
-                type="date"
-                name="warrantyDate"
-                className={`input input-bordered w-full${formError.warrantyDate ? ' is-invalid' : ''}`}
-                required
-                value={form.warrantyDate}
-                onChange={handleFormChange}
-              />
-              {formError.warrantyDate && <span className="helper-text">{formError.warrantyDate}</span>}
-            </div>
-
-            {/* General server error */}
-            {formError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
     </Layout>
   )
 }

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(tail:*)",
       "Bash(head -1026 \"D:\\\\Documents\\\\TIP\\\\CS 304 \\(Soft Eng 2\\)\\\\easi\\\\frontend\\\\src\\\\Home.jsx\")",
-      "Bash(\"D:\\\\Documents\\\\TIP\\\\CS 304 \\(Soft Eng 2\\)\\\\easi\\\\frontend\\\\src\\\\Home.jsx.tmp\")"
+      "Bash(\"D:\\\\Documents\\\\TIP\\\\CS 304 \\(Soft Eng 2\\)\\\\easi\\\\frontend\\\\src\\\\Home.jsx.tmp\")",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch -f --msg-filter 'sed \"\"/^Co-Authored-By:/d\"\"' 4baa967d..HEAD)"
     ]
   }
 }

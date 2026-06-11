@@ -46,10 +46,10 @@ public class ServiceAssignmentService {
                 .orElseThrow(() -> new IllegalArgumentException("Employee not found."));
         ServiceSchedule schedule = serviceScheduleRepository.findById(request.schedId())
                 .orElseThrow(() -> new IllegalArgumentException("Service schedule not found."));
-        if (assignmentRepository.existsByEmployeeEmployeeIdAndServiceScheduleDate(request.employeeId(), schedule.getDate())) {
+        if (assignmentRepository.existsByEmployeeEmployeeIdAndServiceScheduleSchedId(request.employeeId(), request.schedId())) {
             throw new IllegalArgumentException(
                     "Employee " + employee.getFirstName() + " " + employee.getLastName()
-                    + " is already assigned to another schedule on " + schedule.getDate() + ".");
+                    + " is already assigned to this schedule.");
         }
         ServiceAssignment assignment = new ServiceAssignment();
         assignment.setEmployee(employee);

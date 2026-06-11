@@ -17,7 +17,7 @@ public record ServiceReportBillingRow(
         @Schema(description = "Sum of all billing item amounts (services and labor) for this SR", example = "3500.00")
         BigDecimal servicesAndLaborCost,
 
-        @Schema(description = "Sum of (qty × unitPrice) for all parts linked to this SR via its purchase orders", example = "1200.00")
+        @Schema(description = "Sum of (qtyUsed × unitPrice) for all part usages recorded against this SR", example = "1200.00")
         BigDecimal partsTotalCost,
 
         @Schema(description = "Total billed cost: servicesAndLaborCost + partsTotalCost", example = "4700.00")

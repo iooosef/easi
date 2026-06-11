@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import Modal from './Modal'
+import Modal from './modals/Modal'
 import AnySchedulePickerModal from './AnySchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
@@ -37,11 +37,12 @@ async function parseApiError(res) {
 
 /** Navigation items shown as Link cards on the Home page. */
 const HOME_NAV_ITEMS = [
+  { page: 'your-schedules-today', label: 'Your Schedules Today', icon: 'icon-[tabler--calendar-check]', path: '/schedules?hideFinished=1&showToday=1', roles: ['CREW'] },
   { page: 'new-schedule',      label: 'Make new Schedule',  icon: 'icon-[tabler--calendar-plus]', path: '/schedules/new',                        roles: ['ADMIN', 'STAFF'] },
   { page: 'new-service-report',label: 'New Service Report', icon: 'icon-[tabler--file-plus]',     path: '/service-report/new',                   roles: ['ADMIN', 'STAFF'] },
   { page: 'new-purchase-order',label: 'New Purchase Order', icon: 'icon-[tabler--file-invoice]',  path: '/inventory/purchase-orders?newPO=1',    roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
   { page: 'record-payment',    label: 'Record a Payment',   icon: 'icon-[tabler--cash]',          path: '/billing?status=unpaid,partial',         roles: ['ADMIN', 'ACCOUNTING'] },
-  { page: 'add-vehicle-log',   label: 'Add Vehicle Log',    icon: 'icon-[tabler--truck]',         path: '/vehicles?addLog=1',                    roles: ['ADMIN', 'STAFF', 'CREW'] },
+  { page: 'add-vehicle-log',   label: 'Add Vehicle Log',    icon: 'icon-[tabler--truck]',         path: '/vehicles?addLog=1',                    roles: ['ADMIN', 'STAFF'] },
   { page: 'add-employee',      label: 'Add Employee',       icon: 'icon-[tabler--user-plus]',     path: '/employees?addEmployee=1',              roles: ['HR'] },
   { page: 'add-part',          label: 'Add Part',           icon: 'icon-[tabler--tool]',          path: '/inventory/parts?addPart=1',            roles: ['ACCOUNTING'] },
   { page: 'add-equipment',     label: 'Add Equipment',      icon: 'icon-[tabler--device-desktop]', path: '/inventory/equipment?addEquipment=1',  roles: ['ACCOUNTING'] },
@@ -50,7 +51,7 @@ const HOME_NAV_ITEMS = [
 
 /** Action items that open an inline modal instead of navigating. */
 const HOME_ACTION_ITEMS = [
-  { page: 'log-refueling', label: 'Add Vehicle Log', icon: 'icon-[tabler--truck]',          action: 'refueling', roles: ['ADMIN', 'STAFF', 'CREW'] },
+  { page: 'log-refueling', label: 'Add Vehicle Log', icon: 'icon-[tabler--truck]',          action: 'refueling', roles: ['CREW'] },
   { page: 'add-findings',  label: 'Add Findings',   icon: 'icon-[tabler--clipboard-list]', action: 'findings',  roles: ['CREW'] },
 ]
 

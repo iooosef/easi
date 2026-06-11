@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -54,6 +55,11 @@ public class VehicleLog {
     @Getter
     @Setter
     private Integer odometerEnd;
+
+    @Column(name = "date", nullable = false)
+    @Getter
+    @Setter
+    private LocalDate date;
 
     @Column(name = "status", length = 16, nullable = false, columnDefinition = "varchar(16) DEFAULT 'driving'")
     @Getter

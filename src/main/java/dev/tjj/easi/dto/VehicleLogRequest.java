@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 
 
 public record VehicleLogRequest(
@@ -32,5 +33,8 @@ public record VehicleLogRequest(
         Integer odometerEnd,
 
         @Size(max = 16, message = "Status must not exceed 16 characters")
-        String status
+        String status,
+
+        @NotNull(message = "Date is required")
+        LocalDate date
 ) {}

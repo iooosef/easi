@@ -106,6 +106,15 @@ function toSentenceCase(str) {
   return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
 }
 
+function formatPaymentMethod(m) {
+  if (!m) return '—'
+  const lower = m.toLowerCase()
+  if (lower === 'gcash') return 'GCash'
+  if (lower.startsWith('ewallet:')) return `E-Wallet (${m.slice(8)})`
+  const map = { cash: 'Cash', check: 'Check', ewallet: 'E-Wallet', bank: 'Bank Transfer' }
+  return map[lower] ?? toSentenceCase(m)
+}
+
 function computeStatus(billedTotal, paidTotal) {
   if (billedTotal <= 0) return 'UNPAID'
   if (paidTotal >= billedTotal) return 'PAID'
@@ -212,6 +221,26 @@ function PieChart({ data, size = 160 }) {
         ))}
       </div>
     </div>
+  )
+}
+
+/** Generates a short plain-English interpretation of a pie chart's data. */
+function PieInterpretation({ data }) {
+  if (!data || data.length === 0) return null
+  const total = data.reduce((s, d) => s + d.value, 0)
+  if (total === 0) return null
+  const sorted = [...data].sort((a, b) => b.value - a.value)
+  const top = sorted[0]
+  const pct = Math.round((top.value / total) * 100)
+  if (data.length === 1) {
+    return <p className="text-xs text-gray-500 mt-3 text-center">{top.label} accounts for all {total} {total === 1 ? 'entry' : 'entries'}.</p>
+  }
+  const second = sorted[1]
+  return (
+    <p className="text-xs text-gray-500 mt-3 text-center">
+      <span className="font-medium text-gray-700">{top.label}</span> is the largest group at {pct}% ({top.value} of {total}).
+      {' '}<span className="font-medium text-gray-700">{second.label}</span> follows with {second.value}.
+    </p>
   )
 }
 
@@ -665,7 +694,7 @@ function buildSrPdfHtml(d, billedTotal, paidTotal, balance, computedStatus, poGr
   ).join('')
 
   const paymentRows = d.payments.map(p =>
-    `<tr><td>${p.logId}</td><td>${p.paidBy ?? '—'}</td><td>${toSentenceCase(p.paymentMethod)}</td>
+    `<tr><td>${p.logId}</td><td>${p.paidBy ?? '—'}</td><td>${formatPaymentMethod(p.paymentMethod)}</td>
      <td>${p.receiptNumber ?? '—'}</td><td>${fmtDateLong(p.receiptDate)}</td>
      <td class="text-right">${fmtCurrency(p.amount)}</td></tr>`
   ).join('')
@@ -1870,7 +1899,7 @@ export default function Reports() {
             : <ReportTable head={['Payment #', 'Paid By', 'Method', 'Receipt #', 'Receipt Date', 'Amount']}>
                 {srData.payments.map(p => (
                   <tr key={p.logId} className="even:bg-gray-50">
-                    <Td>{p.logId}</Td><Td>{p.paidBy}</Td><Td>{toSentenceCase(p.paymentMethod)}</Td>
+                    <Td>{p.logId}</Td><Td>{p.paidBy}</Td><Td>{formatPaymentMethod(p.paymentMethod)}</Td>
                     <Td>{p.receiptNumber}</Td><Td>{fmtDateLong(p.receiptDate)}</Td><Td right>{fmtCurrency(p.amount)}</Td>
                   </tr>
                 ))}
@@ -2249,10 +2278,12 @@ export default function Reports() {
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">By Status</p>
                     <PieChart data={statusData} size={160} />
+                    <PieInterpretation data={statusData} />
                   </div>
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-5">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">By Supplier</p>
                     <PieChart data={supplierData} size={160} />
+                    <PieInterpretation data={supplierData} />
                   </div>
                 </div>
 
@@ -2382,6 +2413,7 @@ export default function Reports() {
                   <div className="rounded-xl border border-gray-200 bg-gray-50 p-5 max-w-xs">
                     <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-3 text-center">Payment Status</p>
                     <PieChart data={statusData} size={160} />
+                    <PieInterpretation data={statusData} />
                   </div>
                 </div>
 

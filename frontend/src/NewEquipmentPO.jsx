@@ -2,6 +2,8 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
+import PickerInput from './PickerInput'
+import ProjectPickerModal from './ProjectPickerModal'
 import { notyfSuccess, notyfError } from './notyf'
 
 const STEPS = [
@@ -15,7 +17,7 @@ const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
 
 const EMPTY_PO_FORM = {
   purpose: '', terms: '', deliveryAddress: '', remarks: '',
-  paymentMethod: '', paymentDetails: '',
+  paymentMethod: '', ewalletType: '', paymentDetails: '',
 }
 
 const EMPTY_EQUIP = {
@@ -34,13 +36,15 @@ async function parseApiError(res) {
 
 /** Page for creating a new Purchase Order with equipment items and optional documents */
 export default function NewEquipmentPO() {
-  const { apiFetch } = useAuth()
+  const { apiFetch, officeAddress } = useAuth()
   const navigate = useNavigate()
 
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
 
   // Step 1: PO form
+  const [projectAddress, setProjectAddress] = useState('')
+  const [projectDisplay, setProjectDisplay] = useState('')
   const [poForm, setPoForm] = useState(EMPTY_PO_FORM)
   const [poFormError, setPoFormError] = useState({})
 
@@ -149,7 +153,7 @@ export default function NewEquipmentPO() {
           terms: poForm.terms,
           deliveryAddress: poForm.deliveryAddress || null,
           remarks: poForm.remarks || null,
-          paymentMethod: poForm.paymentMethod || null,
+          paymentMethod: poForm.paymentMethod === 'ewallet' ? `ewallet:${poForm.ewalletType}` : poForm.paymentMethod || null,
           paymentDetails: poForm.paymentDetails || null,
           srNum: null,
         }),
@@ -261,6 +265,16 @@ export default function NewEquipmentPO() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
+                  <PickerInput
+                    label="Project (optional)"
+                    displayValue={projectDisplay}
+                    placeholder="None selected"
+                    buttonLabel="Select Project"
+                    Picker={ProjectPickerModal}
+                    onSelect={p => { setProjectAddress(p.address ?? ''); setProjectDisplay(`${p.name} (#${p.projNum})`) }}
+                    className="sm:col-span-2"
+                  />
+
                   <div className="flex flex-col gap-1">
                     <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
                     <input type="text" name="purpose" maxLength={30} required
@@ -283,13 +297,32 @@ export default function NewEquipmentPO() {
                       : <span className="text-xs text-base-content/40">{poForm.terms.length}/16</span>}
                   </div>
 
-                  <div className="flex flex-col gap-1">
+                  <div className={`flex flex-col gap-1${poForm.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
                     <label className="label-text font-medium">Payment Method</label>
-                    <input type="text" name="paymentMethod" maxLength={16}
-                      className={`input input-bordered w-full${poFormError.paymentMethod ? ' is-invalid' : ''}`}
-                      placeholder="e.g. Bank Transfer"
-                      value={poForm.paymentMethod} onChange={handlePoChange} />
+                    <div className="flex gap-2">
+                      <select name="paymentMethod"
+                        className={`select select-bordered${poForm.paymentMethod === 'ewallet' ? '' : ' w-full'}${poFormError.paymentMethod ? ' is-invalid' : ''}`}
+                        value={poForm.paymentMethod} onChange={handlePoChange}>
+                        <option value="">— None —</option>
+                        <option value="cash">Cash</option>
+                        <option value="check">Check</option>
+                        <option value="ewallet">E-Wallet</option>
+                        <option value="bank">Bank Transfer</option>
+                      </select>
+                      {poForm.paymentMethod === 'ewallet' && (
+                        <select name="ewalletType" required
+                          className={`select select-bordered flex-1${poFormError.ewalletType ? ' is-invalid' : ''}`}
+                          value={poForm.ewalletType} onChange={handlePoChange}>
+                          <option value="">— Select —</option>
+                          <option value="GCash">GCash</option>
+                          <option value="Maya">Maya</option>
+                          <option value="ShopeePay">ShopeePay</option>
+                          <option value="GrabPay">GrabPay</option>
+                        </select>
+                      )}
+                    </div>
                     {poFormError.paymentMethod && <span className="helper-text">{poFormError.paymentMethod}</span>}
+                    {poForm.paymentMethod === 'ewallet' && poFormError.ewalletType && <span className="helper-text">{poFormError.ewalletType}</span>}
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -302,7 +335,23 @@ export default function NewEquipmentPO() {
                   </div>
 
                   <div className="sm:col-span-2 flex flex-col gap-1">
-                    <label className="label-text font-medium">Delivery Address</label>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="label-text font-medium">Delivery Address</label>
+                      <div className="flex gap-1.5">
+                        {projectAddress && (
+                          <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                            onClick={() => handlePoChange({ target: { name: 'deliveryAddress', value: projectAddress } })}>
+                            <span className="icon-[tabler--building] size-3"></span>Same as project
+                          </button>
+                        )}
+                        {officeAddress && (
+                          <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                            onClick={() => handlePoChange({ target: { name: 'deliveryAddress', value: officeAddress } })}>
+                            <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <textarea name="deliveryAddress" maxLength={600} rows={2}
                       className={`textarea textarea-bordered w-full${poFormError.deliveryAddress ? ' is-invalid' : ''}`}
                       placeholder="Full delivery address"

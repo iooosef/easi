@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
-import Modal from './Modal'
 import { notyfSuccess, notyfError } from './notyf'
 import AnySchedulePickerModal from './AnySchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
-
-const EMPTY_FORM = {
-  vehicleModel: '',
-  vehiclePlateNum: '',
-}
 
 const EMPTY_LOG_FORM = {
   purpose: '',
@@ -18,6 +13,7 @@ const EMPTY_LOG_FORM = {
   _scheduleDisplay: '',
   destination: '',
   driverEmployeeId: '',
+  _driverDisplay: '',
   odometerStart: '',
   odometerEnd: '',
   status: 'driving',
@@ -44,8 +40,596 @@ function formatDate(dt) {
 
 const PAGE_SIZE = 12
 
+/**
+ * Modal for adding a new vehicle.
+ * Pushed from the Vehicles page header button.
+ */
+function NewVehicleModal({ onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ vehicleModel: '', vehiclePlateNum: '' })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
+  }
+
+  /** Submits the new vehicle and closes on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/vehicles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      setTimeout(() => notyfSuccess(`Vehicle "${data.vehicleModel}" added successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New Vehicle</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="new-vehicle-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Vehicle Model <span className="text-error">*</span></label>
+              <input type="text" name="vehicleModel" maxLength={30} required
+                className={`input input-bordered w-full${formError.vehicleModel ? ' is-invalid' : ''}`}
+                placeholder="e.g. Toyota HiAce"
+                value={form.vehicleModel} onChange={handleChange} />
+              {formError.vehicleModel && <span className="helper-text">{formError.vehicleModel}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Plate Number <span className="text-error">*</span></label>
+              <input type="text" name="vehiclePlateNum" maxLength={12} required
+                className={`input input-bordered w-full${formError.vehiclePlateNum ? ' is-invalid' : ''}`}
+                placeholder="e.g. AAA 1234"
+                value={form.vehiclePlateNum} onChange={handleChange} />
+              {formError.vehiclePlateNum && <span className="helper-text">{formError.vehiclePlateNum}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="new-vehicle-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Vehicle
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Modal for updating an existing vehicle's model and plate number.
+ * Pushed from the vehicle card's "Update Vehicle Info" button.
+ */
+function UpdateVehicleModal({ vehicle, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    vehicleModel:    vehicle.vehicleModel,
+    vehiclePlateNum: vehicle.vehiclePlateNum,
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
+  }
+
+  /** Submits the vehicle update and closes on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/vehicles/${vehicle.vehiclesId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      setTimeout(() => notyfSuccess(`Vehicle "${data.vehicleModel}" updated successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-md my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update Vehicle</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-vehicle-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Vehicle Model <span className="text-error">*</span></label>
+              <input type="text" name="vehicleModel" maxLength={30} required
+                className={`input input-bordered w-full${formError.vehicleModel ? ' is-invalid' : ''}`}
+                placeholder="e.g. Toyota HiAce"
+                value={form.vehicleModel} onChange={handleChange} />
+              {formError.vehicleModel && <span className="helper-text">{formError.vehicleModel}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Plate Number <span className="text-error">*</span></label>
+              <input type="text" name="vehiclePlateNum" maxLength={12} required
+                className={`input input-bordered w-full${formError.vehiclePlateNum ? ' is-invalid' : ''}`}
+                placeholder="e.g. AAA 1234"
+                value={form.vehiclePlateNum} onChange={handleChange} />
+              {formError.vehiclePlateNum && <span className="helper-text">{formError.vehiclePlateNum}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-vehicle-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Layer component that pushes a schedule picker onto the modal stack (L3). */
+function SchedulePickerLayer({ onSelect }) {
+  const { popModal } = useModal()
+  return (
+    <AnySchedulePickerModal
+      asLayer
+      isOpen
+      onClose={popModal}
+      onSelect={s => { popModal(); onSelect(s) }}
+    />
+  )
+}
+
+/** Layer component that pushes an employee (driver) picker onto the modal stack (L3). */
+function DriverPickerLayer({ onSelect }) {
+  const { popModal } = useModal()
+  return (
+    <EmployeePickerModal
+      asLayer
+      isOpen
+      position="Crew"
+      onClose={popModal}
+      onSelect={e => { popModal(); onSelect(e) }}
+    />
+  )
+}
+
+/**
+ * Blocking modal shown when the selected vehicle has an ongoing trip with no end odometer.
+ * Pushed from VehiclePickerModal (L2).
+ */
+function VehicleStillOutModal({ vehicle, incompleteLog }) {
+  const { popModal } = useModal()
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Vehicle Still Out</h3>
+          <span className="text-sm text-base-content/50">{vehicle.vehicleModel} · {vehicle.vehiclePlateNum}</span>
+        </div>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="alert alert-error py-3">
+          <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+          <span className="text-sm">
+            This vehicle has an ongoing trip with no end odometer recorded. Return the vehicle and log the end odometer before adding a new trip.
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div>
+            <span className="text-xs text-base-content/50 block">Log #</span>
+            <span className="font-medium font-mono">{incompleteLog.vehicleLogId}</span>
+          </div>
+          <div>
+            <span className="text-xs text-base-content/50 block">Driver</span>
+            <span className="font-medium">{incompleteLog.driverName}</span>
+          </div>
+          <div>
+            <span className="text-xs text-base-content/50 block">Purpose</span>
+            <span className="font-medium">{incompleteLog.purpose}</span>
+          </div>
+          <div>
+            <span className="text-xs text-base-content/50 block">Odometer Start</span>
+            <span className="font-medium">{incompleteLog.odometerStart?.toLocaleString()} km</span>
+          </div>
+        </div>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-primary" onClick={popModal}>OK</button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Form modal for logging a new vehicle trip.
+ * Pushed from VehiclePickerModal (L2).
+ * Schedule and driver pickers are pushed as L3 layers.
+ * On success: closes itself, then invokes onSuccess which closes VehiclePickerModal.
+ */
+function AddVehicleLogModal({ vehicle, prefillOdo, onSuccess }) {
+  const { pushModal, popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const odoMin = prefillOdo !== '' ? Number(prefillOdo) : 0
+  const [form, setForm] = useState({ ...EMPTY_LOG_FORM, odometerStart: prefillOdo, date: new Date().toISOString().slice(0, 10) })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(f => ({ ...f, [name]: value }))
+  }
+
+  /** Updates form with the selected schedule. */
+  function handleScheduleSelect(sched) {
+    setForm(f => ({
+      ...f,
+      schedId: String(sched.schedId),
+      _scheduleDisplay: `Sched #${sched.schedId} · Project #${sched.projNum} · ${sched.date ?? '—'}`,
+    }))
+  }
+
+  /** Updates form with the selected driver. */
+  function handleDriverSelect(emp) {
+    setForm(f => ({
+      ...f,
+      driverEmployeeId: String(emp.employeeId),
+      _driverDisplay: `${emp.firstName} ${emp.lastName} — ${emp.position}`,
+    }))
+  }
+
+  /** Submits the new vehicle log. On success closes this layer and invokes onSuccess. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/vehicle-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehiclesId:       vehicle.vehiclesId,
+          purpose:          form.purpose,
+          schedId:          form.schedId ? Number(form.schedId) : null,
+          destination:      form.destination,
+          driverEmployeeId: form.driverEmployeeId ? Number(form.driverEmployeeId) : null,
+          odometerStart:    form.odometerStart !== '' ? Number(form.odometerStart) : null,
+          odometerEnd:      form.odometerEnd !== '' ? Number(form.odometerEnd) : null,
+          status:           form.status,
+          date:             form.date || null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      setTimeout(() => notyfSuccess(`Log #${data.vehicleLogId} added successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New Vehicle Log — {vehicle.vehicleModel}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="add-vehicle-log-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Date <span className="text-error">*</span></label>
+              <input type="date" name="date" required
+                className={`input input-bordered w-full${formError.date ? ' is-invalid' : ''}`}
+                value={form.date} onChange={handleChange} />
+              {formError.date && <span className="helper-text">{formError.date}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
+              <input type="text" name="purpose" maxLength={30} required
+                className={`input input-bordered w-full${formError.purpose ? ' is-invalid' : ''}`}
+                placeholder="e.g. Material Delivery"
+                value={form.purpose} onChange={handleChange} />
+              {formError.purpose && <span className="helper-text">{formError.purpose}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Schedule <span className="text-base-content/40 font-normal">(optional)</span></label>
+              <div className={`input input-bordered w-full flex items-center justify-between gap-2${formError.schedId ? ' is-invalid' : ''}`}>
+                <span className={`text-sm truncate ${form._scheduleDisplay ? '' : 'text-base-content/40'}`}>
+                  {form._scheduleDisplay || 'No schedule linked'}
+                </span>
+                <div className="flex gap-1 shrink-0">
+                  <button type="button" className="btn btn-sm btn-secondary"
+                    onClick={() => pushModal(<SchedulePickerLayer onSelect={handleScheduleSelect} />)}>
+                    {form._scheduleDisplay ? 'Change' : 'Select'}
+                  </button>
+                  {form._scheduleDisplay && (
+                    <button type="button" className="btn btn-sm btn-ghost"
+                      onClick={() => setForm(f => ({ ...f, schedId: '', _scheduleDisplay: '' }))}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              {formError.schedId && <span className="helper-text">{formError.schedId}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Destination <span className="text-error">*</span></label>
+              <input type="text" name="destination" maxLength={255} required
+                className={`input input-bordered w-full${formError.destination ? ' is-invalid' : ''}`}
+                placeholder="e.g. 123 Ayala Ave, Makati City"
+                value={form.destination} onChange={handleChange} />
+              {formError.destination && <span className="helper-text">{formError.destination}</span>}
+            </div>
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Driver <span className="text-error">*</span></label>
+              <div className={`input input-bordered w-full flex items-center justify-between gap-2${formError.driverEmployeeId ? ' is-invalid' : ''}`}>
+                <span className={`text-sm truncate ${form._driverDisplay ? '' : 'text-base-content/40'}`}>
+                  {form._driverDisplay || 'No driver selected'}
+                </span>
+                <button type="button" className="btn btn-sm btn-secondary shrink-0"
+                  onClick={() => pushModal(<DriverPickerLayer onSelect={handleDriverSelect} />)}>
+                  {form._driverDisplay ? 'Change' : 'Select'}
+                </button>
+              </div>
+              {formError.driverEmployeeId && <span className="helper-text">{formError.driverEmployeeId}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">
+                Odometer Start (km) <span className="text-error">*</span>
+                {odoMin > 0 && (
+                  <span className="ml-2 text-xs font-normal text-base-content/40">
+                    min {odoMin.toLocaleString()} km
+                  </span>
+                )}
+              </label>
+              <input type="number" name="odometerStart" min={odoMin} required
+                className={`input input-bordered w-full${formError.odometerStart ? ' is-invalid' : ''}`}
+                placeholder="e.g. 12500"
+                value={form.odometerStart}
+                onChange={handleChange} />
+              {formError.odometerStart && <span className="helper-text">{formError.odometerStart}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Odometer End (km)</label>
+              <input type="number" name="odometerEnd" min={0}
+                className={`input input-bordered w-full${formError.odometerEnd ? ' is-invalid' : ''}`}
+                placeholder="Leave blank if still driving"
+                value={form.odometerEnd} onChange={handleChange} />
+              {formError.odometerEnd && <span className="helper-text">{formError.odometerEnd}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status"
+                className={`select select-bordered w-full${formError.status ? ' is-invalid' : ''}`}
+                value={form.status} onChange={handleChange}>
+                {STATUS_OPTIONS.map(s => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
+              {formError.status && <span className="helper-text">{formError.status}</span>}
+            </div>
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="add-vehicle-log-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Log
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * L1 modal for selecting a vehicle to add a log for.
+ * Fetches vehicles itself so it is fully self-contained.
+ * On vehicle selection, checks for incomplete trips:
+ *   - Incomplete trip → pushes VehicleStillOutModal (L2 blocker)
+ *   - Clear → pushes AddVehicleLogModal (L2 form)
+ */
+function VehiclePickerModal({ onSuccess }) {
+  const { pushModal, popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [vehicles, setVehicles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [checking, setChecking] = useState(false)
+
+  /** Fetches all vehicles for the picker list. */
+  useEffect(() => {
+    let active = true
+    apiFetch('/api/vehicles?size=100&sort=addedOn,desc')
+      .then(r => r.json())
+      .then(data => { if (active) { setVehicles(data.content ?? []); setLoading(false) } })
+      .catch(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [apiFetch])
+
+  /** Checks for incomplete trips then advances to the log form. */
+  async function handleVehicleSelect(vehicle) {
+    setChecking(true)
+    try {
+      const res = await apiFetch(`/api/vehicle-logs/latest-incomplete?vehiclesId=${vehicle.vehiclesId}`)
+      if (res.status === 200) {
+        const incomplete = await res.json()
+        pushModal(<VehicleStillOutModal vehicle={vehicle} incompleteLog={incomplete} />)
+      } else {
+        let prefillOdo = ''
+        const lastRes = await apiFetch(`/api/vehicle-logs?vehiclesId=${vehicle.vehiclesId}&sort=addedOn,desc&size=1`)
+        if (lastRes.ok) {
+          const lastData = await lastRes.json()
+          const lastLog = lastData.content?.[0]
+          if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
+        }
+        pushModal(
+          <AddVehicleLogModal
+            vehicle={vehicle}
+            prefillOdo={prefillOdo}
+            onSuccess={() => { popModal(); onSuccess?.() }}
+          />
+        )
+      }
+    } catch {
+      pushModal(
+        <AddVehicleLogModal
+          vehicle={vehicle}
+          prefillOdo=""
+          onSuccess={() => { popModal(); onSuccess?.() }}
+        />
+      )
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Vehicle Log — Select a Vehicle</h3>
+        {!checking && (
+          <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+            <span className="icon-[tabler--x] size-4"></span>
+          </button>
+        )}
+      </div>
+      <div className="modal-body">
+        {loading || checking ? (
+          <div className="flex flex-col items-center gap-3 py-10">
+            <span className="loading loading-spinner loading-md text-primary"></span>
+            {checking && <p className="text-sm text-base-content/60">Checking vehicle logs…</p>}
+          </div>
+        ) : vehicles.length === 0 ? (
+          <div className="text-center py-12 text-base-content/40">
+            <span className="icon-[tabler--truck-off] size-10 mx-auto mb-2 block"></span>
+            <p>No vehicles available.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {vehicles.map(vehicle => (
+              <button
+                key={vehicle.vehiclesId}
+                type="button"
+                disabled={checking}
+                className="card bg-base-100 border border-base-300 hover:border-primary hover:bg-primary/5 transition-colors text-left w-full"
+                onClick={() => handleVehicleSelect(vehicle)}
+              >
+                <div className="card-body py-4 px-5 gap-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm">{vehicle.vehicleModel}</span>
+                    <span className="badge badge-soft badge-neutral text-xs font-mono shrink-0">{vehicle.vehiclePlateNum}</span>
+                  </div>
+                  <span className="text-xs text-base-content/50">
+                    {vehicle.latestOdometer != null
+                      ? `${vehicle.latestOdometer.toLocaleString()} km`
+                      : 'No odometer recorded'}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal} disabled={checking}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
 export default function Vehicles() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -57,30 +641,6 @@ export default function Vehicles() {
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
 
-  // Add vehicle modal
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
-  const [submitting, setSubmitting] = useState(false)
-
-  // Edit vehicle modal
-  const [editModalOpen, setEditModalOpen]         = useState(false)
-  const [editingVehicleId, setEditingVehicleId]   = useState(null)
-
-  // Add Vehicle Log multi-step flow
-  const [addLogStep, setAddLogStep]                             = useState(null) // null | 'pick' | 'new-log'
-  const [addLogVehicle, setAddLogVehicle]                       = useState(null)
-  const [addLogCheckingIncomplete, setAddLogCheckingIncomplete] = useState(false)
-  const [addLogForm, setAddLogForm]                             = useState(EMPTY_LOG_FORM)
-  const [addLogFormError, setAddLogFormError]                   = useState({})
-  const [addLogSubmitting, setAddLogSubmitting]                 = useState(false)
-  const [addLogDriverLabel, setAddLogDriverLabel]               = useState('')
-  const [addLogSchedPickerOpen, setAddLogSchedPickerOpen]       = useState(false)
-  const [addLogDriverPickerOpen, setAddLogDriverPickerOpen]     = useState(false)
-  const [addLogOdoStartLocked, setAddLogOdoStartLocked]         = useState(false)
-
-  // Blocking modal shown when the selected vehicle has an ongoing (no odometerEnd) log
-  const [incompleteLog, setIncompleteLog] = useState(null)
 
   const canEdit   = hasRole('ADMIN', 'STAFF')
   const canAddLog = hasRole('ADMIN', 'STAFF', 'CREW')
@@ -89,161 +649,10 @@ export default function Vehicles() {
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.get('addLog') === '1') {
-      openAddVehicleLog()
+      navigate(location.pathname, { replace: true })
+      pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)
     }
   }, [])
-
-  function openModal() {
-    setForm(EMPTY_FORM)
-    setFormError({})
-    setModalOpen(true)
-  }
-
-  function closeModal() {
-    setModalOpen(false)
-    setForm(EMPTY_FORM)
-    setFormError({})
-  }
-
-  function openEditModal(vehicle) {
-    setForm({
-      vehicleModel:    vehicle.vehicleModel,
-      vehiclePlateNum: vehicle.vehiclePlateNum,
-    })
-    setEditingVehicleId(vehicle.vehiclesId)
-    setFormError({})
-    setEditModalOpen(true)
-  }
-
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingVehicleId(null)
-    setForm(EMPTY_FORM)
-    setFormError({})
-  }
-
-  function handleFormChange(e) {
-    const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  // --- Add Vehicle Log flow ---
-
-  /** Opens the vehicle picker (step 1). */
-  function openAddVehicleLog() {
-    setAddLogStep('pick')
-    setAddLogVehicle(null)
-    setAddLogForm(EMPTY_LOG_FORM)
-    setAddLogFormError({})
-    setAddLogDriverLabel('')
-    setIncompleteLog(null)
-    setAddLogOdoStartLocked(false)
-  }
-
-  /** Closes and resets the entire multi-step flow. */
-  function closeAddVehicleLog() {
-    setAddLogStep(null)
-    setAddLogVehicle(null)
-    setAddLogForm(EMPTY_LOG_FORM)
-    setAddLogFormError({})
-    setAddLogDriverLabel('')
-    setIncompleteLog(null)
-    setAddLogOdoStartLocked(false)
-  }
-
-  /**
-   * Called when the user picks a vehicle in step 1.
-   * Blocks if the vehicle has an ongoing trip (no odometerEnd).
-   * Otherwise pre-fills odometerStart from the last log's odometerEnd and advances.
-   */
-  async function handleVehicleSelect(vehicle) {
-    setAddLogVehicle(vehicle)
-    setAddLogCheckingIncomplete(true)
-    try {
-      const res = await apiFetch(`/api/vehicle-logs/latest-incomplete?vehiclesId=${vehicle.vehiclesId}`)
-      if (res.status === 200) {
-        // Vehicle still out — block the user
-        setIncompleteLog(await res.json())
-      } else {
-        // No ongoing trip — fetch last log to pre-fill odometerStart
-        setIncompleteLog(null)
-        let prefillOdo = ''
-        const lastRes = await apiFetch(
-          `/api/vehicle-logs?vehiclesId=${vehicle.vehiclesId}&sort=addedOn,desc&size=1`
-        )
-        if (lastRes.ok) {
-          const lastData = await lastRes.json()
-          const lastLog = lastData.content?.[0]
-          if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
-        }
-        setAddLogOdoStartLocked(prefillOdo !== '')
-        setAddLogForm({ ...EMPTY_LOG_FORM, odometerStart: prefillOdo })
-        setAddLogFormError({})
-        setAddLogDriverLabel('')
-        setAddLogStep('new-log')
-      }
-    } catch {
-      setIncompleteLog(null)
-      setAddLogForm(EMPTY_LOG_FORM)
-      setAddLogFormError({})
-      setAddLogDriverLabel('')
-      setAddLogStep('new-log')
-    } finally {
-      setAddLogCheckingIncomplete(false)
-    }
-  }
-
-  function handleAddLogFormChange(e) {
-    const { name, value } = e.target
-    setAddLogForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  function handleAddLogScheduleSelect(schedule) {
-    setAddLogSchedPickerOpen(false)
-    const display = `Sched #${schedule.schedId} · Project #${schedule.projNum} · ${schedule.date ?? '—'}`
-    setAddLogForm(prev => ({ ...prev, schedId: String(schedule.schedId), _scheduleDisplay: display }))
-  }
-
-  function handleAddLogDriverSelect(employee) {
-    setAddLogDriverPickerOpen(false)
-    setAddLogForm(prev => ({ ...prev, driverEmployeeId: String(employee.employeeId) }))
-    setAddLogDriverLabel(`${employee.firstName} ${employee.lastName} — ${employee.position}`)
-  }
-
-  /** Submits the new vehicle log for the selected vehicle. */
-  async function handleAddLogSubmit(e) {
-    e.preventDefault()
-    setAddLogFormError({})
-    setAddLogSubmitting(true)
-    try {
-      const res = await apiFetch('/api/vehicle-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehiclesId:       addLogVehicle.vehiclesId,
-          purpose:          addLogForm.purpose,
-          schedId:          addLogForm.schedId ? Number(addLogForm.schedId) : null,
-          destination:      addLogForm.destination,
-          driverEmployeeId: addLogForm.driverEmployeeId ? Number(addLogForm.driverEmployeeId) : null,
-          odometerStart:    addLogForm.odometerStart !== '' ? Number(addLogForm.odometerStart) : null,
-          odometerEnd:      addLogForm.odometerEnd !== '' ? Number(addLogForm.odometerEnd) : null,
-          status:           addLogForm.status,
-        }),
-      })
-      if (!res.ok) {
-        setAddLogFormError(await parseApiError(res))
-        notyfError('Add failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeAddVehicleLog()
-      setTimeout(() => notyfSuccess(`Log #${data.vehicleLogId} added successfully.`), 150)
-    } catch (err) {
-      setAddLogFormError({ _general: err.message })
-    } finally {
-      setAddLogSubmitting(false)
-    }
-  }
 
   async function fetchVehicles() {
     setLoading(true)
@@ -275,59 +684,6 @@ export default function Vehicles() {
     v.vehiclePlateNum.toLowerCase().includes(search.toLowerCase())
   )
 
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/vehicles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Add failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeModal()
-      setTimeout(() => notyfSuccess(`Vehicle "${data.vehicleModel}" added successfully.`), 150)
-      setPage(0)
-      await fetchVehicles()
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/vehicles/${editingVehicleId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`Vehicle "${data.vehicleModel}" updated successfully.`), 150)
-      await fetchVehicles()
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   return (
     <Layout activePage="vehicles">
       {/* Header row */}
@@ -341,7 +697,7 @@ export default function Vehicles() {
             <button
               type="button"
               className="btn btn-secondary h-full min-h-0"
-              onClick={openAddVehicleLog}
+              onClick={() => pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)}
             >
               <span className="icon-[tabler--truck] size-4"></span>
               Add Vehicle Log
@@ -351,7 +707,7 @@ export default function Vehicles() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={openModal}
+              onClick={() => pushModal(<NewVehicleModal onSuccess={() => { setPage(0); fetchVehicles() }} />)}
             >
               <span className="icon-[tabler--plus] size-4"></span>
               New Vehicle
@@ -433,7 +789,7 @@ export default function Vehicles() {
                         {canEdit && (
                           <button
                             className="btn btn-soft btn-secondary btn-sm w-full"
-                            onClick={() => openEditModal(vehicle)}
+                            onClick={() => pushModal(<UpdateVehicleModal vehicle={vehicle} onSuccess={fetchVehicles} />)}
                           >
                             <span className="icon-[tabler--pencil] size-4"></span>
                             Update Vehicle Info
@@ -463,406 +819,6 @@ export default function Vehicles() {
         </>
       )}
 
-      {/* Edit Vehicle Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title="Update Vehicle"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="edit-vehicle-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="edit-vehicle-form" onSubmit={handleUpdate}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Vehicle Model <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="vehicleModel"
-                className={`input input-bordered w-full${formError.vehicleModel ? ' is-invalid' : ''}`}
-                placeholder="e.g. Toyota HiAce"
-                maxLength={30}
-                required
-                value={form.vehicleModel}
-                onChange={handleFormChange}
-              />
-              {formError.vehicleModel && <span className="helper-text">{formError.vehicleModel}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Plate Number <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="vehiclePlateNum"
-                className={`input input-bordered w-full${formError.vehiclePlateNum ? ' is-invalid' : ''}`}
-                placeholder="e.g. AAA 1234"
-                maxLength={12}
-                required
-                value={form.vehiclePlateNum}
-                onChange={handleFormChange}
-              />
-              {formError.vehiclePlateNum && <span className="helper-text">{formError.vehiclePlateNum}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* New Vehicle Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title="New Vehicle"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeModal}>
-              Cancel
-            </button>
-            <button type="submit" form="new-vehicle-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Vehicle
-            </button>
-          </>
-        }
-      >
-        <form id="new-vehicle-form" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Vehicle Model <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="vehicleModel"
-                className={`input input-bordered w-full${formError.vehicleModel ? ' is-invalid' : ''}`}
-                placeholder="e.g. Toyota HiAce"
-                maxLength={30}
-                required
-                value={form.vehicleModel}
-                onChange={handleFormChange}
-              />
-              {formError.vehicleModel && <span className="helper-text">{formError.vehicleModel}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Plate Number <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="vehiclePlateNum"
-                className={`input input-bordered w-full${formError.vehiclePlateNum ? ' is-invalid' : ''}`}
-                placeholder="e.g. AAA 1234"
-                maxLength={12}
-                required
-                value={form.vehiclePlateNum}
-                onChange={handleFormChange}
-              />
-              {formError.vehiclePlateNum && <span className="helper-text">{formError.vehiclePlateNum}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Step 1: Pick a vehicle */}
-      <Modal
-        isOpen={addLogStep === 'pick'}
-        onClose={addLogCheckingIncomplete ? undefined : closeAddVehicleLog}
-        hideClose={addLogCheckingIncomplete}
-        title="Add Vehicle Log — Select a Vehicle"
-        size="max-w-2xl"
-        footer={
-          <button type="button" className="btn btn-soft btn-secondary" onClick={closeAddVehicleLog} disabled={addLogCheckingIncomplete}>
-            Cancel
-          </button>
-        }
-      >
-        {addLogCheckingIncomplete ? (
-          <div className="flex flex-col items-center gap-3 py-10">
-            <span className="loading loading-spinner loading-md text-primary"></span>
-            <p className="text-sm text-base-content/60">Checking vehicle logs…</p>
-          </div>
-        ) : loading ? (
-          <div className="flex justify-center py-12">
-            <span className="loading loading-spinner loading-md text-primary"></span>
-          </div>
-        ) : vehicles.length === 0 ? (
-          <div className="text-center py-12 text-base-content/40">
-            <span className="icon-[tabler--truck-off] size-10 mx-auto mb-2 block"></span>
-            <p>No vehicles available.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {vehicles.map(vehicle => (
-              <button
-                key={vehicle.vehiclesId}
-                type="button"
-                className="card bg-base-100 border border-base-300 hover:border-primary hover:bg-primary/5 transition-colors text-left w-full"
-                onClick={() => handleVehicleSelect(vehicle)}
-              >
-                <div className="card-body py-4 px-5 gap-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-sm">{vehicle.vehicleModel}</span>
-                    <span className="badge badge-soft badge-neutral text-xs font-mono shrink-0">{vehicle.vehiclePlateNum}</span>
-                  </div>
-                  <span className="text-xs text-base-content/50">
-                    {vehicle.latestOdometer != null
-                      ? `${vehicle.latestOdometer.toLocaleString()} km`
-                      : 'No odometer recorded'}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </Modal>
-
-      {/* Blocking modal — vehicle is still on a trip with no end odometer */}
-      {incompleteLog && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Vehicle Still Out</h3>
-                  <span className="text-sm text-base-content/50">{addLogVehicle?.vehicleModel} · {addLogVehicle?.vehiclePlateNum}</span>
-                </div>
-              </div>
-              <div className="modal-body flex flex-col gap-4">
-                <div className="alert alert-error py-3">
-                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                  <span className="text-sm">
-                    This vehicle has an ongoing trip with no end odometer recorded. Return the vehicle and log the end odometer before adding a new trip.
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Log #</span>
-                    <span className="font-medium font-mono">{incompleteLog.vehicleLogId}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Driver</span>
-                    <span className="font-medium">{incompleteLog.driverName}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Purpose</span>
-                    <span className="font-medium">{incompleteLog.purpose}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Odometer Start</span>
-                    <span className="font-medium">{incompleteLog.odometerStart?.toLocaleString()} km</span>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-primary" onClick={() => setIncompleteLog(null)}>
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Step 2: New vehicle log form */}
-      <Modal
-        isOpen={addLogStep === 'new-log'}
-        onClose={closeAddVehicleLog}
-        title={`New Vehicle Log — ${addLogVehicle?.vehicleModel ?? ''}`}
-        size="max-w-2xl"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAddVehicleLog}>
-              Cancel
-            </button>
-            <button type="submit" form="add-log-form" className="btn btn-primary" disabled={addLogSubmitting}>
-              {addLogSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Log
-            </button>
-          </>
-        }
-      >
-        <form id="add-log-form" onSubmit={handleAddLogSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="purpose"
-                maxLength={30}
-                required
-                className={`input input-bordered w-full${addLogFormError.purpose ? ' is-invalid' : ''}`}
-                placeholder="e.g. Material Delivery"
-                value={addLogForm.purpose}
-                onChange={handleAddLogFormChange}
-              />
-              {addLogFormError.purpose && <span className="helper-text">{addLogFormError.purpose}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Schedule <span className="text-base-content/40 font-normal">(optional)</span></label>
-              <div className={`input input-bordered w-full flex items-center justify-between gap-2${addLogFormError.schedId ? ' is-invalid' : ''}`}>
-                <span className={`text-sm truncate ${addLogForm._scheduleDisplay ? '' : 'text-base-content/40'}`}>
-                  {addLogForm._scheduleDisplay || 'No schedule linked'}
-                </span>
-                <div className="flex gap-1 shrink-0">
-                  <button
-                    type="button"
-                    className="btn btn-sm btn-secondary"
-                    onClick={() => setAddLogSchedPickerOpen(true)}
-                  >
-                    {addLogForm._scheduleDisplay ? 'Change' : 'Select'}
-                  </button>
-                  {addLogForm._scheduleDisplay && (
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => setAddLogForm(prev => ({ ...prev, schedId: '', _scheduleDisplay: '' }))}
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-              {addLogFormError.schedId && <span className="helper-text">{addLogFormError.schedId}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Destination <span className="text-error">*</span></label>
-              <input
-                type="text"
-                name="destination"
-                maxLength={255}
-                required
-                className={`input input-bordered w-full${addLogFormError.destination ? ' is-invalid' : ''}`}
-                placeholder="e.g. 123 Ayala Ave, Makati City"
-                value={addLogForm.destination}
-                onChange={handleAddLogFormChange}
-              />
-              {addLogFormError.destination && <span className="helper-text">{addLogFormError.destination}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Driver <span className="text-error">*</span></label>
-              <div className={`input input-bordered w-full flex items-center justify-between gap-2${addLogFormError.driverEmployeeId ? ' is-invalid' : ''}`}>
-                <span className={`text-sm truncate ${addLogDriverLabel ? '' : 'text-base-content/40'}`}>
-                  {addLogDriverLabel || 'No driver selected'}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-secondary shrink-0"
-                  onClick={() => setAddLogDriverPickerOpen(true)}
-                >
-                  {addLogDriverLabel ? 'Change' : 'Select'}
-                </button>
-              </div>
-              {addLogFormError.driverEmployeeId && <span className="helper-text">{addLogFormError.driverEmployeeId}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">
-                Odometer Start (km) <span className="text-error">*</span>
-                {addLogOdoStartLocked && (
-                  <span className="ml-2 text-xs font-normal text-base-content/40">
-                    <span className="icon-[tabler--lock] size-3 inline-block align-middle mr-0.5"></span>
-                    from previous log
-                  </span>
-                )}
-              </label>
-              <input
-                type="number"
-                name="odometerStart"
-                min={0}
-                required
-                readOnly={addLogOdoStartLocked}
-                className={`input input-bordered w-full${addLogOdoStartLocked ? ' bg-base-200 cursor-not-allowed' : ''}${addLogFormError.odometerStart ? ' is-invalid' : ''}`}
-                placeholder="e.g. 12500"
-                value={addLogForm.odometerStart}
-                onChange={addLogOdoStartLocked ? undefined : handleAddLogFormChange}
-              />
-              {addLogFormError.odometerStart && <span className="helper-text">{addLogFormError.odometerStart}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Odometer End (km)</label>
-              <input
-                type="number"
-                name="odometerEnd"
-                min={0}
-                className={`input input-bordered w-full${addLogFormError.odometerEnd ? ' is-invalid' : ''}`}
-                placeholder="Leave blank if still driving"
-                value={addLogForm.odometerEnd}
-                onChange={handleAddLogFormChange}
-              />
-              {addLogFormError.odometerEnd && <span className="helper-text">{addLogFormError.odometerEnd}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Status</label>
-              <select
-                name="status"
-                className={`select select-bordered w-full${addLogFormError.status ? ' is-invalid' : ''}`}
-                value={addLogForm.status}
-                onChange={handleAddLogFormChange}
-              >
-                {STATUS_OPTIONS.map(s => (
-                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                ))}
-              </select>
-              {addLogFormError.status && <span className="helper-text">{addLogFormError.status}</span>}
-            </div>
-
-            {addLogFormError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{addLogFormError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Schedule picker for add log form */}
-      <AnySchedulePickerModal
-        isOpen={addLogSchedPickerOpen}
-        onClose={() => setAddLogSchedPickerOpen(false)}
-        onSelect={handleAddLogScheduleSelect}
-      />
-
-      {/* Driver picker for add log form */}
-      <EmployeePickerModal
-        isOpen={addLogDriverPickerOpen}
-        onClose={() => setAddLogDriverPickerOpen(false)}
-        onSelect={handleAddLogDriverSelect}
-      />
     </Layout>
   )
 }

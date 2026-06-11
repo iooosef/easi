@@ -34,7 +34,7 @@ const renderCard = (e, onSelect) => (
  * Picker modal for selecting an Employee.
  * Accepts an optional `position` prop to filter results server-side (case-insensitive contains).
  */
-export default function EmployeePickerModal({ isOpen, onClose, onSelect, position }) {
+export default function EmployeePickerModal({ isOpen, onClose, onSelect, position, asLayer = false }) {
   // useCallback keeps fetchUrl stable as long as `position` doesn't change,
   // satisfying PickerModal's useEffect dependency requirement
   const fetchUrl = useCallback(
@@ -56,6 +56,7 @@ export default function EmployeePickerModal({ isOpen, onClose, onSelect, positio
       searchFilter={searchFilter}
       renderCard={renderCard}
       searchPlaceholder="Search by name or employee #..."
+      asLayer={asLayer}
     />
   )
 }

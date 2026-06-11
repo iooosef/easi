@@ -262,7 +262,10 @@ public class ReportService {
                         r -> new BigDecimal(r[1].toString())
                 ));
 
-        Map<Integer, BigDecimal> partsTotals = partRepository
+        // BILLING STRATEGY — must match PARTS_BILLING_STRATEGY in frontend/src/Billing.jsx
+        // fetchPartsByUsage (current): partUsageRepository.sumTotalCostBySrNumbers  — bills by qtyUsed
+        // fetchPartsByPO   (alternate): partRepository.sumTotalCostBySrNumbers       — bills by quantityOrdered
+        Map<Integer, BigDecimal> partsTotals = partUsageRepository
                 .sumTotalCostBySrNumbers(srNumbers)
                 .stream()
                 .collect(Collectors.toMap(

@@ -32,10 +32,10 @@ const renderCard = (s, onSelect) => (
 )
 
 /** Picker modal for selecting any Service Schedule (no report filter). */
-export default function AnySchedulePickerModal({ isOpen, onClose, onSelect }) {
+export default function AnySchedulePickerModal({ isOpen, onClose, onSelect, asLayer = false }) {
   return (
     <PickerModal
-      isOpen={isOpen}
+      isOpen={asLayer ? true : isOpen}
       onClose={onClose}
       onSelect={onSelect}
       title="Select Schedule"
@@ -43,6 +43,7 @@ export default function AnySchedulePickerModal({ isOpen, onClose, onSelect }) {
       searchFilter={searchFilter}
       renderCard={renderCard}
       searchPlaceholder="Search by sched #, project #, or purpose..."
+      asLayer={asLayer}
     />
   )
 }

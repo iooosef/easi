@@ -1,12 +1,24 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
-import ManageMenu from './ManageMenu'
-import Modal from './Modal'
+import ModalNav from './modals/ModalNav.jsx'
 import { notyfSuccess, notyfError } from './notyf'
 import SupplierPickerModal from './SupplierPickerModal'
 import ServiceReportPickerModal from './ServiceReportPickerModal'
+
+/** Parses a stored PO paymentMethod into { method, ewalletType } for form state */
+function parsePoPaymentMethod(stored) {
+  if (!stored) return { method: '', ewalletType: '' }
+  const lower = stored.toLowerCase()
+  if (lower === 'cash') return { method: 'cash', ewalletType: '' }
+  if (lower === 'check') return { method: 'check', ewalletType: '' }
+  if (lower === 'bank' || lower === 'bank transfer') return { method: 'bank', ewalletType: '' }
+  if (lower === 'gcash') return { method: 'ewallet', ewalletType: 'GCash' }
+  if (lower.startsWith('ewallet:')) return { method: 'ewallet', ewalletType: stored.slice(8) }
+  return { method: '', ewalletType: '' }
+}
 
 /** Parses a failed API response into field-level or general errors. */
 async function parseApiError(res) {
@@ -14,7 +26,6 @@ async function parseApiError(res) {
   if (data.errors) return data.errors
   return { _general: data.message ?? data.error ?? `Error ${res.status}` }
 }
-const PO_MENU_ITEMS = []
 
 /** Returns badge class for part status */
 function partStatusBadge(status) {
@@ -33,13 +44,14 @@ function formatDate(dt) {
 const PAGE_SIZE = 12
 const PARTS_PAGE_SIZE = 7
 
+
 /** Formats a number as currency (PHP) */
 function formatCurrency(value) {
   if (value == null) return '—'
   return Number(value).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' })
 }
 
-/** Parts table rendered inside the ManageMenu details component */
+/** Parts table with optional per-row action button */
 function PartsTable({ parts, loading, onSelectPart }) {
   const [partsPage, setPartsPage] = useState(0)
 
@@ -73,7 +85,7 @@ function PartsTable({ parts, loading, onSelectPart }) {
               <th>Quantity</th>
               <th>Unit Price</th>
               <th>Status</th>
-              <th>Action</th>
+              {onSelectPart && <th>Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -90,15 +102,14 @@ function PartsTable({ parts, loading, onSelectPart }) {
                     {p.status}
                   </span>
                 </td>
-                <td>
-                  <button
-                    className="btn btn-soft btn-primary btn-xs"
-                    onClick={() => onSelectPart(p)}
-                  >
-                    <span className="icon-[tabler--settings] size-3"></span>
-                    Manage
-                  </button>
-                </td>
+                {onSelectPart && (
+                  <td>
+                    <button className="btn btn-soft btn-primary btn-xs" onClick={() => onSelectPart(p)}>
+                      <span className="icon-[tabler--settings] size-3"></span>
+                      Manage
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -128,7 +139,7 @@ function PartsTable({ parts, loading, onSelectPart }) {
   )
 }
 
-/** Delivery contacts table rendered inside the ManageMenu details component */
+/** Delivery contacts table with optional per-row action button */
 function DeliveryContactsTable({ contacts, loading, onSelectContact }) {
   const [contactsPage, setContactsPage] = useState(0)
 
@@ -159,7 +170,7 @@ function DeliveryContactsTable({ contacts, loading, onSelectContact }) {
               <th>ID</th>
               <th>Contact Name</th>
               <th>Contact Number</th>
-              <th>Action</th>
+              {onSelectContact && <th>Action</th>}
             </tr>
           </thead>
           <tbody>
@@ -168,15 +179,14 @@ function DeliveryContactsTable({ contacts, loading, onSelectContact }) {
                 <td className="font-mono text-xs">{c.poContactNum}</td>
                 <td className="text-sm">{c.contactName}</td>
                 <td className="text-sm">{c.contactNumber}</td>
-                <td>
-                  <button
-                    className="btn btn-soft btn-primary btn-xs"
-                    onClick={() => onSelectContact(c)}
-                  >
-                    <span className="icon-[tabler--info-circle] size-3"></span>
-                    Details
-                  </button>
-                </td>
+                {onSelectContact && (
+                  <td>
+                    <button className="btn btn-soft btn-primary btn-xs" onClick={() => onSelectContact(c)}>
+                      <span className="icon-[tabler--info-circle] size-3"></span>
+                      Details
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -201,55 +211,45 @@ function DeliveryContactsTable({ contacts, loading, onSelectContact }) {
   )
 }
 
-/** Small modal showing all details of a single delivery contact */
-function ContactDetailsModal({ contact, onClose }) {
-  if (!contact) return null
+/** Modal showing all details of a single delivery contact */
+function ContactDetailsModal({ contact }) {
+  const { popModal } = useModal()
   return (
-    <>
-      <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={onClose} />
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div className="modal-content w-full max-w-sm">
-          <div className="modal-header">
-            <div>
-              <h3 className="modal-title">Contact #{contact.poContactNum}</h3>
-              <span className="text-sm text-base-content/50">{contact.contactName}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-              aria-label="Close"
-              onClick={onClose}
-            >
-              <span className="icon-[tabler--x] size-4"></span>
-            </button>
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Contact #{contact.poContactNum}</h3>
+          <span className="text-sm text-base-content/50">{contact.contactName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" aria-label="Close" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact ID</span>
+            <span className="text-sm font-medium font-mono">{contact.poContactNum}</span>
           </div>
-          <div className="modal-body">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact ID</span>
-                <span className="text-sm font-medium font-mono">{contact.poContactNum}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
-                <span className="text-sm font-medium font-mono">{contact.poNum}</span>
-              </div>
-              <div className="col-span-2 flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact Name</span>
-                <span className="text-sm font-medium">{contact.contactName}</span>
-              </div>
-              <div className="col-span-2 flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact Number</span>
-                <span className="text-sm font-medium">{contact.contactNumber}</span>
-              </div>
-            </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
+            <span className="text-sm font-medium font-mono">{contact.poNum}</span>
+          </div>
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact Name</span>
+            <span className="text-sm font-medium">{contact.contactName}</span>
+          </div>
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Contact Number</span>
+            <span className="text-sm font-medium">{contact.contactNumber}</span>
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
 
-/** Detail field helper for the manage part sub-modal */
+/** Detail field helper for part detail displays */
 function PartDetailField({ label, children }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -259,228 +259,1484 @@ function PartDetailField({ label, children }) {
   )
 }
 
-export default function PurchaseOrders() {
-  const { apiFetch, hasRole } = useAuth()
-  const { srNumber } = useParams()
-  const location = useLocation()
-  const navigate = useNavigate()
-  const srNumberInt = Number(srNumber)
-  const projectName = location.state?.projectName ?? '...'
+/** Level 2 modal — form for adding a delivery contact to the local list (New PO wizard) */
+function AddContactModal({ onAdd }) {
+  const { popModal } = useModal()
+  const [form, setForm] = useState({ contactName: '', contactNumber: '' })
+  const [formError, setFormError] = useState({})
 
-  const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+  function handleSubmit(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!form.contactName.trim()) errors.contactName = 'Contact name is required.'
+    if (!form.contactNumber.trim()) errors.contactNumber = 'Contact number is required.'
+    if (Object.keys(errors).length > 0) { setFormError(errors); return }
+    onAdd({ ...form })
+    popModal()
+  }
 
-  // Add PO modal
-  const EMPTY_FORM = { purpose: '', terms: '', paymentMethod: '', paymentDetails: '', deliveryAddress: '', remarks: '' }
-  const [addModalOpen, setAddModalOpen]   = useState(false)
-  const [form, setForm]                   = useState(EMPTY_FORM)
-  const [formError, setFormError]         = useState({})
-  const [submitting, setSubmitting]       = useState(false)
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Delivery Contact</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="new-po-add-contact-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+              <input type="text" maxLength={300} required
+                className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
+                placeholder="e.g. Juan Dela Cruz"
+                value={form.contactName}
+                onChange={e => setForm(p => ({ ...p, contactName: e.target.value }))} />
+              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+              <input type="text" maxLength={16} required
+                className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
+                placeholder="e.g. 09171234567"
+                value={form.contactNumber}
+                onChange={e => setForm(p => ({ ...p, contactNumber: e.target.value }))} />
+              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
+            </div>
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="new-po-add-contact-form" className="btn btn-primary">
+          <span className="icon-[tabler--plus] size-4"></span>
+          Add Contact
+        </button>
+      </div>
+    </div>
+  )
+}
 
-  function openAddModal() { setForm(EMPTY_FORM); setFormError({}); setAddModalOpen(true) }
-  function closeAddModal() { setAddModalOpen(false); setForm(EMPTY_FORM); setFormError({}) }
+/** Supplier picker pushed as a modal layer */
+function SupplierPickerLayer({ onSelect }) {
+  const { popModal } = useModal()
 
-  function handleFormChange(e) {
+  function handleSelect(s) {
+    onSelect(s)
+    popModal()
+  }
+
+  return (
+    <SupplierPickerModal
+      asLayer
+      isOpen={true}
+      onClose={popModal}
+      onSelect={handleSelect}
+    />
+  )
+}
+
+/** Level 2 modal — form for adding a part to the local list (New PO wizard) */
+function AddPartModal({ onAdd }) {
+  const { popModal, pushModal } = useModal()
+  const [form, setForm] = useState({
+    name: '', quantityOrdered: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered',
+  })
+  const [formError, setFormError] = useState({})
+  const [supplierDisplay, setSupplierDisplay] = useState('')
+
+  function handleSupplierSelect(s) {
+    setForm(p => ({ ...p, supplierId: s.supplierId }))
+    setSupplierDisplay(`${s.name} (#${s.supplierId})`)
+  }
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    const errors = {}
+    if (!form.name.trim()) errors.name = 'Name is required.'
+    if (!form.quantityOrdered || Number(form.quantityOrdered) < 0) errors.quantityOrdered = 'Quantity is required.'
+    if (!form.quantityType.trim()) errors.quantityType = 'Quantity type is required.'
+    if (!form.unitPrice || Number(form.unitPrice) < 0) errors.unitPrice = 'Unit price is required.'
+    if (!form.supplierId) errors.supplierId = 'Supplier is required.'
+    if (Object.keys(errors).length > 0) { setFormError(errors); return }
+    onAdd({
+      ...form,
+      quantityOrdered: Number(form.quantityOrdered),
+      unitPrice: Number(form.unitPrice),
+      supplierId: Number(form.supplierId),
+      supplierDisplay,
+    })
+    popModal()
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Part</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="new-po-add-part-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" maxLength={255} required
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+                placeholder="e.g. Compressor Unit"
+                value={form.name}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" min={0} required
+                className={`input input-bordered w-full${formError.quantityOrdered ? ' is-invalid' : ''}`}
+                placeholder="e.g. 2"
+                value={form.quantityOrdered}
+                onChange={e => setForm(p => ({ ...p, quantityOrdered: e.target.value }))} />
+              {formError.quantityOrdered && <span className="helper-text">{formError.quantityOrdered}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+              <input type="text" maxLength={30} required
+                className={`input input-bordered w-full${formError.quantityType ? ' is-invalid' : ''}`}
+                placeholder="e.g. pcs"
+                value={form.quantityType}
+                onChange={e => setForm(p => ({ ...p, quantityType: e.target.value }))} />
+              {formError.quantityType && <span className="helper-text">{formError.quantityType}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" min={0} step="0.01" required
+                className={`input input-bordered w-full${formError.unitPrice ? ' is-invalid' : ''}`}
+                placeholder="e.g. 1500.00"
+                value={form.unitPrice}
+                onChange={e => setForm(p => ({ ...p, unitPrice: e.target.value }))} />
+              {formError.unitPrice && <span className="helper-text">{formError.unitPrice}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${formError.supplierId ? ' is-invalid' : ''}`}
+                  placeholder="No supplier selected"
+                  value={supplierDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => pushModal(<SupplierPickerLayer onSelect={handleSupplierSelect} />)}>
+                  Pick
+                </button>
+              </div>
+              {formError.supplierId && <span className="helper-text">{formError.supplierId}</span>}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select className="select select-bordered w-full"
+                value={form.status}
+                onChange={e => setForm(p => ({ ...p, status: e.target.value }))}>
+                <option value="ordered">ordered</option>
+                <option value="received">received</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </div>
+
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="new-po-add-part-form" className="btn btn-primary">
+          <span className="icon-[tabler--plus] size-4"></span>
+          Add Part
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const NEW_PO_STEPS = [
+  { number: 1, label: 'PO Info' },
+  { number: 2, label: 'Payment' },
+  { number: 3, label: 'Delivery' },
+  { number: 4, label: 'Parts & Contacts' },
+]
+
+/** Level 1 modal — 4-step wizard for creating a new Purchase Order with parts and delivery contacts */
+function NewPOModal({ srNum, onSuccess }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch, officeAddress } = useAuth()
+  const [step, setStep] = useState(1)
+  const [projectAddress, setProjectAddress] = useState('')
+
+  useEffect(() => {
+    apiFetch(`/api/service-reports/${srNum}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(sr => apiFetch(`/api/projects/${sr.projNum}`))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(proj => setProjectAddress(proj.address ?? ''))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState({})
+
+  const [poInfo, setPoInfo] = useState({ purpose: '', terms: '' })
+  const [poInfoError, setPoInfoError] = useState({})
+  const [payment, setPayment] = useState({ paymentMethod: '', ewalletType: '', paymentDetails: '' })
+  const [delivery, setDelivery] = useState({ deliveryAddress: '', remarks: '' })
+  const [partsList, setPartsList] = useState([])
+  const [contactsList, setContactsList] = useState([])
+
+  function handleNext1() {
+    const errors = {}
+    if (!poInfo.purpose.trim()) errors.purpose = 'Purpose is required.'
+    if (!poInfo.terms.trim()) errors.terms = 'Terms is required.'
+    if (Object.keys(errors).length > 0) { setPoInfoError(errors); return }
+    setPoInfoError({})
+    setStep(2)
+  }
+
+  function handleAddPart(partData) {
+    setPartsList(prev => [...prev, { ...partData, _key: Date.now() }])
+  }
+
+  function handleAddContact(contactData) {
+    setContactsList(prev => [...prev, { ...contactData, _key: Date.now() }])
+  }
+
+  async function handleSubmit() {
+    setSubmitError({})
+    setSubmitting(true)
+    try {
+      const poRes = await apiFetch('/api/purchase-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purpose: poInfo.purpose,
+          terms: poInfo.terms,
+          paymentMethod: payment.paymentMethod === 'ewallet' ? `ewallet:${payment.ewalletType}` : payment.paymentMethod || null,
+          paymentDetails: payment.paymentDetails || null,
+          deliveryAddress: delivery.deliveryAddress || null,
+          remarks: delivery.remarks || null,
+          srNum,
+        }),
+      })
+      if (!poRes.ok) {
+        setSubmitError(await parseApiError(poRes))
+        notyfError('Failed to create purchase order.')
+        return
+      }
+      const createdPo = await poRes.json()
+      const poNum = createdPo.poNum
+
+      const partFailures = []
+      for (const part of partsList) {
+        const { _key, supplierDisplay, ...partPayload } = part
+        const res = await apiFetch('/api/parts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...partPayload, poNum }),
+        })
+        if (!res.ok) {
+          const err = await parseApiError(res)
+          partFailures.push(`"${part.name}": ${err._general ?? JSON.stringify(err)}`)
+        }
+      }
+
+      const contactFailures = []
+      for (const contact of contactsList) {
+        const { _key, ...contactPayload } = contact
+        const res = await apiFetch('/api/purchase-order-delivery-contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...contactPayload, poNum }),
+        })
+        if (!res.ok) {
+          const err = await parseApiError(res)
+          contactFailures.push(`"${contact.contactName}": ${err._general ?? JSON.stringify(err)}`)
+        }
+      }
+
+      notyfSuccess(`Purchase Order ${poNum} created.`)
+      partFailures.forEach(msg => notyfError(msg))
+      contactFailures.forEach(msg => notyfError(msg))
+      onSuccess?.()
+      popModal()
+    } catch (err) {
+      setSubmitError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New Purchase Order</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+
+        {/* Step progress */}
+        <div className="flex items-center gap-x-1">
+          {NEW_PO_STEPS.map(s => (
+            <div
+              key={s.number}
+              className={`progress-step transition-colors ${step >= s.number ? 'bg-primary' : 'bg-primary/10'}`}
+              role="progressbar"
+              aria-label={s.label}
+              aria-valuenow={step >= s.number ? 100 : 0}
+              aria-valuemin="0"
+              aria-valuemax="100"
+            />
+          ))}
+          <p className="text-xs text-primary ms-1 font-medium">{step}/{NEW_PO_STEPS.length}</p>
+        </div>
+
+        {/* Step 1 — PO Info */}
+        {step === 1 && (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Step 1 — PO Information</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
+                <input type="text" maxLength={30} required
+                  className={`input input-bordered w-full${poInfoError.purpose ? ' is-invalid' : ''}`}
+                  placeholder="e.g. Repair Parts"
+                  value={poInfo.purpose}
+                  onChange={e => setPoInfo(p => ({ ...p, purpose: e.target.value }))} />
+                {poInfoError.purpose
+                  ? <span className="helper-text">{poInfoError.purpose}</span>
+                  : <span className="text-xs text-base-content/40">{poInfo.purpose.length}/30</span>}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Terms <span className="text-error">*</span></label>
+                <input type="text" maxLength={16} required
+                  className={`input input-bordered w-full${poInfoError.terms ? ' is-invalid' : ''}`}
+                  placeholder="e.g. Net 30"
+                  value={poInfo.terms}
+                  onChange={e => setPoInfo(p => ({ ...p, terms: e.target.value }))} />
+                {poInfoError.terms
+                  ? <span className="helper-text">{poInfoError.terms}</span>
+                  : <span className="text-xs text-base-content/40">{poInfo.terms.length}/16</span>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2 — Payment */}
+        {step === 2 && (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Step 2 — Payment</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={`flex flex-col gap-1${payment.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
+                <label className="label-text font-medium">Payment Method</label>
+                <div className="flex gap-2">
+                  <select
+                    className={`select select-bordered${payment.paymentMethod === 'ewallet' ? '' : ' w-full'}`}
+                    value={payment.paymentMethod}
+                    onChange={e => setPayment(p => ({ ...p, paymentMethod: e.target.value }))}>
+                    <option value="">— None —</option>
+                    <option value="cash">Cash</option>
+                    <option value="check">Check</option>
+                    <option value="ewallet">E-Wallet</option>
+                    <option value="bank">Bank Transfer</option>
+                  </select>
+                  {payment.paymentMethod === 'ewallet' && (
+                    <select name="ewalletType" required
+                      className="select select-bordered flex-1"
+                      value={payment.ewalletType}
+                      onChange={e => setPayment(p => ({ ...p, ewalletType: e.target.value }))}>
+                      <option value="">— Select —</option>
+                      <option value="GCash">GCash</option>
+                      <option value="Maya">Maya</option>
+                      <option value="ShopeePay">ShopeePay</option>
+                      <option value="GrabPay">GrabPay</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+              <div className="sm:col-span-2 flex flex-col gap-1">
+                <label className="label-text font-medium">Payment Details</label>
+                <input type="text" maxLength={60}
+                  className="input input-bordered w-full"
+                  placeholder="e.g. BDO #1234-5678"
+                  value={payment.paymentDetails}
+                  onChange={e => setPayment(p => ({ ...p, paymentDetails: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3 — Delivery & Remarks */}
+        {step === 3 && (
+          <div className="flex flex-col gap-4">
+            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">Step 3 — Delivery &amp; Remarks</p>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="label-text font-medium">Delivery Address</label>
+                  <div className="flex gap-1.5">
+                    {projectAddress && (
+                      <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => setDelivery(p => ({ ...p, deliveryAddress: projectAddress }))}>
+                        <span className="icon-[tabler--building] size-3"></span>Same as project
+                      </button>
+                    )}
+                    {officeAddress && (
+                      <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                        onClick={() => setDelivery(p => ({ ...p, deliveryAddress: officeAddress }))}>
+                        <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <textarea maxLength={600} rows={3}
+                  className="textarea textarea-bordered w-full"
+                  placeholder="Full delivery address"
+                  value={delivery.deliveryAddress}
+                  onChange={e => setDelivery(p => ({ ...p, deliveryAddress: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Remarks</label>
+                <textarea maxLength={255} rows={2}
+                  className="textarea textarea-bordered w-full"
+                  placeholder="Optional notes or instructions"
+                  value={delivery.remarks}
+                  onChange={e => setDelivery(p => ({ ...p, remarks: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Step 4 — Parts & Delivery Contacts */}
+        {step === 4 && (
+          <div className="flex flex-col gap-6">
+            <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wide">
+              Step 4 — Parts &amp; Delivery Contacts <span className="text-base-content/30 font-normal normal-case">(optional)</span>
+            </p>
+
+            {/* Parts */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  Parts
+                  <span className="badge badge-soft badge-neutral text-xs ms-1">{partsList.length}</span>
+                </span>
+                <button type="button" className="btn btn-primary btn-sm"
+                  onClick={() => pushModal(<AddPartModal onAdd={handleAddPart} />)}>
+                  <span className="icon-[tabler--plus] size-4"></span>
+                  Add Part
+                </button>
+              </div>
+              {partsList.length === 0 ? (
+                <p className="text-sm text-base-content/40">No parts added yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {partsList.map(part => (
+                    <div key={part._key} className="card border border-base-300 bg-base-100">
+                      <div className="card-body py-2 px-3 gap-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm">{part.name}</p>
+                            <p className="text-xs text-base-content/50">
+                              {part.quantityOrdered} {part.quantityType} · {formatCurrency(part.unitPrice)} · {part.supplierDisplay}
+                            </p>
+                          </div>
+                          <button type="button" className="btn btn-error btn-xs btn-square shrink-0"
+                            onClick={() => setPartsList(prev => prev.filter(p => p._key !== part._key))}>
+                            <span className="icon-[tabler--x] size-3.5"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Delivery Contacts */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  Delivery Contacts
+                  <span className="badge badge-soft badge-neutral text-xs ms-1">{contactsList.length}</span>
+                </span>
+                <button type="button" className="btn btn-primary btn-sm"
+                  onClick={() => pushModal(<AddContactModal onAdd={handleAddContact} />)}>
+                  <span className="icon-[tabler--plus] size-4"></span>
+                  Add Contact
+                </button>
+              </div>
+              {contactsList.length === 0 ? (
+                <p className="text-sm text-base-content/40">No contacts added yet.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {contactsList.map(contact => (
+                    <div key={contact._key} className="card border border-base-300 bg-base-100">
+                      <div className="card-body py-2 px-3 gap-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-medium text-sm">{contact.contactName}</p>
+                            <p className="text-xs text-base-content/50">{contact.contactNumber}</p>
+                          </div>
+                          <button type="button" className="btn btn-error btn-xs btn-square shrink-0"
+                            onClick={() => setContactsList(prev => prev.filter(c => c._key !== contact._key))}>
+                            <span className="icon-[tabler--x] size-3.5"></span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {submitError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{submitError._general}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="modal-footer flex justify-between">
+        {step > 1 ? (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={() => setStep(s => s - 1)}>
+            <span className="icon-[tabler--arrow-left] size-4"></span> Back
+          </button>
+        ) : (
+          <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        )}
+        {step < 4 && (
+          <button type="button" className="btn btn-primary"
+            onClick={step === 1 ? handleNext1 : () => setStep(s => s + 1)}>
+            Next <span className="icon-[tabler--arrow-right] size-4"></span>
+          </button>
+        )}
+        {step === 4 && (
+          <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={submitting}>
+            {submitting
+              ? <span className="loading loading-spinner loading-sm"></span>
+              : <span className="icon-[tabler--plus] size-4"></span>
+            }
+            Create Purchase Order
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Modal — form for updating an existing purchase order */
+function UpdatePOModal({ po, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch, officeAddress } = useAuth()
+  const [projectAddress, setProjectAddress] = useState('')
+
+  useEffect(() => {
+    if (!po.srNum) return
+    apiFetch(`/api/service-reports/${po.srNum}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(sr => apiFetch(`/api/projects/${sr.projNum}`))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(proj => setProjectAddress(proj.address ?? ''))
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [form, setForm] = useState(() => {
+    const { method, ewalletType } = parsePoPaymentMethod(po.paymentMethod)
+    return {
+      purpose:         po.purpose ?? '',
+      terms:           po.terms ?? '',
+      paymentMethod:   method,
+      ewalletType,
+      paymentDetails:  po.paymentDetails ?? '',
+      deliveryAddress: po.deliveryAddress ?? '',
+      remarks:         po.remarks ?? '',
+    }
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/purchase-orders/${po.poNum}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, ewalletType: undefined, paymentMethod: form.paymentMethod === 'ewallet' ? `ewallet:${form.ewalletType}` : form.paymentMethod || null, poNum: po.poNum, srNum: po.srNum }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      notyfSuccess(`Purchase Order "${po.poNum}" updated successfully.`)
+      popModal()
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function handleChange(e) {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
-  // Update PO modal
-  const [editModalOpen, setEditModalOpen]   = useState(false)
-  const [editingPO, setEditingPO]           = useState(null)
-  const [editForm, setEditForm]             = useState(EMPTY_FORM)
-  const [editFormError, setEditFormError]   = useState({})
-  const [editSubmitting, setEditSubmitting] = useState(false)
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update {po.poNum}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-po-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
+              <input type="text" name="purpose" maxLength={30} required
+                className={`input input-bordered w-full${formError.purpose ? ' is-invalid' : ''}`}
+                placeholder="e.g. Repair Parts"
+                value={form.purpose} onChange={handleChange} />
+              {formError.purpose && <span className="helper-text">{formError.purpose}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Terms <span className="text-error">*</span></label>
+              <input type="text" name="terms" maxLength={16} required
+                className={`input input-bordered w-full${formError.terms ? ' is-invalid' : ''}`}
+                placeholder="e.g. net30"
+                value={form.terms} onChange={handleChange} />
+              {formError.terms && <span className="helper-text">{formError.terms}</span>}
+            </div>
+            <div className={`flex flex-col gap-1${form.paymentMethod === 'ewallet' ? ' sm:col-span-2' : ''}`}>
+              <label className="label-text font-medium">Payment Method</label>
+              <div className="flex gap-2">
+                <select name="paymentMethod"
+                  className={`select select-bordered${form.paymentMethod === 'ewallet' ? '' : ' w-full'}${formError.paymentMethod ? ' is-invalid' : ''}`}
+                  value={form.paymentMethod} onChange={handleChange}>
+                  <option value="">— None —</option>
+                  <option value="cash">Cash</option>
+                  <option value="check">Check</option>
+                  <option value="ewallet">E-Wallet</option>
+                  <option value="bank">Bank Transfer</option>
+                </select>
+                {form.paymentMethod === 'ewallet' && (
+                  <select name="ewalletType" required
+                    className={`select select-bordered flex-1${formError.ewalletType ? ' is-invalid' : ''}`}
+                    value={form.ewalletType} onChange={handleChange}>
+                    <option value="">— Select —</option>
+                    <option value="GCash">GCash</option>
+                    <option value="Maya">Maya</option>
+                    <option value="ShopeePay">ShopeePay</option>
+                    <option value="GrabPay">GrabPay</option>
+                  </select>
+                )}
+              </div>
+              {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
+              {form.paymentMethod === 'ewallet' && formError.ewalletType && <span className="helper-text">{formError.ewalletType}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Payment Details</label>
+              <input type="text" name="paymentDetails" maxLength={60}
+                className={`input input-bordered w-full${formError.paymentDetails ? ' is-invalid' : ''}`}
+                placeholder="e.g. BDO #1234567890"
+                value={form.paymentDetails} onChange={handleChange} />
+              {formError.paymentDetails && <span className="helper-text">{formError.paymentDetails}</span>}
+            </div>
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <div className="flex items-center justify-between gap-2">
+                <label className="label-text font-medium">Delivery Address</label>
+                <div className="flex gap-1.5">
+                  {projectAddress && (
+                    <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                      onClick={() => setForm(p => ({ ...p, deliveryAddress: projectAddress }))}>
+                      <span className="icon-[tabler--building] size-3"></span>Same as project
+                    </button>
+                  )}
+                  {officeAddress && (
+                    <button type="button" className="btn btn-xs btn-soft btn-secondary"
+                      onClick={() => setForm(p => ({ ...p, deliveryAddress: officeAddress }))}>
+                      <span className="icon-[tabler--building-factory-2] size-3"></span>Office address
+                    </button>
+                  )}
+                </div>
+              </div>
+              <textarea name="deliveryAddress" maxLength={600} rows={2}
+                className={`textarea textarea-bordered w-full${formError.deliveryAddress ? ' is-invalid' : ''}`}
+                placeholder="Full delivery address"
+                value={form.deliveryAddress} onChange={handleChange} />
+              {formError.deliveryAddress && <span className="helper-text">{formError.deliveryAddress}</span>}
+            </div>
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Remarks</label>
+              <textarea name="remarks" maxLength={255} rows={2}
+                className={`textarea textarea-bordered w-full${formError.remarks ? ' is-invalid' : ''}`}
+                placeholder="Optional notes"
+                value={form.remarks} onChange={handleChange} />
+              {formError.remarks && <span className="helper-text">{formError.remarks}</span>}
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-po-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
 
-  function openEditModal(o) {
-    setEditForm({
-      purpose:        o.purpose ?? '',
-      terms:          o.terms ?? '',
-      paymentMethod:  o.paymentMethod ?? '',
-      paymentDetails: o.paymentDetails ?? '',
-      deliveryAddress: o.deliveryAddress ?? '',
-      remarks:        o.remarks ?? '',
-    })
-    setEditingPO(o)
-    setEditFormError({})
-    setEditModalOpen(true)
+/** Modal — form for adding a part to an existing purchase order */
+function AddPartToExistingPOModal({ poNum, onSuccess }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    name: '', quantityOrdered: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered',
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [supplierDisplay, setSupplierDisplay] = useState('')
+
+  function handleSupplierSelect(s) {
+    setForm(p => ({ ...p, supplierId: s.supplierId }))
+    setSupplierDisplay(`${s.name} (#${s.supplierId})`)
   }
 
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingPO(null)
-    setEditForm(EMPTY_FORM)
-    setEditFormError({})
-  }
-
-  function handleEditFormChange(e) {
-    const { name, value } = e.target
-    setEditForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  async function handleUpdateSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    setEditFormError({})
-    setEditSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/purchase-orders/${editingPO.poNum}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editForm,
-          poNum:   editingPO.poNum,
-          srNum:   editingPO.srNum,
-        }),
-      })
-      if (!res.ok) {
-        setEditFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`Purchase Order "${editingPO.poNum}" updated successfully.`), 150)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setEditFormError({ _general: err.message })
-    } finally {
-      setEditSubmitting(false)
-    }
-  }
-
-  // Manage Parts modal
-  const EMPTY_PART_FORM = { name: '', quantityOrdered: '', quantityType: '', unitPrice: '', supplierId: '', status: 'ordered' }
-  const [managePartsOpen, setManagePartsOpen]         = useState(false)
-  const [managePartsOrder, setManagePartsOrder]       = useState(null)
-  const [manageParts, setManageParts]                 = useState([])
-  const [managePartsLoading, setManagePartsLoading]   = useState(false)
-  const [managePartsRefresh, setManagePartsRefresh]   = useState(0)
-  const [addPartOpen, setAddPartOpen]                 = useState(false)
-  const [partForm, setPartForm]                       = useState(EMPTY_PART_FORM)
-  const [partFormError, setPartFormError]             = useState({})
-  const [partFormSubmitting, setPartFormSubmitting]   = useState(false)
-  const [deletingPartId, setDeletingPartId]           = useState(null)
-  const [supplierPickerFor, setSupplierPickerFor]     = useState(null) // 'add' | 'update'
-  const [addSupplierDisplay, setAddSupplierDisplay]   = useState('')
-  const [updateSupplierDisplay, setUpdateSupplierDisplay] = useState('')
-
-  useEffect(() => {
-    if (!managePartsOpen || !managePartsOrder) { setManageParts([]); return }
-    let active = true
-    setManagePartsLoading(true)
-    const params = new URLSearchParams({ poNum: managePartsOrder.poNum, size: '100', sort: 'partId,asc' })
-    apiFetch(`/api/parts?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setManageParts(data.content ?? []) })
-      .catch(() => { if (active) setManageParts([]) })
-      .finally(() => { if (active) setManagePartsLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, managePartsOpen, managePartsOrder, managePartsRefresh])
-
-  function openManageParts(o) { setManagePartsOrder(o); setManagePartsOpen(true); setAddPartOpen(false) }
-  function closeManageParts() { setManagePartsOpen(false); setManagePartsOrder(null); setManageParts([]); setAddPartOpen(false); setPartForm(EMPTY_PART_FORM); setPartFormError({}); setAddSupplierDisplay('') }
-
-  function handlePartFormChange(e) {
-    const { name, value } = e.target
-    setPartForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  async function handleAddPartSubmit(e) {
-    e.preventDefault()
-    setPartFormError({})
-    setPartFormSubmitting(true)
+    setFormError({})
+    setSubmitting(true)
     try {
       const res = await apiFetch('/api/parts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...partForm,
-          quantityOrdered: Number(partForm.quantityOrdered),
-          unitPrice: Number(partForm.unitPrice),
-          supplierId: Number(partForm.supplierId),
-          poNum: managePartsOrder.poNum,
+          ...form,
+          quantityOrdered: Number(form.quantityOrdered),
+          unitPrice: Number(form.unitPrice),
+          supplierId: Number(form.supplierId),
+          poNum,
         }),
       })
       if (!res.ok) {
-        setPartFormError(await parseApiError(res))
+        setFormError(await parseApiError(res))
         notyfError('Add part failed')
         return
       }
-      setAddPartOpen(false)
-      setPartForm(EMPTY_PART_FORM)
-      setPartFormError({})
       notyfSuccess('Part added successfully.')
-      setManagePartsRefresh(k => k + 1)
+      popModal()
+      onSuccess?.()
     } catch (err) {
-      setPartFormError({ _general: err.message })
+      setFormError({ _general: err.message })
     } finally {
-      setPartFormSubmitting(false)
+      setSubmitting(false)
     }
   }
 
-  // Update Part sub-modal
-  const [updatePartOpen, setUpdatePartOpen]         = useState(false)
-  const [updatingPart, setUpdatingPart]             = useState(null)
-  const [updatePartForm, setUpdatePartForm]         = useState({})
-  const [updatePartFormError, setUpdatePartFormError] = useState({})
-  const [updatePartSubmitting, setUpdatePartSubmitting] = useState(false)
-
-  function openUpdatePart(p) {
-    setUpdatePartForm({
-      name:            p.name,
-      quantityOrdered: p.quantityOrdered,
-      quantityType:    p.quantityType,
-      unitPrice:       p.unitPrice,
-      supplierId:      p.supplierId,
-      status:          p.status,
-    })
-    setUpdateSupplierDisplay(`${p.supplierName ?? 'Supplier'} (#${p.supplierId})`)
-    setUpdatingPart(p)
-    setUpdatePartFormError({})
-    setUpdatePartOpen(true)
-  }
-
-  function closeUpdatePart() {
-    setUpdatePartOpen(false)
-    setUpdatingPart(null)
-    setUpdatePartForm({})
-    setUpdatePartFormError({})
-    setUpdateSupplierDisplay('')
-  }
-
-  function handleUpdatePartFormChange(e) {
+  function handleChange(e) {
     const { name, value } = e.target
-    setUpdatePartForm(prev => ({ ...prev, [name]: value }))
+    setForm(prev => ({ ...prev, [name]: value }))
   }
 
-  async function handleUpdatePartSubmit(e) {
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Part to {poNum}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="add-part-existing-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" name="name" maxLength={255} required
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+                placeholder="e.g. Compressor Unit"
+                value={form.name} onChange={handleChange} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" name="quantityOrdered" min={0} required
+                className={`input input-bordered w-full${formError.quantityOrdered ? ' is-invalid' : ''}`}
+                placeholder="e.g. 2"
+                value={form.quantityOrdered} onChange={handleChange} />
+              {formError.quantityOrdered && <span className="helper-text">{formError.quantityOrdered}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+              <input type="text" name="quantityType" maxLength={30} required
+                className={`input input-bordered w-full${formError.quantityType ? ' is-invalid' : ''}`}
+                placeholder="e.g. pcs"
+                value={form.quantityType} onChange={handleChange} />
+              {formError.quantityType && <span className="helper-text">{formError.quantityType}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" name="unitPrice" min={0} step="0.01" required
+                className={`input input-bordered w-full${formError.unitPrice ? ' is-invalid' : ''}`}
+                placeholder="e.g. 1500.00"
+                value={form.unitPrice} onChange={handleChange} />
+              {formError.unitPrice && <span className="helper-text">{formError.unitPrice}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${formError.supplierId ? ' is-invalid' : ''}`}
+                  placeholder="No supplier selected"
+                  value={supplierDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => pushModal(<SupplierPickerLayer onSelect={handleSupplierSelect} />)}>
+                  Pick
+                </button>
+              </div>
+              {formError.supplierId && <span className="helper-text">{formError.supplierId}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status" className="select select-bordered w-full"
+                value={form.status} onChange={handleChange}>
+                <option value="ordered">ordered</option>
+                <option value="received">received</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="add-part-existing-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Part
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal — form for updating an existing part */
+function UpdatePartModal({ part, onSuccess }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    name:            part.name,
+    quantityOrdered: part.quantityOrdered,
+    quantityType:    part.quantityType,
+    unitPrice:       part.unitPrice,
+    supplierId:      part.supplierId,
+    status:          part.status,
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [supplierDisplay, setSupplierDisplay] = useState(`${part.supplierName ?? 'Supplier'} (#${part.supplierId})`)
+
+  function handleSupplierSelect(s) {
+    setForm(p => ({ ...p, supplierId: s.supplierId }))
+    setSupplierDisplay(`${s.name} (#${s.supplierId})`)
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault()
-    setUpdatePartFormError({})
-    setUpdatePartSubmitting(true)
+    setFormError({})
+    setSubmitting(true)
     try {
-      const res = await apiFetch(`/api/parts/${updatingPart.partId}`, {
+      const res = await apiFetch(`/api/parts/${part.partId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...updatePartForm,
-          quantityOrdered: Number(updatePartForm.quantityOrdered),
-          unitPrice:       Number(updatePartForm.unitPrice),
-          supplierId: Number(updatePartForm.supplierId),
-          poNum:      updatingPart.poNum,
-          orderDate:  updatingPart.orderDate,
+          ...form,
+          quantityOrdered: Number(form.quantityOrdered),
+          unitPrice:       Number(form.unitPrice),
+          supplierId:      Number(form.supplierId),
+          poNum:           part.poNum,
+          orderDate:       part.orderDate,
         }),
       })
       if (!res.ok) {
-        setUpdatePartFormError(await parseApiError(res))
+        setFormError(await parseApiError(res))
         notyfError('Update failed')
         return
       }
-      closeUpdatePart()
-      notyfSuccess(`Part #${updatingPart.partId} updated successfully.`)
-      setManagePartsRefresh(k => k + 1)
+      notyfSuccess(`Part #${part.partId} updated successfully.`)
+      popModal()
+      onSuccess?.()
     } catch (err) {
-      setUpdatePartFormError({ _general: err.message })
+      setFormError({ _general: err.message })
     } finally {
-      setUpdatePartSubmitting(false)
+      setSubmitting(false)
     }
+  }
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Update Part #{part.partId}</h3>
+          <span className="text-sm text-base-content/50">{part.name}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-part-form" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2 flex flex-col gap-1">
+              <label className="label-text font-medium">Name <span className="text-error">*</span></label>
+              <input type="text" name="name" maxLength={255} required
+                className={`input input-bordered w-full${formError.name ? ' is-invalid' : ''}`}
+                value={form.name} onChange={handleChange} />
+              {formError.name && <span className="helper-text">{formError.name}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
+              <input type="number" name="quantityOrdered" min={0} required
+                className={`input input-bordered w-full${formError.quantityOrdered ? ' is-invalid' : ''}`}
+                value={form.quantityOrdered} onChange={handleChange} />
+              {formError.quantityOrdered && <span className="helper-text">{formError.quantityOrdered}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
+              <input type="text" name="quantityType" maxLength={30} required
+                className={`input input-bordered w-full${formError.quantityType ? ' is-invalid' : ''}`}
+                value={form.quantityType} onChange={handleChange} />
+              {formError.quantityType && <span className="helper-text">{formError.quantityType}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
+              <input type="number" name="unitPrice" min={0} step="0.01" required
+                className={`input input-bordered w-full${formError.unitPrice ? ' is-invalid' : ''}`}
+                value={form.unitPrice} onChange={handleChange} />
+              {formError.unitPrice && <span className="helper-text">{formError.unitPrice}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
+              <div className="flex gap-2">
+                <input type="text" readOnly
+                  className={`input input-bordered flex-1${formError.supplierId ? ' is-invalid' : ''}`}
+                  placeholder="No supplier selected"
+                  value={supplierDisplay} />
+                <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                  onClick={() => pushModal(<SupplierPickerLayer onSelect={handleSupplierSelect} />)}>
+                  Pick
+                </button>
+              </div>
+              {formError.supplierId && <span className="helper-text">{formError.supplierId}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Status</label>
+              <select name="status" className="select select-bordered w-full"
+                value={form.status} onChange={handleChange}>
+                <option value="ordered">ordered</option>
+                <option value="received">received</option>
+                <option value="cancelled">cancelled</option>
+              </select>
+            </div>
+            {formError._general && (
+              <div className="sm:col-span-2 alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-part-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal — form for logging a new usage record for a part */
+function LogUsageModal({ part, srNumber, availableQty, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ qtyUsed: '', notes: '' })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/part-usages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partId:   part.partId,
+          srNumber: srNumber ?? null,
+          qtyUsed:  Number(form.qtyUsed),
+          notes:    form.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Log usage failed')
+        return
+      }
+      notyfSuccess('Usage logged successfully.')
+      popModal()
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Log Usage — Part #{part.partId}</h3>
+          <span className="text-sm text-base-content/50">{part.name}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="log-usage-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            {srNumber && (
+              <p className="text-sm text-base-content/60">
+                Usage will be logged against <span className="font-medium">SR #{srNumber}</span>.
+              </p>
+            )}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <label className="label-text font-medium">Quantity Used <span className="text-error">*</span></label>
+                <button type="button" className="btn btn-xs btn-soft btn-primary"
+                  onClick={() => setForm(p => ({ ...p, qtyUsed: availableQty }))}>
+                  Use All
+                </button>
+              </div>
+              <input type="number" min={1} max={availableQty} required
+                className={`input input-bordered w-full${formError.qtyUsed ? ' is-invalid' : ''}`}
+                placeholder={`Max: ${availableQty}`}
+                value={form.qtyUsed}
+                onChange={e => setForm(p => ({ ...p, qtyUsed: e.target.value }))} />
+              {formError.qtyUsed && <span className="helper-text">{formError.qtyUsed}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Notes</label>
+              <textarea maxLength={255} rows={2}
+                className={`textarea textarea-bordered w-full${formError.notes ? ' is-invalid' : ''}`}
+                placeholder="Optional notes"
+                value={form.notes}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+              {formError.notes && <span className="helper-text">{formError.notes}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="log-usage-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--tool] size-4"></span>
+          }
+          Log Usage
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal — form for editing an existing usage record. Uses state-driven SR picker to avoid z-index conflicts. */
+function EditUsageModal({ usage, part, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    srNumber: usage.srNumber ?? '',
+    qtyUsed:  usage.qtyUsed,
+    notes:    usage.notes ?? '',
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [srDisplay, setSrDisplay] = useState(usage.srNumber ? `SR #${usage.srNumber}` : '')
+  const [srPickerOpen, setSrPickerOpen] = useState(false)
+
+  useEffect(() => {
+    if (!usage.srNumber) return
+    apiFetch(`/api/service-reports/${usage.srNumber}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(sr => { if (sr) setSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? ''}`) })
+      .catch(() => {})
+  }, [])
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/part-usages/${usage.usageId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber: form.srNumber ? Number(form.srNumber) : null,
+          qtyUsed:  Number(form.qtyUsed),
+          notes:    form.notes || null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      notyfSuccess(`Usage #${usage.usageId} updated.`)
+      popModal()
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="modal-content w-full max-w-sm my-auto">
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">Edit Usage #{usage.usageId}</h3>
+            <span className="text-sm text-base-content/50">{part?.name}</span>
+          </div>
+          <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+            <span className="icon-[tabler--x] size-4"></span>
+          </button>
+        </div>
+        <div className="modal-body">
+          <form id="edit-usage-form" onSubmit={handleSubmit}>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Service Report <span className="text-base-content/50 font-normal">(optional)</span></label>
+                <div className="flex gap-2">
+                  <input type="text" readOnly
+                    className={`input input-bordered flex-1${formError.srNumber ? ' is-invalid' : ''}`}
+                    placeholder="None — not linked to an SR"
+                    value={srDisplay} />
+                  <button type="button" className="btn btn-soft btn-secondary shrink-0"
+                    onClick={() => setSrPickerOpen(true)}>
+                    Pick
+                  </button>
+                  {form.srNumber && (
+                    <button type="button" className="btn btn-soft btn-error shrink-0" title="Clear SR link"
+                      onClick={() => { setForm(p => ({ ...p, srNumber: '' })); setSrDisplay('') }}>
+                      <span className="icon-[tabler--x] size-4"></span>
+                    </button>
+                  )}
+                </div>
+                {formError.srNumber && <span className="helper-text">{formError.srNumber}</span>}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
+                <input type="number" min={1} required
+                  className={`input input-bordered w-full${formError.qtyUsed ? ' is-invalid' : ''}`}
+                  value={form.qtyUsed}
+                  onChange={e => setForm(p => ({ ...p, qtyUsed: e.target.value }))} />
+                {formError.qtyUsed && <span className="helper-text">{formError.qtyUsed}</span>}
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Notes</label>
+                <textarea maxLength={255} rows={2}
+                  className={`textarea textarea-bordered w-full${formError.notes ? ' is-invalid' : ''}`}
+                  placeholder="Optional notes"
+                  value={form.notes}
+                  onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
+                {formError.notes && <span className="helper-text">{formError.notes}</span>}
+              </div>
+              {formError._general && (
+                <div className="alert alert-error py-2">
+                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                  <span className="text-sm">{formError._general}</span>
+                </div>
+              )}
+            </div>
+          </form>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+          <button type="submit" form="edit-usage-form" className="btn btn-primary" disabled={submitting}>
+            {submitting
+              ? <span className="loading loading-spinner loading-sm"></span>
+              : <span className="icon-[tabler--device-floppy] size-4"></span>
+            }
+            Save Changes
+          </button>
+        </div>
+      </div>
+      <ServiceReportPickerModal
+        isOpen={srPickerOpen}
+        onClose={() => setSrPickerOpen(false)}
+        backdropZ="z-[300]"
+        modalZ="z-[310]"
+        onSelect={sr => {
+          setForm(p => ({ ...p, srNumber: sr.srNumber }))
+          setSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? sr.projectName ?? ''}`)
+          setSrPickerOpen(false)
+        }}
+      />
+    </>
+  )
+}
+
+/** Modal — shows part details, usage history, and manage actions (Update / Log Usage) */
+function ManagePartModal({ part: initialPart, srNumber, onRefreshList }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch, hasRole } = useAuth()
+  const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
+
+  const [part, setPart] = useState(initialPart)
+  const [partRefreshKey, setPartRefreshKey] = useState(0)
+  const [usageHistory, setUsageHistory] = useState([])
+  const [usageLoading, setUsageLoading] = useState(false)
+  const [usageRefreshKey, setUsageRefreshKey] = useState(0)
+
+  const PART_MENU_ITEMS = [
+    { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
+    { key: 'log', label: 'Log Usage', icon: 'icon-[tabler--tool]', roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
+  ]
+
+  /** Computed qty available based on usage history */
+  const availableQty = (part.quantityOrdered ?? 0) - usageHistory.reduce((s, u) => s + u.qtyUsed, 0)
+
+  useEffect(() => {
+    if (partRefreshKey === 0) return
+    apiFetch(`/api/parts/${initialPart.partId}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setPart(data) })
+      .catch(() => {})
+  }, [partRefreshKey])
+
+  useEffect(() => {
+    let active = true
+    setUsageLoading(true)
+    const params = new URLSearchParams({ partId: part.partId, size: '100', sort: 'usedOn,desc' })
+    apiFetch(`/api/part-usages?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setUsageHistory(data.content ?? []) })
+      .catch(() => { if (active) setUsageHistory([]) })
+      .finally(() => { if (active) setUsageLoading(false) })
+    return () => { active = false }
+  }, [part.partId, apiFetch, usageRefreshKey])
+
+  function handleAction(key) {
+    if (key === 'update') {
+      pushModal(<UpdatePartModal part={part} onSuccess={() => {
+        setPartRefreshKey(k => k + 1)
+        onRefreshList?.()
+      }} />)
+    }
+    if (key === 'log') {
+      if (availableQty <= 0) { notyfError('No stock available to log.'); return }
+      pushModal(<LogUsageModal part={part} srNumber={srNumber} availableQty={availableQty} onSuccess={() => {
+        setUsageRefreshKey(k => k + 1)
+        onRefreshList?.()
+      }} />)
+    }
+  }
+
+  function handleEditUsage(u) {
+    pushModal(<EditUsageModal usage={u} part={part} onSuccess={() => {
+      setUsageRefreshKey(k => k + 1)
+      onRefreshList?.()
+    }} />)
+  }
+
+  return (
+    <div className="modal-content w-full max-w-xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Part #{part.partId}</h3>
+          <span className="text-sm text-base-content/50">{part.name}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-5">
+
+        {/* Part details */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+          <PartDetailField label="Part ID"><span className="font-mono">{part.partId}</span></PartDetailField>
+          <PartDetailField label="Status">
+            <span className={`badge badge-soft ${partStatusBadge(part.status)} text-xs`}>{part.status}</span>
+          </PartDetailField>
+          <PartDetailField label="PO Number"><span className="font-mono">{part.poNum}</span></PartDetailField>
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
+            <span className="text-sm font-medium">{part.name}</span>
+          </div>
+          <PartDetailField label="Ordered">{part.quantityOrdered} {part.quantityType}</PartDetailField>
+          <PartDetailField label="Available">
+            <span className={availableQty === 0 ? 'text-error font-semibold' : 'text-success font-semibold'}>
+              {usageLoading ? '…' : availableQty} {part.quantityType}
+            </span>
+          </PartDetailField>
+          <PartDetailField label="Unit Price">{formatCurrency(part.unitPrice)}</PartDetailField>
+          <PartDetailField label="Subtotal">{formatCurrency(Number(part.quantityOrdered) * Number(part.unitPrice ?? 0))}</PartDetailField>
+          <PartDetailField label="Supplier">({part.supplierId}) {part.supplierName ?? '—'}</PartDetailField>
+          <PartDetailField label="Order Date">{formatDate(part.orderDate)}</PartDetailField>
+        </div>
+
+        <div className="divider my-0"></div>
+
+        {/* Usage history */}
+        <div className="flex flex-col gap-2">
+          <span className="text-xs text-base-content/50 uppercase tracking-wide">Usage History</span>
+          {usageLoading ? (
+            <div className="flex justify-center py-4">
+              <span className="loading loading-spinner loading-sm text-primary"></span>
+            </div>
+          ) : usageHistory.length === 0 ? (
+            <div className="text-center py-4 text-base-content/40 text-sm">No usage recorded.</div>
+          ) : (
+            <div className="overflow-x-auto rounded-box border border-base-300">
+              <table className="table table-zebra table-sm w-full">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>SR #</th>
+                    <th>Qty Used</th>
+                    <th>Used On</th>
+                    {canEdit && <th></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageHistory.map(u => (
+                    <tr key={u.usageId}>
+                      <td className="font-mono text-xs">{u.usageId}</td>
+                      <td className="text-sm">{u.srNumber ?? '—'}</td>
+                      <td className="text-sm">{u.qtyUsed} {part.quantityType}</td>
+                      <td className="text-sm">{formatDate(u.usedOn)}</td>
+                      {canEdit && (
+                        <td>
+                          <button className="btn btn-soft btn-secondary btn-xs" onClick={() => handleEditUsage(u)}>
+                            <span className="icon-[tabler--pencil] size-3"></span>
+                            Edit
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="divider my-0"></div>
+
+        <ModalNav title="Manage" items={PART_MENU_ITEMS} hasRole={hasRole} onSelect={handleAction} cols={3} />
+      </div>
+    </div>
+  )
+}
+
+/** Modal — lists all parts for a PO with add/manage/delete actions */
+function ManagePartsModal({ po, onRefresh }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [parts, setParts] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [deletingPartId, setDeletingPartId] = useState(null)
+
+  function refresh() {
+    setRefreshKey(k => k + 1)
+    onRefresh?.()
+  }
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    const params = new URLSearchParams({ poNum: po.poNum, size: '100', sort: 'partId,asc' })
+    apiFetch(`/api/parts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setParts(data.content ?? []) })
+      .catch(() => { if (active) setParts([]) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [po.poNum, apiFetch, refreshKey])
+
+  function handleAddPart() {
+    pushModal(<AddPartToExistingPOModal poNum={po.poNum} onSuccess={refresh} />)
+  }
+
+  function handleManagePart(p) {
+    pushModal(<ManagePartModal part={p} srNumber={po.srNumber} onRefreshList={refresh} />)
   }
 
   async function handleDeletePart(partId) {
@@ -493,7 +1749,7 @@ export default function PurchaseOrders() {
         return
       }
       notyfSuccess(`Part #${partId} deleted.`)
-      setManagePartsRefresh(k => k + 1)
+      refresh()
     } catch {
       notyfError('Delete failed — server error')
     } finally {
@@ -501,137 +1757,307 @@ export default function PurchaseOrders() {
     }
   }
 
-  // Part usage history (for the manage-part sub-modal)
-  const EMPTY_USAGE_FORM = { srNumber: '', qtyUsed: '', notes: '' }
-  const [partUsageHistory, setPartUsageHistory]   = useState([])
-  const [partUsageLoading, setPartUsageLoading]   = useState(false)
-  const [partUsageRefresh, setPartUsageRefresh]   = useState(0)
-  const [logUsageOpen, setLogUsageOpen]           = useState(false)
-  const [logUsageForm, setLogUsageForm]           = useState(EMPTY_USAGE_FORM)
-  const [logUsageFormError, setLogUsageFormError] = useState({})
-  const [logUsageSubmitting, setLogUsageSubmitting] = useState(false)
-  const [editUsageOpen, setEditUsageOpen]           = useState(false)
-  const [editingUsage, setEditingUsage]             = useState(null)
-  const [editUsageForm, setEditUsageForm]           = useState({})
-  const [editUsageFormError, setEditUsageFormError] = useState({})
-  const [editUsageSubmitting, setEditUsageSubmitting] = useState(false)
-  const [editSrDisplay, setEditSrDisplay]           = useState('')
-  const [srPickerOpen, setSrPickerOpen]             = useState(false)
+  return (
+    <div className="modal-content w-full max-w-5xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Parts — {po.poNum}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="flex justify-end">
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleAddPart}>
+            <span className="icon-[tabler--plus] size-4"></span>
+            Add Part
+          </button>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <span className="loading loading-spinner loading-sm text-primary"></span>
+          </div>
+        ) : parts.length === 0 ? (
+          <div className="text-center py-6 text-base-content/40 text-sm">
+            No parts linked to this purchase order.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300">
+            <table className="table table-zebra table-sm w-full">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>QTY Ordered</th>
+                  <th>Remaining</th>
+                  <th>Unit Price</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parts.map(p => (
+                  <tr key={p.partId}>
+                    <td className="font-mono text-xs">{p.partId}</td>
+                    <td className="text-sm max-w-40">
+                      <span className="line-clamp-1" title={p.name}>{p.name}</span>
+                    </td>
+                    <td className="text-sm">{p.quantityOrdered} {p.quantityType}</td>
+                    <td className="text-sm">
+                      <span className={p.availableQty === 0 ? 'text-error font-semibold' : 'text-success font-semibold'}>
+                        {p.availableQty} {p.quantityType}
+                      </span>
+                    </td>
+                    <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
+                    <td>
+                      <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>{p.status}</span>
+                    </td>
+                    <td>
+                      <div className="flex gap-1">
+                        <button className="btn btn-soft btn-primary btn-xs" onClick={() => handleManagePart(p)}>
+                          <span className="icon-[tabler--settings] size-3"></span>
+                          Manage
+                        </button>
+                        <button className="btn btn-soft btn-error btn-xs"
+                          disabled={deletingPartId === p.partId}
+                          onClick={() => handleDeletePart(p.partId)}>
+                          {deletingPartId === p.partId
+                            ? <span className="loading loading-spinner loading-xs"></span>
+                            : <span className="icon-[tabler--x] size-3"></span>
+                          }
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>
+      </div>
+    </div>
+  )
+}
 
-  // Manage Delivery Contacts modal
-  const EMPTY_CONTACT_FORM = { contactName: '', contactNumber: '' }
-  const [manageContactsOpen, setManageContactsOpen]       = useState(false)
-  const [manageContactsOrder, setManageContactsOrder]     = useState(null)
-  const [manageContacts, setManageContacts]               = useState([])
-  const [manageContactsLoading, setManageContactsLoading] = useState(false)
-  const [manageContactsRefresh, setManageContactsRefresh] = useState(0)
-  const [addContactOpen, setAddContactOpen]               = useState(false)
-  const [contactForm, setContactForm]                     = useState(EMPTY_CONTACT_FORM)
-  const [contactFormError, setContactFormError]           = useState({})
-  const [contactFormSubmitting, setContactFormSubmitting] = useState(false)
-  const [deletingContactId, setDeletingContactId]         = useState(null)
+/** Modal — form for adding a delivery contact to an existing PO */
+function AddContactToExistingPOModal({ poNum, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ contactName: '', contactNumber: '' })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
 
-  // Update Contact sub-modal
-  const [updateContactOpen, setUpdateContactOpen]           = useState(false)
-  const [updatingContact, setUpdatingContact]               = useState(null)
-  const [updateContactForm, setUpdateContactForm]           = useState({})
-  const [updateContactFormError, setUpdateContactFormError] = useState({})
-  const [updateContactSubmitting, setUpdateContactSubmitting] = useState(false)
-
-  useEffect(() => {
-    if (!manageContactsOpen || !manageContactsOrder) { setManageContacts([]); return }
-    let active = true
-    setManageContactsLoading(true)
-    const params = new URLSearchParams({ poNum: manageContactsOrder.poNum, size: '100', sort: 'poContactNum,asc' })
-    apiFetch(`/api/purchase-order-delivery-contacts?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setManageContacts(data.content ?? []) })
-      .catch(() => { if (active) setManageContacts([]) })
-      .finally(() => { if (active) setManageContactsLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, manageContactsOpen, manageContactsOrder, manageContactsRefresh])
-
-  function openManageContacts(o) { setManageContactsOrder(o); setManageContactsOpen(true); setAddContactOpen(false) }
-  function closeManageContacts() { setManageContactsOpen(false); setManageContactsOrder(null); setManageContacts([]); setAddContactOpen(false); setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}) }
-
-  function handleContactFormChange(e) {
-    const { name, value } = e.target
-    setContactForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  async function handleAddContactSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    setContactFormError({})
-    setContactFormSubmitting(true)
+    setFormError({})
+    setSubmitting(true)
     try {
       const res = await apiFetch('/api/purchase-order-delivery-contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...contactForm, poNum: manageContactsOrder.poNum }),
+        body: JSON.stringify({ ...form, poNum }),
       })
       if (!res.ok) {
-        setContactFormError(await parseApiError(res))
+        setFormError(await parseApiError(res))
         notyfError('Add contact failed')
         return
       }
-      setAddContactOpen(false)
-      setContactForm(EMPTY_CONTACT_FORM)
-      setContactFormError({})
       notyfSuccess('Delivery contact added successfully.')
-      setManageContactsRefresh(k => k + 1)
+      popModal()
+      onSuccess?.()
     } catch (err) {
-      setContactFormError({ _general: err.message })
+      setFormError({ _general: err.message })
     } finally {
-      setContactFormSubmitting(false)
+      setSubmitting(false)
     }
   }
 
-  function openUpdateContact(c) {
-    setUpdateContactForm({ contactName: c.contactName, contactNumber: c.contactNumber })
-    setUpdatingContact(c)
-    setUpdateContactFormError({})
-    setUpdateContactOpen(true)
-  }
-
-  function closeUpdateContact() {
-    setUpdateContactOpen(false)
-    setUpdatingContact(null)
-    setUpdateContactForm({})
-    setUpdateContactFormError({})
-  }
-
-  function handleUpdateContactFormChange(e) {
+  function handleChange(e) {
     const { name, value } = e.target
-    setUpdateContactForm(prev => ({ ...prev, [name]: value }))
+    setForm(prev => ({ ...prev, [name]: value }))
   }
 
-  async function handleUpdateContactSubmit(e) {
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Delivery Contact</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="add-contact-existing-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+              <input type="text" name="contactName" maxLength={300} required
+                className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
+                placeholder="e.g. Juan Dela Cruz"
+                value={form.contactName} onChange={handleChange} />
+              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+              <input type="text" name="contactNumber" maxLength={16} required
+                className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
+                placeholder="e.g. 09171234567"
+                value={form.contactNumber} onChange={handleChange} />
+              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="add-contact-existing-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Contact
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal — form for updating an existing delivery contact */
+function UpdateContactModal({ contact, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ contactName: contact.contactName, contactNumber: contact.contactNumber })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleSubmit(e) {
     e.preventDefault()
-    setUpdateContactFormError({})
-    setUpdateContactSubmitting(true)
+    setFormError({})
+    setSubmitting(true)
     try {
-      const res = await apiFetch(`/api/purchase-order-delivery-contacts/${updatingContact.poContactNum}`, {
+      const res = await apiFetch(`/api/purchase-order-delivery-contacts/${contact.poContactNum}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...updateContactForm, poNum: updatingContact.poNum }),
+        body: JSON.stringify({ ...form, poNum: contact.poNum }),
       })
       if (!res.ok) {
-        setUpdateContactFormError(await parseApiError(res))
+        setFormError(await parseApiError(res))
         notyfError('Update failed')
         return
       }
-      closeUpdateContact()
-      notyfSuccess(`Contact #${updatingContact.poContactNum} updated successfully.`)
-      setManageContactsRefresh(k => k + 1)
+      notyfSuccess(`Contact #${contact.poContactNum} updated successfully.`)
+      popModal()
+      onSuccess?.()
     } catch (err) {
-      setUpdateContactFormError({ _general: err.message })
+      setFormError({ _general: err.message })
     } finally {
-      setUpdateContactSubmitting(false)
+      setSubmitting(false)
     }
   }
 
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Update Contact #{contact.poContactNum}</h3>
+          <span className="text-sm text-base-content/50">{contact.contactName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-contact-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
+              <input type="text" name="contactName" maxLength={300} required
+                className={`input input-bordered w-full${formError.contactName ? ' is-invalid' : ''}`}
+                value={form.contactName} onChange={handleChange} />
+              {formError.contactName && <span className="helper-text">{formError.contactName}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
+              <input type="text" name="contactNumber" maxLength={16} required
+                className={`input input-bordered w-full${formError.contactNumber ? ' is-invalid' : ''}`}
+                value={form.contactNumber} onChange={handleChange} />
+              {formError.contactNumber && <span className="helper-text">{formError.contactNumber}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-contact-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** Modal — lists all delivery contacts for a PO with add/details/update/delete actions */
+function ManageDeliveryContactsModal({ po, onRefresh }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [contacts, setContacts] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [deletingId, setDeletingId] = useState(null)
+
+  function refresh() {
+    setRefreshKey(k => k + 1)
+    onRefresh?.()
+  }
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    const params = new URLSearchParams({ poNum: po.poNum, size: '100', sort: 'poContactNum,asc' })
+    apiFetch(`/api/purchase-order-delivery-contacts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setContacts(data.content ?? []) })
+      .catch(() => { if (active) setContacts([]) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [po.poNum, apiFetch, refreshKey])
+
+  function handleAddContact() {
+    pushModal(<AddContactToExistingPOModal poNum={po.poNum} onSuccess={refresh} />)
+  }
+
+  function handleViewDetails(c) {
+    pushModal(<ContactDetailsModal contact={c} />)
+  }
+
+  function handleUpdateContact(c) {
+    pushModal(<UpdateContactModal contact={c} onSuccess={refresh} />)
+  }
+
   async function handleDeleteContact(poContactNum) {
-    setDeletingContactId(poContactNum)
+    setDeletingId(poContactNum)
     try {
       const res = await apiFetch(`/api/purchase-order-delivery-contacts/${poContactNum}`, { method: 'DELETE' })
       if (!res.ok) {
@@ -640,40 +2066,244 @@ export default function PurchaseOrders() {
         return
       }
       notyfSuccess(`Contact #${poContactNum} deleted.`)
-      setManageContactsRefresh(k => k + 1)
+      refresh()
     } catch {
       notyfError('Delete failed — server error')
     } finally {
-      setDeletingContactId(null)
+      setDeletingId(null)
     }
   }
 
-  async function handleAddSubmit(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/purchase-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, srNum: srNumberInt }),
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Delivery Contacts — {po.poNum}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="flex justify-end">
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleAddContact}>
+            <span className="icon-[tabler--plus] size-4"></span>
+            Add Contact
+          </button>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <span className="loading loading-spinner loading-sm text-primary"></span>
+          </div>
+        ) : contacts.length === 0 ? (
+          <div className="text-center py-6 text-base-content/40 text-sm">
+            No delivery contacts linked to this purchase order.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300">
+            <table className="table table-zebra table-sm w-full">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Contact Name</th>
+                  <th>Contact Number</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contacts.map(c => (
+                  <tr key={c.poContactNum}>
+                    <td className="font-mono text-xs">{c.poContactNum}</td>
+                    <td className="text-sm">{c.contactName}</td>
+                    <td className="text-sm">{c.contactNumber}</td>
+                    <td>
+                      <div className="flex gap-1">
+                        <button className="btn btn-soft btn-primary btn-xs" onClick={() => handleViewDetails(c)}>
+                          <span className="icon-[tabler--info-circle] size-3"></span>
+                          Details
+                        </button>
+                        <button className="btn btn-soft btn-secondary btn-xs" onClick={() => handleUpdateContact(c)}>
+                          <span className="icon-[tabler--pencil] size-3"></span>
+                          Update
+                        </button>
+                        <button className="btn btn-soft btn-error btn-xs"
+                          disabled={deletingId === c.poContactNum}
+                          onClick={() => handleDeleteContact(c.poContactNum)}>
+                          {deletingId === c.poContactNum
+                            ? <span className="loading loading-spinner loading-xs"></span>
+                            : <span className="icon-[tabler--x] size-3"></span>
+                          }
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>
+      </div>
+    </div>
+  )
+}
+
+const PO_MANAGE_MENU_ITEMS = [
+  { key: 'update',    label: 'Update Details',      icon: 'icon-[tabler--pencil]',       roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
+  { key: 'parts',     label: 'Manage Parts',         icon: 'icon-[tabler--package]',      roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
+  { key: 'contacts',  label: 'Delivery Contacts',    icon: 'icon-[tabler--address-book]', roles: ['ADMIN', 'ACCOUNTING', 'STAFF'] },
+  { key: 'documents', label: 'Manage Documents',     icon: 'icon-[tabler--files]',        roles: null },
+]
+
+/** Level 1 modal — PO details panel with ModalNav for manage actions */
+function POManageModal({ po: initialPo, onRefresh }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch, hasRole } = useAuth()
+  const navigate = useNavigate()
+
+  const [po, setPo] = useState(initialPo)
+  const [parts, setParts] = useState([])
+  const [partsLoading, setPartsLoading] = useState(false)
+  const [partsRefreshKey, setPartsRefreshKey] = useState(0)
+  const [contacts, setContacts] = useState([])
+  const [contactsLoading, setContactsLoading] = useState(false)
+  const [contactsRefreshKey, setContactsRefreshKey] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    setPartsLoading(true)
+    const params = new URLSearchParams({ poNum: po.poNum, size: '100', sort: 'partId,asc' })
+    apiFetch(`/api/parts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setParts(data.content ?? []) })
+      .catch(() => { if (active) setParts([]) })
+      .finally(() => { if (active) setPartsLoading(false) })
+    return () => { active = false }
+  }, [po.poNum, apiFetch, partsRefreshKey])
+
+  useEffect(() => {
+    let active = true
+    setContactsLoading(true)
+    const params = new URLSearchParams({ poNum: po.poNum, size: '100', sort: 'poContactNum,asc' })
+    apiFetch(`/api/purchase-order-delivery-contacts?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setContacts(data.content ?? []) })
+      .catch(() => { if (active) setContacts([]) })
+      .finally(() => { if (active) setContactsLoading(false) })
+    return () => { active = false }
+  }, [po.poNum, apiFetch, contactsRefreshKey])
+
+  function refreshPo() {
+    apiFetch(`/api/purchase-orders/${po.poNum}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setPo(data) })
+      .catch(() => {})
+    onRefresh?.()
+  }
+
+  function refreshParts() { setPartsRefreshKey(k => k + 1) }
+  function refreshContacts() { setContactsRefreshKey(k => k + 1) }
+
+  function handleAction(key) {
+    if (key === 'update') pushModal(<UpdatePOModal po={po} onSuccess={refreshPo} />)
+    if (key === 'parts') pushModal(<ManagePartsModal po={po} onRefresh={refreshParts} />)
+    if (key === 'contacts') pushModal(<ManageDeliveryContactsModal po={po} onRefresh={refreshContacts} />)
+    if (key === 'documents') {
+      popModal()
+      navigate(`/service-report/${po.srNum}/purchase-orders/${po.poNum}/documents`, {
+        state: { poNum: po.poNum, srNumber: po.srNum },
       })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Add failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeAddModal()
-      setTimeout(() => notyfSuccess(`Purchase Order "${data.poNum}" created successfully.`), 150)
-      setPage(0)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
     }
   }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">{po.poNum}</h3>
+          <span className="text-sm text-base-content/50">SR #{po.srNum} · {po.purpose}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-5">
+
+        {/* PO details */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">PO Number</span>
+            <span className="text-sm font-medium font-mono">{po.poNum}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">SR #</span>
+            <span className="text-sm font-medium">{po.srNum ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Terms</span>
+            <span className="text-sm font-medium">{po.terms}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Payment Method</span>
+            <span className="text-sm font-medium">{po.paymentMethod ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Payment Details</span>
+            <span className="text-sm font-medium">{po.paymentDetails ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Added On</span>
+            <span className="text-sm font-medium">{formatDate(po.addedOn)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Total Cost</span>
+            <span className="text-sm font-medium text-primary">
+              {po.totalCost != null ? Number(po.totalCost).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' }) : '₱0.00'}
+            </span>
+          </div>
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Delivery Address</span>
+            <span className="text-sm font-medium">{po.deliveryAddress ?? '—'}</span>
+          </div>
+          <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Remarks</span>
+            <span className="text-sm font-medium">{po.remarks ?? '—'}</span>
+          </div>
+        </div>
+
+        <div className="divider my-0"></div>
+
+        {/* Ordered parts summary */}
+        <div className="flex flex-col gap-3">
+          <span className="text-xs text-base-content/50 uppercase tracking-wide">Ordered Parts</span>
+          <PartsTable parts={parts} loading={partsLoading} />
+        </div>
+
+        <div className="divider my-0"></div>
+
+        {/* Delivery contacts summary */}
+        <div className="flex flex-col gap-3">
+          <span className="text-xs text-base-content/50 uppercase tracking-wide">Delivery Contacts</span>
+          <DeliveryContactsTable contacts={contacts} loading={contactsLoading} />
+        </div>
+
+        <div className="divider my-0"></div>
+
+        <ModalNav title="Manage" items={PO_MANAGE_MENU_ITEMS} hasRole={hasRole} onSelect={handleAction} cols={4} />
+      </div>
+    </div>
+  )
+}
+
+export default function PurchaseOrders() {
+  const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
+  const { srNumber } = useParams()
+  const location = useLocation()
+  const srNumberInt = Number(srNumber)
+  const projectName = location.state?.projectName ?? '...'
+
+  const canEdit = hasRole('ADMIN', 'ACCOUNTING', 'STAFF')
 
   const [orders, setOrders]               = useState([])
   const [loading, setLoading]             = useState(true)
@@ -683,15 +2313,6 @@ export default function PurchaseOrders() {
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
   const [refreshKey, setRefreshKey]       = useState(0)
-
-  const [selectedOrder, setSelectedOrder]     = useState(null)
-  const [parts, setParts]                     = useState([])
-  const [partsLoading, setPartsLoading]       = useState(false)
-  const [partsRefreshKey, setPartsRefreshKey] = useState(0)
-  const [selectedPart, setSelectedPart]       = useState(null)
-  const [contacts, setContacts]               = useState([])
-  const [contactsLoading, setContactsLoading] = useState(false)
-  const [selectedContact, setSelectedContact] = useState(null)
 
   /** Fetches purchase orders for the current service report. */
   useEffect(() => {
@@ -720,160 +2341,6 @@ export default function PurchaseOrders() {
     return () => { active = false }
   }, [apiFetch, page, srNumberInt, refreshKey])
 
-  /** Fetches parts whenever a PO is selected or partsRefreshKey changes. */
-  useEffect(() => {
-    if (!selectedOrder) {
-      setParts([])
-      return
-    }
-    let active = true
-    setPartsLoading(true)
-    const params = new URLSearchParams({
-      poNum: selectedOrder.poNum,
-      size: '100',
-      sort: 'partId,asc',
-    })
-    apiFetch(`/api/parts?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setParts(data.content ?? []) })
-      .catch(() => { if (active) setParts([]) })
-      .finally(() => { if (active) setPartsLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, selectedOrder, partsRefreshKey])
-
-  /** Fetches usage history whenever a part is selected in the sub-modal. */
-  useEffect(() => {
-    if (!selectedPart) { setPartUsageHistory([]); return }
-    let active = true
-    setPartUsageLoading(true)
-    const params = new URLSearchParams({ partId: selectedPart.partId, size: '100', sort: 'usedOn,desc' })
-    apiFetch(`/api/part-usages?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setPartUsageHistory(data.content ?? []) })
-      .catch(() => { if (active) setPartUsageHistory([]) })
-      .finally(() => { if (active) setPartUsageLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, selectedPart, partUsageRefresh])
-
-  /** Fetches delivery contacts whenever a PO is selected. */
-  useEffect(() => {
-    if (!selectedOrder) {
-      setContacts([])
-      return
-    }
-    let active = true
-    setContactsLoading(true)
-    const params = new URLSearchParams({
-      poNum: selectedOrder.poNum,
-      size: '100',
-      sort: 'poContactNum,asc',
-    })
-    apiFetch(`/api/purchase-order-delivery-contacts?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setContacts(data.content ?? []) })
-      .catch(() => { if (active) setContacts([]) })
-      .finally(() => { if (active) setContactsLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, selectedOrder])
-
-  /** Opens the log usage overlay for the selected part. */
-  function openLogUsage() { setLogUsageForm(EMPTY_USAGE_FORM); setLogUsageFormError({}); setLogUsageOpen(true) }
-  function closeLogUsage() { setLogUsageOpen(false); setLogUsageForm(EMPTY_USAGE_FORM); setLogUsageFormError({}) }
-
-  /** Submits a new part usage record. */
-  async function handleLogUsageSubmit(e) {
-    e.preventDefault()
-    setLogUsageFormError({})
-    setLogUsageSubmitting(true)
-    try {
-      const res = await apiFetch('/api/part-usages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          partId:    selectedPart.partId,
-          srNumber:  logUsageForm.srNumber ? Number(logUsageForm.srNumber) : null,
-          qtyUsed:   Number(logUsageForm.qtyUsed),
-          notes:     logUsageForm.notes || null,
-        }),
-      })
-      if (!res.ok) {
-        setLogUsageFormError(await parseApiError(res))
-        notyfError('Log usage failed')
-        return
-      }
-      closeLogUsage()
-      notyfSuccess('Usage logged successfully.')
-      setPartUsageRefresh(k => k + 1)
-      setPartsRefreshKey(k => k + 1)
-      setManagePartsRefresh(k => k + 1)
-    } catch (err) {
-      setLogUsageFormError({ _general: err.message })
-    } finally {
-      setLogUsageSubmitting(false)
-    }
-  }
-
-  /** Opens the edit usage overlay for a specific usage record. */
-  function openEditUsage(u) {
-    setEditUsageForm({ srNumber: u.srNumber ?? '', qtyUsed: u.qtyUsed, notes: u.notes ?? '' })
-    setEditingUsage(u)
-    setEditUsageFormError({})
-    setEditUsageOpen(true)
-    if (u.srNumber) {
-      setEditSrDisplay(`SR #${u.srNumber}`)
-      apiFetch(`/api/service-reports/${u.srNumber}`)
-        .then(res => res.ok ? res.json() : null)
-        .then(sr => { if (sr) setEditSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? ''}`) })
-        .catch(() => {})
-    } else {
-      setEditSrDisplay('')
-    }
-  }
-  function closeEditUsage() {
-    setEditUsageOpen(false)
-    setEditingUsage(null)
-    setEditUsageForm({})
-    setEditUsageFormError({})
-    setEditSrDisplay('')
-  }
-
-  /** Submits an update to an existing part usage record. */
-  async function handleEditUsageSubmit(e) {
-    e.preventDefault()
-    setEditUsageFormError({})
-    setEditUsageSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/part-usages/${editingUsage.usageId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          srNumber: editUsageForm.srNumber ? Number(editUsageForm.srNumber) : null,
-          qtyUsed:  Number(editUsageForm.qtyUsed),
-          notes:    editUsageForm.notes || null,
-        }),
-      })
-      if (!res.ok) {
-        setEditUsageFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeEditUsage()
-      notyfSuccess(`Usage #${editingUsage.usageId} updated.`)
-      setPartUsageRefresh(k => k + 1)
-      setPartsRefreshKey(k => k + 1)
-      setManagePartsRefresh(k => k + 1)
-    } catch (err) {
-      setEditUsageFormError({ _general: err.message })
-    } finally {
-      setEditUsageSubmitting(false)
-    }
-  }
-
-  /** Computed available qty for the currently selected part using live usage history. */
-  const computedAvailableQty = selectedPart
-    ? (selectedPart.quantityOrdered ?? 0) - partUsageHistory.reduce((s, u) => s + u.qtyUsed, 0)
-    : 0
-
   const filtered = orders.filter(o => {
     if (search === '') return true
     const q = search.toLowerCase()
@@ -883,6 +2350,10 @@ export default function PurchaseOrders() {
       (o.terms ?? '').toLowerCase().includes(q)
     )
   })
+
+  function openManage(o) {
+    pushModal(<POManageModal po={o} onRefresh={() => { setPage(0); setRefreshKey(k => k + 1) }} />)
+  }
 
   return (
     <Layout activePage="service-report">
@@ -901,7 +2372,7 @@ export default function PurchaseOrders() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={openAddModal}
+              onClick={() => pushModal(<NewPOModal srNum={srNumberInt} onSuccess={() => { setPage(0); setRefreshKey(k => k + 1) }} />)}
             >
               <span className="icon-[tabler--plus] size-4"></span>
               New Purchase Order
@@ -970,43 +2441,13 @@ export default function PurchaseOrders() {
                         <p>Payment: {o.paymentMethod}</p>
                         <p>Added: {formatDate(o.addedOn)}</p>
                       </div>
-                      <div className="card-actions mt-2 flex-col gap-2">
+                      <div className="card-actions mt-2">
                         <button
                           className="btn btn-soft btn-primary btn-sm w-full"
-                          onClick={() => setSelectedOrder(o)}
+                          onClick={() => openManage(o)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
-                          View Details
-                        </button>
-                        <button
-                          className="btn btn-soft btn-secondary btn-sm w-full"
-                          onClick={() => openEditModal(o)}
-                        >
-                          <span className="icon-[tabler--pencil] size-4"></span>
-                          Update Purchase Order
-                        </button>
-                        <button
-                          className="btn btn-soft btn-secondary btn-sm w-full"
-                          onClick={() => openManageParts(o)}
-                        >
-                          <span className="icon-[tabler--package] size-4"></span>
-                          Manage Parts
-                        </button>
-                        <button
-                          className="btn btn-soft btn-secondary btn-sm w-full"
-                          onClick={() => openManageContacts(o)}
-                        >
-                          <span className="icon-[tabler--address-book] size-4"></span>
-                          Manage Delivery Contacts
-                        </button>
-                        <button
-                          className="btn btn-soft btn-secondary btn-sm w-full"
-                          onClick={() => navigate(`/service-report/${srNumber}/purchase-orders/${o.poNum}/documents`, {
-                            state: { projectName, srNumber: srNumberInt, poNum: o.poNum },
-                          })}
-                        >
-                          <span className="icon-[tabler--files] size-4"></span>
-                          Manage Documents
+                          Manage
                         </button>
                       </div>
                     </div>
@@ -1031,1023 +2472,6 @@ export default function PurchaseOrders() {
           )}
         </>
       )}
-
-      {/* Purchase Order Manage Modal */}
-      <ManageMenu
-        title={selectedOrder ? `PO ${selectedOrder.poNum}` : ''}
-        subtitle={selectedOrder ? `SR #${selectedOrder.srNum} · ${selectedOrder.purpose}` : ''}
-        item={selectedOrder}
-        details={selectedOrder ? [
-          { label: 'PO Number',       value: selectedOrder.poNum },
-          { label: 'SR #',            value: selectedOrder.srNum ?? '—' },
-          { label: 'Terms',           value: selectedOrder.terms },
-          { label: 'Payment Method',  value: selectedOrder.paymentMethod },
-          { label: 'Payment Details', value: selectedOrder.paymentDetails ?? '—' },
-          { label: 'Added On',        value: formatDate(selectedOrder.addedOn) },
-          { label: 'Total Cost',       value: selectedOrder.totalCost != null ? Number(selectedOrder.totalCost).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' }) : '₱0.00' },
-          { label: 'Delivery Address', value: selectedOrder.deliveryAddress ?? '—', fullWidth: true },
-          { label: 'Remarks',          value: selectedOrder.remarks ?? '—', fullWidth: true },
-          {
-            fullWidth: true,
-            component: (
-              <div className="flex flex-col gap-3">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Ordered Parts</span>
-                <PartsTable parts={parts} loading={partsLoading} onSelectPart={setSelectedPart} />
-              </div>
-            ),
-          },
-          {
-            fullWidth: true,
-            component: (
-              <div className="flex flex-col gap-3">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Delivery Contacts</span>
-                <DeliveryContactsTable contacts={contacts} loading={contactsLoading} onSelectContact={setSelectedContact} />
-              </div>
-            ),
-          },
-        ] : []}
-        isOpen={!!selectedOrder}
-        onClose={() => { setSelectedOrder(null); setSelectedPart(null); setSelectedContact(null) }}
-        hasRole={hasRole}
-        menuItems={PO_MENU_ITEMS}
-        onMenuSelect={(key, order) => {
-          setSelectedOrder(null)
-        }}
-      />
-
-      {/* Manage Part sub-modal — sits above ManageMenu / Manage Parts modal via higher z-index */}
-      {selectedPart && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={() => { setSelectedPart(null); closeLogUsage(); closeEditUsage() }} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
-            <div className="modal-content w-full max-w-xl my-auto">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Part #{selectedPart.partId}</h3>
-                  <span className="text-sm text-base-content/50">{selectedPart.name}</span>
-                </div>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-                  onClick={() => { setSelectedPart(null); closeLogUsage(); closeEditUsage() }}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body flex flex-col gap-5">
-
-                {/* Part details grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
-                  <PartDetailField label="Part ID"><span className="font-mono">{selectedPart.partId}</span></PartDetailField>
-                  <PartDetailField label="Status">
-                    <span className={`badge badge-soft ${partStatusBadge(selectedPart.status)} text-xs`}>{selectedPart.status}</span>
-                  </PartDetailField>
-                  <PartDetailField label="PO Number"><span className="font-mono">{selectedPart.poNum}</span></PartDetailField>
-                  <div className="col-span-2 sm:col-span-3 flex flex-col gap-0.5">
-                    <span className="text-xs text-base-content/50 uppercase tracking-wide">Name</span>
-                    <span className="text-sm font-medium">{selectedPart.name}</span>
-                  </div>
-                  <PartDetailField label="Ordered">{selectedPart.quantityOrdered} {selectedPart.quantityType}</PartDetailField>
-                  <PartDetailField label="Available">
-                    <span className={computedAvailableQty === 0 ? 'text-error font-semibold' : 'text-success font-semibold'}>
-                      {partUsageLoading ? '…' : computedAvailableQty} {selectedPart.quantityType}
-                    </span>
-                  </PartDetailField>
-                  <PartDetailField label="Unit Price">{formatCurrency(selectedPart.unitPrice)}</PartDetailField>
-                  <PartDetailField label="Subtotal">{formatCurrency(Number(selectedPart.quantityOrdered) * Number(selectedPart.unitPrice ?? 0))}</PartDetailField>
-                  <PartDetailField label="Supplier">({selectedPart.supplierId}) {selectedPart.supplierName ?? '—'}</PartDetailField>
-                  <PartDetailField label="Order Date">{formatDate(selectedPart.orderDate)}</PartDetailField>
-                </div>
-
-                <div className="divider my-0"></div>
-
-                {/* Usage history */}
-                <div className="flex flex-col gap-2">
-                  <span className="text-xs text-base-content/50 uppercase tracking-wide">Usage History</span>
-                  {partUsageLoading ? (
-                    <div className="flex justify-center py-4">
-                      <span className="loading loading-spinner loading-sm text-primary"></span>
-                    </div>
-                  ) : partUsageHistory.length === 0 ? (
-                    <div className="text-center py-4 text-base-content/40 text-sm">No usage recorded.</div>
-                  ) : (
-                    <div className="overflow-x-auto rounded-box border border-base-300">
-                      <table className="table table-zebra table-sm w-full">
-                        <thead>
-                          <tr>
-                            <th>ID</th>
-                            <th>SR #</th>
-                            <th>Qty Used</th>
-                            <th>Used On</th>
-                            {canEdit && <th></th>}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {partUsageHistory.map(u => (
-                            <tr key={u.usageId}>
-                              <td className="font-mono text-xs">{u.usageId}</td>
-                              <td className="text-sm">{u.srNumber ?? '—'}</td>
-                              <td className="text-sm">{u.qtyUsed} {selectedPart.quantityType}</td>
-                              <td className="text-sm">{formatDate(u.usedOn)}</td>
-                              {canEdit && (
-                                <td>
-                                  <button className="btn btn-soft btn-secondary btn-xs" onClick={() => openEditUsage(u)}>
-                                    <span className="icon-[tabler--pencil] size-3"></span>
-                                    Edit
-                                  </button>
-                                </td>
-                              )}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                <div className="divider my-0"></div>
-
-                {/* Action buttons */}
-                <div>
-                  <p className="text-xs text-base-content/50 uppercase tracking-wide mb-3">Manage</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    {canEdit && (
-                      <button type="button" className="group w-full"
-                        onClick={() => { const p = selectedPart; setSelectedPart(null); openUpdatePart(p) }}>
-                        <div className="card bg-base-100 border border-base-300 h-full transition-transform duration-300 group-hover:-translate-y-2">
-                          <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
-                            <span className="icon-[tabler--pencil] size-8 text-primary"></span>
-                            <p className="text-xs font-medium text-base-content leading-tight">Update Details</p>
-                          </div>
-                        </div>
-                      </button>
-                    )}
-                    {canEdit && (
-                      <button type="button"
-                        className={`group w-full${computedAvailableQty === 0 ? ' cursor-not-allowed opacity-40' : ''}`}
-                        disabled={computedAvailableQty === 0}
-                        title={computedAvailableQty === 0 ? 'No stock available' : undefined}
-                        onClick={() => computedAvailableQty > 0 && openLogUsage()}>
-                        <div className={`card bg-base-100 border border-base-300 h-full${computedAvailableQty > 0 ? ' transition-transform duration-300 group-hover:-translate-y-2' : ''}`}>
-                          <div className="card-body items-center justify-center text-center gap-2 py-5 px-3">
-                            <span className="icon-[tabler--tool] size-8 text-primary"></span>
-                            <p className="text-xs font-medium text-base-content leading-tight">Log Usage</p>
-                          </div>
-                        </div>
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Log Usage overlay — sits above Manage Part sub-modal */}
-      {logUsageOpen && selectedPart && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[65]" onClick={closeLogUsage} />
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Log Usage — Part #{selectedPart.partId}</h3>
-                  <span className="text-sm text-base-content/50">{selectedPart.name}</span>
-                </div>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeLogUsage}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="log-usage-form" onSubmit={handleLogUsageSubmit}>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">SR # <span className="text-base-content/50 font-normal">(optional)</span></label>
-                      <input type="number" name="srNumber" min={1}
-                        className={`input input-bordered w-full${logUsageFormError.srNumber ? ' is-invalid' : ''}`}
-                        placeholder="Leave blank if not tied to an SR"
-                        value={logUsageForm.srNumber}
-                        onChange={e => setLogUsageForm(p => ({ ...p, srNumber: e.target.value }))} />
-                      {logUsageFormError.srNumber && <span className="helper-text">{logUsageFormError.srNumber}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
-                      <input type="number" name="qtyUsed" min={1} max={computedAvailableQty} required
-                        className={`input input-bordered w-full${logUsageFormError.qtyUsed ? ' is-invalid' : ''}`}
-                        placeholder={`Max: ${computedAvailableQty}`}
-                        value={logUsageForm.qtyUsed}
-                        onChange={e => setLogUsageForm(p => ({ ...p, qtyUsed: e.target.value }))} />
-                      {logUsageFormError.qtyUsed && <span className="helper-text">{logUsageFormError.qtyUsed}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Notes</label>
-                      <textarea name="notes" maxLength={255} rows={2}
-                        className={`textarea textarea-bordered w-full${logUsageFormError.notes ? ' is-invalid' : ''}`}
-                        placeholder="Optional notes"
-                        value={logUsageForm.notes}
-                        onChange={e => setLogUsageForm(p => ({ ...p, notes: e.target.value }))} />
-                      {logUsageFormError.notes && <span className="helper-text">{logUsageFormError.notes}</span>}
-                    </div>
-                    {logUsageFormError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{logUsageFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeLogUsage}>Cancel</button>
-                <button type="submit" form="log-usage-form" className="btn btn-primary" disabled={logUsageSubmitting}>
-                  {logUsageSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--tool] size-4"></span>
-                  }
-                  Log Usage
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Edit Usage overlay — sits above Manage Part sub-modal */}
-      {editUsageOpen && editingUsage && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[65]" onClick={closeEditUsage} />
-          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Edit Usage #{editingUsage.usageId}</h3>
-                  <span className="text-sm text-base-content/50">{selectedPart?.name}</span>
-                </div>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeEditUsage}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="edit-usage-form" onSubmit={handleEditUsageSubmit}>
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Service Report <span className="text-base-content/50 font-normal">(optional)</span></label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          readOnly
-                          className={`input input-bordered flex-1${editUsageFormError.srNumber ? ' is-invalid' : ''}`}
-                          placeholder="None — not linked to an SR"
-                          value={editSrDisplay}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-soft btn-secondary shrink-0"
-                          onClick={() => setSrPickerOpen(true)}
-                        >
-                          Pick
-                        </button>
-                        {editUsageForm.srNumber && (
-                          <button
-                            type="button"
-                            className="btn btn-soft btn-error shrink-0"
-                            title="Clear SR link"
-                            onClick={() => { setEditUsageForm(p => ({ ...p, srNumber: '' })); setEditSrDisplay('') }}
-                          >
-                            <span className="icon-[tabler--x] size-4"></span>
-                          </button>
-                        )}
-                      </div>
-                      {editUsageFormError.srNumber && <span className="helper-text">{editUsageFormError.srNumber}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Qty Used <span className="text-error">*</span></label>
-                      <input type="number" name="qtyUsed" min={1} required
-                        className={`input input-bordered w-full${editUsageFormError.qtyUsed ? ' is-invalid' : ''}`}
-                        value={editUsageForm.qtyUsed}
-                        onChange={e => setEditUsageForm(p => ({ ...p, qtyUsed: e.target.value }))} />
-                      {editUsageFormError.qtyUsed && <span className="helper-text">{editUsageFormError.qtyUsed}</span>}
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Notes</label>
-                      <textarea name="notes" maxLength={255} rows={2}
-                        className={`textarea textarea-bordered w-full${editUsageFormError.notes ? ' is-invalid' : ''}`}
-                        placeholder="Optional notes"
-                        value={editUsageForm.notes}
-                        onChange={e => setEditUsageForm(p => ({ ...p, notes: e.target.value }))} />
-                      {editUsageFormError.notes && <span className="helper-text">{editUsageFormError.notes}</span>}
-                    </div>
-                    {editUsageFormError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{editUsageFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditUsage}>Cancel</button>
-                <button type="submit" form="edit-usage-form" className="btn btn-primary" disabled={editUsageSubmitting}>
-                  {editUsageSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--device-floppy] size-4"></span>
-                  }
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* SR Picker — sits above edit usage sub-modal (z-[65]/z-[70]) */}
-      <ServiceReportPickerModal
-        isOpen={srPickerOpen}
-        onClose={() => setSrPickerOpen(false)}
-        backdropZ="z-[75]"
-        modalZ="z-[80]"
-        onSelect={sr => {
-          setEditUsageForm(p => ({ ...p, srNumber: sr.srNumber }))
-          setEditSrDisplay(`SR #${sr.srNumber} — ${sr.complaint ?? sr.projectName ?? ''}`)
-          setSrPickerOpen(false)
-        }}
-      />
-
-      {/* Contact Details Modal — sits above ManageMenu via higher z-index */}
-      <ContactDetailsModal contact={selectedContact} onClose={() => setSelectedContact(null)} />
-
-      {/* Add Purchase Order Modal */}
-      <Modal
-        isOpen={addModalOpen}
-        onClose={closeAddModal}
-        title="New Purchase Order"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAddModal}>
-              Cancel
-            </button>
-            <button type="submit" form="add-po-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Purchase Order
-            </button>
-          </>
-        }
-      >
-        <form id="add-po-form" onSubmit={handleAddSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
-              <input type="text" name="purpose"
-                className={`input input-bordered w-full${formError.purpose ? ' is-invalid' : ''}`}
-                placeholder="e.g. Repair Parts" maxLength={30} required
-                value={form.purpose} onChange={handleFormChange} />
-              {formError.purpose && <span className="helper-text">{formError.purpose}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Terms <span className="text-error">*</span></label>
-              <input type="text" name="terms"
-                className={`input input-bordered w-full${formError.terms ? ' is-invalid' : ''}`}
-                placeholder="e.g. net30" maxLength={16} required
-                value={form.terms} onChange={handleFormChange} />
-              {formError.terms && <span className="helper-text">{formError.terms}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Method</label>
-              <input type="text" name="paymentMethod"
-                className={`input input-bordered w-full${formError.paymentMethod ? ' is-invalid' : ''}`}
-                placeholder="e.g. cash" maxLength={16}
-                value={form.paymentMethod} onChange={handleFormChange} />
-              {formError.paymentMethod && <span className="helper-text">{formError.paymentMethod}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Details</label>
-              <input type="text" name="paymentDetails"
-                className={`input input-bordered w-full${formError.paymentDetails ? ' is-invalid' : ''}`}
-                placeholder="e.g. BDO #1234567890" maxLength={60}
-                value={form.paymentDetails} onChange={handleFormChange} />
-              {formError.paymentDetails && <span className="helper-text">{formError.paymentDetails}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Delivery Address</label>
-              <textarea name="deliveryAddress"
-                className={`textarea textarea-bordered w-full${formError.deliveryAddress ? ' is-invalid' : ''}`}
-                placeholder="Full delivery address" maxLength={600} rows={2}
-                value={form.deliveryAddress} onChange={handleFormChange} />
-              {formError.deliveryAddress && <span className="helper-text">{formError.deliveryAddress}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Remarks</label>
-              <textarea name="remarks"
-                className={`textarea textarea-bordered w-full${formError.remarks ? ' is-invalid' : ''}`}
-                placeholder="Optional notes" maxLength={255} rows={2}
-                value={form.remarks} onChange={handleFormChange} />
-              {formError.remarks && <span className="helper-text">{formError.remarks}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Manage Parts Modal */}
-      <Modal
-        isOpen={managePartsOpen}
-        onClose={addPartOpen ? undefined : closeManageParts}
-        hideClose={addPartOpen}
-        title={`Parts — ${managePartsOrder?.poNum ?? ''}`}
-        size="max-w-5xl"
-        footer={!addPartOpen && (
-          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageParts}>
-            Close
-          </button>
-        )}
-      >
-        {/* Add Part form (inline toggle) */}
-        {addPartOpen ? (
-          <form onSubmit={handleAddPartSubmit}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-
-              <div className="sm:col-span-2 flex flex-col gap-1">
-                <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-                <input type="text" name="name"
-                  className={`input input-bordered w-full${partFormError.name ? ' is-invalid' : ''}`}
-                  placeholder="e.g. Compressor Unit" maxLength={255} required
-                  value={partForm.name} onChange={handlePartFormChange} />
-                {partFormError.name && <span className="helper-text">{partFormError.name}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
-                <input type="number" name="quantityOrdered" min={0}
-                  className={`input input-bordered w-full${partFormError.quantityOrdered ? ' is-invalid' : ''}`}
-                  placeholder="e.g. 2" required
-                  value={partForm.quantityOrdered} onChange={handlePartFormChange} />
-                {partFormError.quantityOrdered && <span className="helper-text">{partFormError.quantityOrdered}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
-                <input type="text" name="quantityType" maxLength={30}
-                  className={`input input-bordered w-full${partFormError.quantityType ? ' is-invalid' : ''}`}
-                  placeholder="e.g. pcs" required
-                  value={partForm.quantityType} onChange={handlePartFormChange} />
-                {partFormError.quantityType && <span className="helper-text">{partFormError.quantityType}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
-                <input type="number" name="unitPrice" min={0} step="0.01"
-                  className={`input input-bordered w-full${partFormError.unitPrice ? ' is-invalid' : ''}`}
-                  placeholder="e.g. 1500.00" required
-                  value={partForm.unitPrice} onChange={handlePartFormChange} />
-                {partFormError.unitPrice && <span className="helper-text">{partFormError.unitPrice}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
-                <div className="flex gap-2">
-                  <input type="text" readOnly
-                    className={`input input-bordered flex-1${partFormError.supplierId ? ' is-invalid' : ''}`}
-                    placeholder="No supplier selected"
-                    value={addSupplierDisplay} />
-                  <button type="button" className="btn btn-soft btn-secondary shrink-0"
-                    onClick={() => setSupplierPickerFor('add')}>
-                    Pick
-                  </button>
-                </div>
-                {partFormError.supplierId && <span className="helper-text">{partFormError.supplierId}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Status</label>
-                <select name="status"
-                  className={`select select-bordered w-full${partFormError.status ? ' is-invalid' : ''}`}
-                  value={partForm.status} onChange={handlePartFormChange}>
-                  <option value="ordered">ordered</option>
-                  <option value="received">received</option>
-                  <option value="cancelled">cancelled</option>
-                </select>
-                {partFormError.status && <span className="helper-text">{partFormError.status}</span>}
-              </div>
-
-              {partFormError._general && (
-                <div className="sm:col-span-2 alert alert-error py-2">
-                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                  <span className="text-sm">{partFormError._general}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn btn-soft btn-secondary btn-sm"
-                onClick={() => { setAddPartOpen(false); setPartForm(EMPTY_PART_FORM); setPartFormError({}) }}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary btn-sm" disabled={partFormSubmitting}>
-                {partFormSubmitting
-                  ? <span className="loading loading-spinner loading-xs"></span>
-                  : <span className="icon-[tabler--plus] size-4"></span>
-                }
-                Add Part
-              </button>
-            </div>
-          </form>
-        ) : (
-          <>
-            <div className="flex justify-end mb-3">
-              <button type="button" className="btn btn-primary btn-sm"
-                onClick={() => { setPartForm(EMPTY_PART_FORM); setPartFormError({}); setAddPartOpen(true) }}>
-                <span className="icon-[tabler--plus] size-4"></span>
-                Add Part
-              </button>
-            </div>
-
-            {managePartsLoading ? (
-              <div className="flex justify-center py-6">
-                <span className="loading loading-spinner loading-sm text-primary"></span>
-              </div>
-            ) : manageParts.length === 0 ? (
-              <div className="text-center py-6 text-base-content/40 text-sm">
-                No parts linked to this purchase order.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-box border border-base-300">
-                <table className="table table-zebra table-sm w-full">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Name</th>
-                      <th>QTY Ordered</th>
-                      <th>Remaining</th>
-                      <th>Unit Price</th>
-                      <th>Status</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manageParts.map(p => (
-                      <tr key={p.partId}>
-                        <td className="font-mono text-xs">{p.partId}</td>
-                        <td className="text-sm max-w-40">
-                          <span className="line-clamp-1" title={p.name}>{p.name}</span>
-                        </td>
-                        <td className="text-sm">{p.quantityOrdered} {p.quantityType}</td>
-                        <td className="text-sm">
-                          <span className={p.availableQty === 0 ? 'text-error font-semibold' : 'text-success font-semibold'}>
-                            {p.availableQty} {p.quantityType}
-                          </span>
-                        </td>
-                        <td className="text-sm">{formatCurrency(p.unitPrice)}</td>
-                        <td>
-                          <span className={`badge badge-soft ${partStatusBadge(p.status)} text-xs`}>
-                            {p.status}
-                          </span>
-                        </td>
-                        <td>
-                          <div className="flex gap-1">
-                            <button
-                              className="btn btn-soft btn-primary btn-xs"
-                              onClick={() => setSelectedPart(p)}
-                            >
-                              <span className="icon-[tabler--settings] size-3"></span>
-                              Manage
-                            </button>
-                            <button
-                              className="btn btn-soft btn-error btn-xs"
-                              disabled={deletingPartId === p.partId}
-                              onClick={() => handleDeletePart(p.partId)}
-                            >
-                              {deletingPartId === p.partId
-                                ? <span className="loading loading-spinner loading-xs"></span>
-                                : <span className="icon-[tabler--x] size-3"></span>
-                              }
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </Modal>
-
-      {/* Update Part Sub-modal — sits above Manage Parts via higher z-index */}
-      {updatePartOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdatePart} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-lg shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Update Part #{updatingPart?.partId}</h3>
-                  <span className="text-sm text-base-content/50">{updatingPart?.name}</span>
-                </div>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdatePart}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="update-part-form" onSubmit={handleUpdatePartSubmit}>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                    <div className="sm:col-span-2 flex flex-col gap-1">
-                      <label className="label-text font-medium">Name <span className="text-error">*</span></label>
-                      <input type="text" name="name"
-                        className={`input input-bordered w-full${updatePartFormError.name ? ' is-invalid' : ''}`}
-                        maxLength={255} required
-                        value={updatePartForm.name} onChange={handleUpdatePartFormChange} />
-                      {updatePartFormError.name && <span className="helper-text">{updatePartFormError.name}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Quantity <span className="text-error">*</span></label>
-                      <input type="number" name="quantityOrdered" min={0}
-                        className={`input input-bordered w-full${updatePartFormError.quantityOrdered ? ' is-invalid' : ''}`}
-                        required value={updatePartForm.quantityOrdered} onChange={handleUpdatePartFormChange} />
-                      {updatePartFormError.quantityOrdered && <span className="helper-text">{updatePartFormError.quantityOrdered}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Quantity Type <span className="text-error">*</span></label>
-                      <input type="text" name="quantityType" maxLength={30}
-                        className={`input input-bordered w-full${updatePartFormError.quantityType ? ' is-invalid' : ''}`}
-                        required value={updatePartForm.quantityType} onChange={handleUpdatePartFormChange} />
-                      {updatePartFormError.quantityType && <span className="helper-text">{updatePartFormError.quantityType}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Unit Price <span className="text-error">*</span></label>
-                      <input type="number" name="unitPrice" min={0} step="0.01"
-                        className={`input input-bordered w-full${updatePartFormError.unitPrice ? ' is-invalid' : ''}`}
-                        required value={updatePartForm.unitPrice} onChange={handleUpdatePartFormChange} />
-                      {updatePartFormError.unitPrice && <span className="helper-text">{updatePartFormError.unitPrice}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Supplier <span className="text-error">*</span></label>
-                      <div className="flex gap-2">
-                        <input type="text" readOnly
-                          className={`input input-bordered flex-1${updatePartFormError.supplierId ? ' is-invalid' : ''}`}
-                          placeholder="No supplier selected"
-                          value={updateSupplierDisplay} />
-                        <button type="button" className="btn btn-soft btn-secondary shrink-0"
-                          onClick={() => setSupplierPickerFor('update')}>
-                          Pick
-                        </button>
-                      </div>
-                      {updatePartFormError.supplierId && <span className="helper-text">{updatePartFormError.supplierId}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Status</label>
-                      <select name="status"
-                        className={`select select-bordered w-full${updatePartFormError.status ? ' is-invalid' : ''}`}
-                        value={updatePartForm.status} onChange={handleUpdatePartFormChange}>
-                        <option value="ordered">ordered</option>
-                        <option value="received">received</option>
-                        <option value="cancelled">cancelled</option>
-                      </select>
-                      {updatePartFormError.status && <span className="helper-text">{updatePartFormError.status}</span>}
-                    </div>
-
-                    {updatePartFormError._general && (
-                      <div className="sm:col-span-2 alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{updatePartFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdatePart}>
-                  Cancel
-                </button>
-                <button type="submit" form="update-part-form" className="btn btn-primary" disabled={updatePartSubmitting}>
-                  {updatePartSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--device-floppy] size-4"></span>
-                  }
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Manage Delivery Contacts Modal */}
-      <Modal
-        isOpen={manageContactsOpen}
-        onClose={addContactOpen ? undefined : closeManageContacts}
-        hideClose={addContactOpen}
-        title={`Delivery Contacts — ${manageContactsOrder?.poNum ?? ''}`}
-        size="max-w-2xl"
-        footer={!addContactOpen && (
-          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageContacts}>
-            Close
-          </button>
-        )}
-      >
-        {addContactOpen ? (
-          <form onSubmit={handleAddContactSubmit}>
-            <div className="flex flex-col gap-4 mb-4">
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-                <input type="text" name="contactName"
-                  className={`input input-bordered w-full${contactFormError.contactName ? ' is-invalid' : ''}`}
-                  placeholder="e.g. Juan Dela Cruz" maxLength={300} required
-                  value={contactForm.contactName} onChange={handleContactFormChange} />
-                {contactFormError.contactName && <span className="helper-text">{contactFormError.contactName}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-                <input type="text" name="contactNumber"
-                  className={`input input-bordered w-full${contactFormError.contactNumber ? ' is-invalid' : ''}`}
-                  placeholder="e.g. 09171234567" maxLength={16} required
-                  value={contactForm.contactNumber} onChange={handleContactFormChange} />
-                {contactFormError.contactNumber && <span className="helper-text">{contactFormError.contactNumber}</span>}
-              </div>
-
-              {contactFormError._general && (
-                <div className="alert alert-error py-2">
-                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                  <span className="text-sm">{contactFormError._general}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <button type="button" className="btn btn-soft btn-secondary btn-sm"
-                onClick={() => { setAddContactOpen(false); setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}) }}>
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary btn-sm" disabled={contactFormSubmitting}>
-                {contactFormSubmitting
-                  ? <span className="loading loading-spinner loading-xs"></span>
-                  : <span className="icon-[tabler--plus] size-4"></span>
-                }
-                Add Contact
-              </button>
-            </div>
-          </form>
-        ) : (
-          <>
-            <div className="flex justify-end mb-3">
-              <button type="button" className="btn btn-primary btn-sm"
-                onClick={() => { setContactForm(EMPTY_CONTACT_FORM); setContactFormError({}); setAddContactOpen(true) }}>
-                <span className="icon-[tabler--plus] size-4"></span>
-                Add Contact
-              </button>
-            </div>
-
-            {manageContactsLoading ? (
-              <div className="flex justify-center py-6">
-                <span className="loading loading-spinner loading-sm text-primary"></span>
-              </div>
-            ) : manageContacts.length === 0 ? (
-              <div className="text-center py-6 text-base-content/40 text-sm">
-                No delivery contacts linked to this purchase order.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-box border border-base-300">
-                <table className="table table-zebra table-sm w-full">
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Contact Name</th>
-                      <th>Contact Number</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manageContacts.map(c => (
-                      <tr key={c.poContactNum}>
-                        <td className="font-mono text-xs">{c.poContactNum}</td>
-                        <td className="text-sm">{c.contactName}</td>
-                        <td className="text-sm">{c.contactNumber}</td>
-                        <td>
-                          <div className="flex gap-1">
-                            <button
-                              className="btn btn-soft btn-primary btn-xs"
-                              onClick={() => setSelectedContact(c)}
-                            >
-                              <span className="icon-[tabler--info-circle] size-3"></span>
-                              Details
-                            </button>
-                            <button
-                              className="btn btn-soft btn-secondary btn-xs"
-                              onClick={() => openUpdateContact(c)}
-                            >
-                              <span className="icon-[tabler--pencil] size-3"></span>
-                              Update
-                            </button>
-                            <button
-                              className="btn btn-soft btn-error btn-xs"
-                              disabled={deletingContactId === c.poContactNum}
-                              onClick={() => handleDeleteContact(c.poContactNum)}
-                            >
-                              {deletingContactId === c.poContactNum
-                                ? <span className="loading loading-spinner loading-xs"></span>
-                                : <span className="icon-[tabler--x] size-3"></span>
-                              }
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </Modal>
-
-      {/* Update Contact Sub-modal — sits above Manage Contacts via higher z-index */}
-      {updateContactOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdateContact} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Update Contact #{updatingContact?.poContactNum}</h3>
-                  <span className="text-sm text-base-content/50">{updatingContact?.contactName}</span>
-                </div>
-                <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={closeUpdateContact}>
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="update-contact-form" onSubmit={handleUpdateContactSubmit}>
-                  <div className="flex flex-col gap-4">
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Contact Name <span className="text-error">*</span></label>
-                      <input type="text" name="contactName"
-                        className={`input input-bordered w-full${updateContactFormError.contactName ? ' is-invalid' : ''}`}
-                        maxLength={300} required
-                        value={updateContactForm.contactName} onChange={handleUpdateContactFormChange} />
-                      {updateContactFormError.contactName && <span className="helper-text">{updateContactFormError.contactName}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Contact Number <span className="text-error">*</span></label>
-                      <input type="text" name="contactNumber"
-                        className={`input input-bordered w-full${updateContactFormError.contactNumber ? ' is-invalid' : ''}`}
-                        maxLength={16} required
-                        value={updateContactForm.contactNumber} onChange={handleUpdateContactFormChange} />
-                      {updateContactFormError.contactNumber && <span className="helper-text">{updateContactFormError.contactNumber}</span>}
-                    </div>
-
-                    {updateContactFormError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{updateContactFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdateContact}>
-                  Cancel
-                </button>
-                <button type="submit" form="update-contact-form" className="btn btn-primary" disabled={updateContactSubmitting}>
-                  {updateContactSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--device-floppy] size-4"></span>
-                  }
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Supplier Picker — used by Add Part and Update Part forms */}
-      <SupplierPickerModal
-        isOpen={!!supplierPickerFor}
-        onClose={() => setSupplierPickerFor(null)}
-        onSelect={s => {
-          if (supplierPickerFor === 'add') {
-            setPartForm(prev => ({ ...prev, supplierId: s.supplierId }))
-            setAddSupplierDisplay(`${s.name} (#${s.supplierId})`)
-          } else if (supplierPickerFor === 'update') {
-            setUpdatePartForm(prev => ({ ...prev, supplierId: s.supplierId }))
-            setUpdateSupplierDisplay(`${s.name} (#${s.supplierId})`)
-          }
-          setSupplierPickerFor(null)
-        }}
-      />
-
-      {/* Update Purchase Order Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title={`Update ${editingPO?.poNum ?? 'Purchase Order'}`}
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="update-po-form" className="btn btn-primary" disabled={editSubmitting}>
-              {editSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="update-po-form" onSubmit={handleUpdateSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
-              <input type="text" name="purpose"
-                className={`input input-bordered w-full${editFormError.purpose ? ' is-invalid' : ''}`}
-                placeholder="e.g. Repair Parts" maxLength={30} required
-                value={editForm.purpose} onChange={handleEditFormChange} />
-              {editFormError.purpose && <span className="helper-text">{editFormError.purpose}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Terms <span className="text-error">*</span></label>
-              <input type="text" name="terms"
-                className={`input input-bordered w-full${editFormError.terms ? ' is-invalid' : ''}`}
-                placeholder="e.g. net30" maxLength={16} required
-                value={editForm.terms} onChange={handleEditFormChange} />
-              {editFormError.terms && <span className="helper-text">{editFormError.terms}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Method</label>
-              <input type="text" name="paymentMethod"
-                className={`input input-bordered w-full${editFormError.paymentMethod ? ' is-invalid' : ''}`}
-                placeholder="e.g. cash" maxLength={16}
-                value={editForm.paymentMethod} onChange={handleEditFormChange} />
-              {editFormError.paymentMethod && <span className="helper-text">{editFormError.paymentMethod}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Payment Details</label>
-              <input type="text" name="paymentDetails"
-                className={`input input-bordered w-full${editFormError.paymentDetails ? ' is-invalid' : ''}`}
-                placeholder="e.g. BDO #1234567890" maxLength={60}
-                value={editForm.paymentDetails} onChange={handleEditFormChange} />
-              {editFormError.paymentDetails && <span className="helper-text">{editFormError.paymentDetails}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Delivery Address</label>
-              <textarea name="deliveryAddress"
-                className={`textarea textarea-bordered w-full${editFormError.deliveryAddress ? ' is-invalid' : ''}`}
-                placeholder="Full delivery address" maxLength={600} rows={2}
-                value={editForm.deliveryAddress} onChange={handleEditFormChange} />
-              {editFormError.deliveryAddress && <span className="helper-text">{editFormError.deliveryAddress}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Remarks</label>
-              <textarea name="remarks"
-                className={`textarea textarea-bordered w-full${editFormError.remarks ? ' is-invalid' : ''}`}
-                placeholder="Optional notes" maxLength={255} rows={2}
-                value={editForm.remarks} onChange={handleEditFormChange} />
-              {editFormError.remarks && <span className="helper-text">{editFormError.remarks}</span>}
-            </div>
-
-            {editFormError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{editFormError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
     </Layout>
   )
 }

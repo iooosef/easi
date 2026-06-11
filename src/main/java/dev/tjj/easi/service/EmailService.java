@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
-/** Handles sending transactional emails such as OTP codes. */
+/** Handles sending transactional emails such as schedule reminders. */
 @Service
 public class EmailService {
 
@@ -45,16 +45,4 @@ public class EmailService {
         mailSender.send(message);
     }
 
-    /** Sends a one-time password code to the given address for the specified purpose. */
-    public void sendOtp(String toEmail, String otp, String purpose) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom(fromEmail);
-        message.setTo(toEmail);
-        message.setSubject("EASI - Your verification code");
-        message.setText(
-                "Your " + purpose + " code is: " + otp +
-                "\n\nThis code expires in 10 minutes. Do not share it with anyone."
-        );
-        mailSender.send(message);
-    }
 }

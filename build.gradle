@@ -7,7 +7,7 @@ plugins {
 }
 
 group = 'dev.tjj'
-version = '1.0'
+version = '3.0'
 
 java {
 	toolchain {
@@ -96,6 +96,66 @@ tasks.register('runDemo', Exec) {
     description = 'Runs the built JAR with full demo seed data'
     commandLine 'java', '-jar', "build/libs/easi-${version}.jar", '--app.seed.full=true'
     dependsOn 'buildAll'
+}
+
+// Copies processed resources into a staging dir and activates the seed profile
+tasks.register('processSeedResources') {
+    dependsOn 'processResources'
+    def outputDir = file("${buildDir}/seed-resources")
+    inputs.files sourceSets.main.output.resourcesDir
+    outputs.dir outputDir
+    doLast {
+        copy {
+            from sourceSets.main.output.resourcesDir
+            into outputDir
+        }
+        def appProps = new File(outputDir, 'application.properties')
+        appProps.text = appProps.text + '\nspring.profiles.active=seed\n'
+    }
+}
+
+// Production JAR — admin credentials only, uses EASI_DB_NAME
+tasks.register('bootJarNoSeed', org.springframework.boot.gradle.tasks.bundling.BootJar) {
+    dependsOn 'classes'
+    group = 'build'
+    description = 'Production JAR without seed data (admin credentials only)'
+    archiveClassifier = 'noseed'
+    mainClass = tasks.bootJar.mainClass
+    targetJavaVersion = tasks.bootJar.targetJavaVersion
+    classpath = sourceSets.main.runtimeClasspath
+}
+
+// Production JAR — full seed data, uses EASI_DB_NAME_DEMO
+tasks.register('bootJarSeed', org.springframework.boot.gradle.tasks.bundling.BootJar) {
+    dependsOn 'processSeedResources', 'classes'
+    group = 'build'
+    description = 'Production JAR with full seed data (uses EASI_DB_NAME_DEMO database)'
+    archiveClassifier = 'seed'
+    mainClass = tasks.bootJar.mainClass
+    targetJavaVersion = tasks.bootJar.targetJavaVersion
+    classpath = files(
+        sourceSets.main.output.classesDirs,
+        "${buildDir}/seed-resources",
+        configurations.runtimeClasspath
+    )
+}
+
+tasks.register('buildNoSeed') {
+    group = 'build'
+    description = 'Builds frontend + backend JAR without seed data (admin credentials only)'
+    dependsOn 'buildFrontend', 'bootJarNoSeed'
+}
+tasks.named('bootJarNoSeed').configure {
+    mustRunAfter 'buildFrontend'
+}
+
+tasks.register('buildSeed') {
+    group = 'build'
+    description = 'Builds frontend + backend JAR with full seed data (uses EASI_DB_NAME_DEMO)'
+    dependsOn 'buildFrontend', 'bootJarSeed'
+}
+tasks.named('bootJarSeed').configure {
+    mustRunAfter 'buildFrontend'
 }
 
 tasks.named('build').configure {

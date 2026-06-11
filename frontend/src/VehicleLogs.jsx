@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
+import { useModal } from './modals/index.js'
 import Layout from './Layout'
-import Modal from './Modal'
-import ManageMenu from './ManageMenu'
+import ModalNav from './modals/ModalNav.jsx'
 import AnySchedulePickerModal from './AnySchedulePickerModal'
 import EmployeePickerModal from './EmployeePickerModal'
 import { notyfSuccess, notyfError } from './notyf'
@@ -24,6 +24,7 @@ const EMPTY_FORM = {
   odometerStart: '',
   odometerEnd: '',
   status: 'driving',
+  date: '',
 }
 
 const EMPTY_GAS_FORM = { invoiceId: '', amount: '' }
@@ -61,8 +62,558 @@ function formatCurrency(value) {
 
 const PAGE_SIZE = 10
 
-/** Modal for viewing gas log details with inline document preview. */
-function GasLogDetailsModal({ gasLog, onClose, apiFetch }) {
+/** Schedule picker pushed as a modal stack layer. */
+function SchedulePickerLayer({ onSelect }) {
+  const { popModal } = useModal()
+  return (
+    <AnySchedulePickerModal
+      isOpen={true}
+      onClose={popModal}
+      onSelect={s => { popModal(); onSelect(s) }}
+      asLayer={true}
+    />
+  )
+}
+
+/** Driver picker (Crew only) pushed as a modal stack layer. */
+function DriverPickerLayer({ onSelect }) {
+  const { popModal } = useModal()
+  return (
+    <EmployeePickerModal
+      isOpen={true}
+      onClose={popModal}
+      onSelect={e => { popModal(); onSelect(e) }}
+      position="Crew"
+      asLayer={true}
+    />
+  )
+}
+
+/** Modal for adding a new vehicle log, including incomplete trip check on mount. */
+function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [checking, setChecking] = useState(true)
+  const [incompleteLog, setIncompleteLog] = useState(null)
+  const [form, setForm] = useState({ ...EMPTY_FORM, date: new Date().toISOString().slice(0, 10) })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [driverLabel, setDriverLabel] = useState('')
+  const [odoMin, setOdoMin] = useState(0)
+
+  /** Check for ongoing trip and prefill odometer on mount. */
+  useEffect(() => {
+    let active = true
+    async function check() {
+      try {
+        const res = await apiFetch(`/api/vehicle-logs/latest-incomplete?vehiclesId=${vehiclesId}`)
+        if (!active) return
+        if (res.status === 200) {
+          setIncompleteLog(await res.json())
+          return
+        }
+        let prefillOdo = ''
+        const lastRes = await apiFetch(
+          `/api/vehicle-logs?vehiclesId=${vehiclesId}&sort=addedOn,desc&size=1`
+        )
+        if (lastRes.ok) {
+          const lastData = await lastRes.json()
+          const lastLog = lastData.content?.[0]
+          if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
+        }
+        if (!active) return
+        if (prefillOdo !== '') setOdoMin(Number(prefillOdo))
+        setForm(prev => ({ ...prev, odometerStart: prefillOdo }))
+      } finally {
+        if (active) setChecking(false)
+      }
+    }
+    check()
+    return () => { active = false }
+  }, [apiFetch, vehiclesId])
+
+  function handleFormChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Builds the POST request body from form state. */
+  function buildBody(f) {
+    return {
+      vehiclesId,
+      purpose:          f.purpose,
+      schedId:          f.schedId ? Number(f.schedId) : null,
+      destination:      f.destination,
+      driverEmployeeId: f.driverEmployeeId ? Number(f.driverEmployeeId) : null,
+      odometerStart:    f.odometerStart !== '' ? Number(f.odometerStart) : null,
+      odometerEnd:      f.odometerEnd !== '' ? Number(f.odometerEnd) : null,
+      status:           f.status,
+      date:             f.date || null,
+    }
+  }
+
+  /** Submits the new vehicle log form. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/vehicle-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(form)),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add failed')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      setTimeout(() => notyfSuccess(`Log #${data.vehicleLogId} added successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (checking) {
+    return (
+      <div className="modal-content w-full max-w-lg my-auto">
+        <div className="modal-body flex justify-center py-12">
+          <span className="loading loading-spinner loading-md text-primary"></span>
+        </div>
+      </div>
+    )
+  }
+
+  if (incompleteLog) {
+    return (
+      <div className="modal-content w-full max-w-sm my-auto">
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">Vehicle Still Out</h3>
+            <span className="text-sm text-base-content/50">{vehicleLabel}</span>
+          </div>
+        </div>
+        <div className="modal-body flex flex-col gap-4">
+          <div className="alert alert-error py-3">
+            <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+            <span className="text-sm">
+              This vehicle has an ongoing trip with no end odometer recorded. Return the vehicle and log the end odometer before adding a new trip.
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <div>
+              <span className="text-xs text-base-content/50 block">Log #</span>
+              <span className="font-medium font-mono">{incompleteLog.vehicleLogId}</span>
+            </div>
+            <div>
+              <span className="text-xs text-base-content/50 block">Driver</span>
+              <span className="font-medium">{incompleteLog.driverName}</span>
+            </div>
+            <div>
+              <span className="text-xs text-base-content/50 block">Purpose</span>
+              <span className="font-medium">{incompleteLog.purpose}</span>
+            </div>
+            <div>
+              <span className="text-xs text-base-content/50 block">Odometer Start</span>
+              <span className="font-medium">{incompleteLog.odometerStart?.toLocaleString()} km</span>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-primary" onClick={popModal}>OK</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New Vehicle Log</h3>
+        <button
+          type="button"
+          className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+          onClick={popModal}
+        >
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="new-log-form" onSubmit={handleSubmit}>
+          <LogFormFields
+            form={form}
+            formError={formError}
+            onChange={handleFormChange}
+            onSetForm={setForm}
+            driverLabel={driverLabel}
+            odoMin={odoMin}
+            onOpenSchedulePicker={() => pushModal(
+              <SchedulePickerLayer onSelect={s => {
+                const display = `Sched #${s.schedId} · Project #${s.projNum} · ${s.date ?? '—'}`
+                setForm(prev => ({ ...prev, schedId: String(s.schedId), _scheduleDisplay: display }))
+              }} />
+            )}
+            onOpenDriverPicker={() => pushModal(
+              <DriverPickerLayer onSelect={e => {
+                setForm(prev => ({ ...prev, driverEmployeeId: String(e.employeeId) }))
+                setDriverLabel(`${e.firstName} ${e.lastName} — ${e.position}`)
+              }} />
+            )}
+          />
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="new-log-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Log
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** L1 manage panel for a vehicle log — shows details and action menu. */
+function ManageLogModal({ log: initialLog, onRefresh }) {
+  const { pushModal, popModal } = useModal()
+  const { hasRole, apiFetch } = useAuth()
+  const [log, setLog] = useState(initialLog)
+
+  async function refreshLog() {
+    try {
+      const res = await apiFetch(`/api/vehicle-logs/${log.vehicleLogId}`)
+      if (res.ok) setLog(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
+
+  function handleAction(key) {
+    if (key === 'update') pushModal(<UpdateLogModal log={log} onRefresh={refreshLog} />)
+    if (key === 'manage-gas-logs') pushModal(<ManageGasLogsModal log={log} />)
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Log #{log.vehicleLogId}</h3>
+          <span className="text-sm text-base-content/50">{log.vehicleModel} · {log.vehiclePlateNum}</span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+          onClick={popModal}
+        >
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Vehicle</span>
+            <span className="font-medium">{log.vehicleModel} ({log.vehiclePlateNum})</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Schedule</span>
+            <span className="font-medium">{log.schedId != null ? `Sched #${log.schedId}` : '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Purpose</span>
+            <span className="font-medium">{log.purpose}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Driver</span>
+            <span className="font-medium">{log.driverName}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Status</span>
+            <span className={`badge badge-soft ${statusBadgeClass(log.status)} text-xs`}>
+              {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
+            </span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Date</span>
+            <span className="font-medium">{formatDate(log.addedOn)}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Odometer Start</span>
+            <span className="font-medium">{log.odometerStart?.toLocaleString()} km</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Odometer End</span>
+            <span className="font-medium">{log.odometerEnd != null ? `${log.odometerEnd?.toLocaleString()} km` : '—'}</span>
+          </div>
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Destination</span>
+            <span className="font-medium">{log.destination}</span>
+          </div>
+        </div>
+        <ModalNav items={LOG_MENU_ITEMS} hasRole={hasRole} onSelect={handleAction} cols={4} />
+      </div>
+    </div>
+  )
+}
+
+/** L2 modal for updating a vehicle log's details. */
+function UpdateLogModal({ log, onRefresh }) {
+  const { popModal, pushModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    purpose:          log.purpose,
+    schedId:          log.schedId != null ? String(log.schedId) : '',
+    _scheduleDisplay: log.schedId ? `Sched #${log.schedId}` : '',
+    destination:      log.destination,
+    driverEmployeeId: String(log.driverEmployeeId),
+    odometerStart:    String(log.odometerStart),
+    odometerEnd:      log.odometerEnd != null ? String(log.odometerEnd) : '',
+    status:           log.status,
+    date:             log.date ?? '',
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [driverLabel, setDriverLabel] = useState(log.driverName)
+  const [odoMin, setOdoMin] = useState(0)
+
+  /** Fetch the previous log for this vehicle to determine the minimum odometer start. */
+  useEffect(() => {
+    apiFetch(`/api/vehicle-logs?vehiclesId=${log.vehiclesId}&sort=vehicleLogId,desc&size=50`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => {
+        const prev = (data.content ?? []).find(l => l.vehicleLogId < log.vehicleLogId && l.odometerEnd != null)
+        if (prev) setOdoMin(prev.odometerEnd)
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleFormChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Builds the PUT request body from form state. */
+  function buildBody(f) {
+    return {
+      vehiclesId:       log.vehiclesId,
+      purpose:          f.purpose,
+      schedId:          f.schedId ? Number(f.schedId) : null,
+      destination:      f.destination,
+      driverEmployeeId: f.driverEmployeeId ? Number(f.driverEmployeeId) : null,
+      odometerStart:    f.odometerStart !== '' ? Number(f.odometerStart) : null,
+      odometerEnd:      f.odometerEnd !== '' ? Number(f.odometerEnd) : null,
+      status:           f.status,
+      date:             f.date || null,
+    }
+  }
+
+  /** Submits the update log form. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/vehicle-logs/${log.vehicleLogId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildBody(form)),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      popModal()
+      setTimeout(() => notyfSuccess(`Log #${log.vehicleLogId} updated successfully.`), 150)
+      onRefresh?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update Log #{log.vehicleLogId}</h3>
+        <button
+          type="button"
+          className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+          onClick={popModal}
+        >
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-log-form" onSubmit={handleSubmit}>
+          <LogFormFields
+            form={form}
+            formError={formError}
+            onChange={handleFormChange}
+            onSetForm={setForm}
+            driverLabel={driverLabel}
+            odoMin={odoMin}
+            onOpenSchedulePicker={() => pushModal(
+              <SchedulePickerLayer onSelect={s => {
+                const display = `Sched #${s.schedId} · Project #${s.projNum} · ${s.date ?? '—'}`
+                setForm(prev => ({ ...prev, schedId: String(s.schedId), _scheduleDisplay: display }))
+              }} />
+            )}
+            onOpenDriverPicker={() => pushModal(
+              <DriverPickerLayer onSelect={e => {
+                setForm(prev => ({ ...prev, driverEmployeeId: String(e.employeeId) }))
+                setDriverLabel(`${e.firstName} ${e.lastName} — ${e.position}`)
+              }} />
+            )}
+          />
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-log-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** L2 modal — manage gas logs for a vehicle log. */
+function ManageGasLogsModal({ log }) {
+  const { pushModal, popModal } = useModal()
+  const { apiFetch, hasRole } = useAuth()
+  const [gasLogs, setGasLogs] = useState([])
+  const [gasLoading, setGasLoading] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const canManageDocs = hasRole('ADMIN', 'STAFF')
+
+  /** Fetches gas logs for this vehicle log. */
+  useEffect(() => {
+    let active = true
+    setGasLoading(true)
+    const params = new URLSearchParams({
+      vehicleLogId: String(log.vehicleLogId),
+      size: '100',
+      sort: 'gasLogId,asc',
+    })
+    apiFetch(`/api/vehicle-gas-logs?${params}`)
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(data => { if (active) setGasLogs(data.content ?? []) })
+      .catch(() => { if (active) setGasLogs([]) })
+      .finally(() => { if (active) setGasLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, log.vehicleLogId, refreshKey])
+
+  function refresh() { setRefreshKey(k => k + 1) }
+
+  return (
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Gas Logs — Log #{log.vehicleLogId}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => pushModal(<AddGasLogModal vehicleLogId={log.vehicleLogId} onRefresh={refresh} />)}
+          >
+            <span className="icon-[tabler--plus] size-4"></span>
+            Add Gas Log
+          </button>
+        </div>
+
+        {gasLoading ? (
+          <div className="flex justify-center py-6">
+            <span className="loading loading-spinner loading-sm text-primary"></span>
+          </div>
+        ) : gasLogs.length === 0 ? (
+          <div className="text-center py-6 text-base-content/40 text-sm">
+            No gas logs linked to this vehicle log.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-box border border-base-300">
+            <table className="table table-zebra table-sm w-full">
+              <thead>
+                <tr>
+                  <th>Gas Log #</th>
+                  <th>Invoice ID</th>
+                  <th>Amount</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gasLogs.map(g => (
+                  <tr key={g.gasLogId}>
+                    <td className="font-mono text-xs">{g.gasLogId}</td>
+                    <td className="text-sm">{g.invoiceId}</td>
+                    <td className="text-sm">{formatCurrency(g.amount)}</td>
+                    <td>
+                      <div className="flex gap-1 flex-wrap">
+                        <button
+                          className="btn btn-soft btn-primary btn-xs"
+                          onClick={() => pushModal(<GasLogDetailsModal gasLog={g} />)}
+                        >
+                          <span className="icon-[tabler--info-circle] size-3"></span>
+                          View
+                        </button>
+                        <button
+                          className="btn btn-soft btn-secondary btn-xs"
+                          onClick={() => pushModal(<UpdateGasLogModal gasLog={g} onRefresh={refresh} />)}
+                        >
+                          <span className="icon-[tabler--pencil] size-3"></span>
+                          Update
+                        </button>
+                        {canManageDocs && (
+                          g.docuId != null ? (
+                            <button
+                              className="btn btn-soft btn-warning btn-xs"
+                              onClick={() => pushModal(<ReplaceGasFileModal gasLog={g} onRefresh={refresh} />)}
+                            >
+                              <span className="icon-[tabler--file-upload] size-3"></span>
+                              Replace File
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-soft btn-accent btn-xs"
+                              onClick={() => pushModal(<ReplaceGasFileModal gasLog={g} onRefresh={refresh} />)}
+                            >
+                              <span className="icon-[tabler--paperclip] size-3"></span>
+                              Attach File
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** L3 modal — view a single gas log's details with document preview. */
+function GasLogDetailsModal({ gasLog }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
   const [docBlobUrl, setDocBlobUrl] = useState(null)
   const [docIsImage, setDocIsImage] = useState(false)
   const [docLoading, setDocLoading] = useState(false)
@@ -92,85 +643,438 @@ function GasLogDetailsModal({ gasLog, onClose, apiFetch }) {
     }
   }, [gasLog?.docuId, apiFetch])
 
-  if (!gasLog) return null
   return (
-    <>
-      <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={onClose} />
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-        <div className="modal-content w-full max-w-2xl shadow-xl">
-          <div className="modal-header">
-            <div>
-              <h3 className="modal-title">Gas Log #{gasLog.gasLogId}</h3>
-              <span className="text-sm text-base-content/50">Invoice: {gasLog.invoiceId}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-              aria-label="Close"
-              onClick={onClose}
-            >
-              <span className="icon-[tabler--x] size-4"></span>
-            </button>
+    <div className="modal-content w-full max-w-2xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Gas Log #{gasLog.gasLogId}</h3>
+          <span className="text-sm text-base-content/50">Invoice: {gasLog.invoiceId}</span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+          aria-label="Close"
+          onClick={popModal}
+        >
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Gas Log ID</span>
+            <span className="text-sm font-medium font-mono">{gasLog.gasLogId}</span>
           </div>
-          <div className="modal-body flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Gas Log ID</span>
-                <span className="text-sm font-medium font-mono">{gasLog.gasLogId}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Vehicle Log ID</span>
-                <span className="text-sm font-medium font-mono">{gasLog.vehicleLogId}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Invoice ID</span>
-                <span className="text-sm font-medium">{gasLog.invoiceId}</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Amount</span>
-                <span className="text-sm font-medium text-primary">{formatCurrency(gasLog.amount)}</span>
-              </div>
-            </div>
-
-            {gasLog.docuId != null ? (
-              <div className="flex flex-col gap-2">
-                <span className="text-xs text-base-content/50 uppercase tracking-wide">Document</span>
-                {docLoading && (
-                  <div className="flex justify-center py-8">
-                    <span className="loading loading-spinner loading-sm text-primary"></span>
-                  </div>
-                )}
-                {docError && (
-                  <div className="alert alert-error py-2 text-sm">{docError}</div>
-                )}
-                {docBlobUrl && !docLoading && (
-                  docIsImage ? (
-                    <img
-                      src={docBlobUrl}
-                      alt="Document"
-                      className="w-full rounded-box object-contain max-h-80 border border-base-300 bg-base-200"
-                    />
-                  ) : (
-                    <iframe
-                      src={docBlobUrl}
-                      title="Document preview"
-                      className="w-full h-80 rounded-box border border-base-300"
-                    />
-                  )
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-base-content/40 italic">No document attached.</p>
-            )}
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Vehicle Log ID</span>
+            <span className="text-sm font-medium font-mono">{gasLog.vehicleLogId}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Invoice ID</span>
+            <span className="text-sm font-medium">{gasLog.invoiceId}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Amount</span>
+            <span className="text-sm font-medium text-primary">{formatCurrency(gasLog.amount)}</span>
           </div>
         </div>
+        {gasLog.docuId != null ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Document</span>
+            {docLoading && (
+              <div className="flex justify-center py-8">
+                <span className="loading loading-spinner loading-sm text-primary"></span>
+              </div>
+            )}
+            {docError && (
+              <div className="alert alert-error py-2 text-sm">{docError}</div>
+            )}
+            {docBlobUrl && !docLoading && (
+              docIsImage ? (
+                <img
+                  src={docBlobUrl}
+                  alt="Document"
+                  className="w-full rounded-box object-contain max-h-80 border border-base-300 bg-base-200"
+                />
+              ) : (
+                <iframe
+                  src={docBlobUrl}
+                  title="Document preview"
+                  className="w-full h-80 rounded-box border border-base-300"
+                />
+              )
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-base-content/40 italic">No document attached.</p>
+        )}
       </div>
-    </>
+    </div>
+  )
+}
+
+/** L3 modal — add a new gas log to a vehicle log. */
+function AddGasLogModal({ vehicleLogId, onRefresh }) {
+  const { popModal } = useModal()
+  const { apiFetch, hasRole } = useAuth()
+  const [form, setForm] = useState(EMPTY_GAS_FORM)
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const [file, setFile] = useState(null)
+  const fileRef = useRef(null)
+  const canManageDocs = hasRole('ADMIN', 'STAFF')
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the add gas log form, optionally uploading a document first. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      let docuId = null
+      if (file) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
+        if (!uploadRes.ok) {
+          setFormError(await parseApiError(uploadRes))
+          notyfError('File upload failed')
+          return
+        }
+        const docData = await uploadRes.json()
+        docuId = docData.docuId
+      }
+      const res = await apiFetch('/api/vehicle-gas-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vehicleLogId, amount: Number(form.amount), invoiceId: form.invoiceId, docuId }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Add gas log failed')
+        return
+      }
+      notyfSuccess('Gas log added successfully.')
+      popModal()
+      onRefresh?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Add Gas Log</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="add-gas-log-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+              <input
+                type="text"
+                name="invoiceId"
+                className={`input input-bordered w-full${formError.invoiceId ? ' is-invalid' : ''}`}
+                placeholder="e.g. INV-001"
+                maxLength={16}
+                required
+                value={form.invoiceId}
+                onChange={handleChange}
+              />
+              {formError.invoiceId && <span className="helper-text">{formError.invoiceId}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+              <input
+                type="number"
+                name="amount"
+                className={`input input-bordered w-full${formError.amount ? ' is-invalid' : ''}`}
+                placeholder="e.g. 500.00"
+                min="0"
+                step="0.01"
+                required
+                value={form.amount}
+                onChange={handleChange}
+              />
+              {formError.amount && <span className="helper-text">{formError.amount}</span>}
+            </div>
+            {canManageDocs && (
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">Document <span className="text-base-content/40 font-normal">(optional)</span></label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept={ACCEPTED_EXTENSIONS}
+                  className="hidden"
+                  onChange={e => setFile(e.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  className={`btn btn-outline w-full justify-start font-normal${formError.file ? ' btn-error' : ''}`}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <span className="icon-[tabler--paperclip] size-4"></span>
+                  {file ? file.name : 'Choose file…'}
+                </button>
+                {formError.file && <span className="helper-text">{formError.file}</span>}
+              </div>
+            )}
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="add-gas-log-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-xs"></span>
+            : <span className="icon-[tabler--plus] size-4"></span>
+          }
+          Add Gas Log
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** L3 modal — update an existing gas log. */
+function UpdateGasLogModal({ gasLog, onRefresh }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ invoiceId: gasLog.invoiceId, amount: String(gasLog.amount) })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  /** Submits the update gas log form. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/vehicle-gas-logs/${gasLog.gasLogId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleLogId: gasLog.vehicleLogId,
+          amount:       Number(form.amount),
+          invoiceId:    form.invoiceId,
+          docuId:       gasLog.docuId ?? null,
+        }),
+      })
+      if (!res.ok) {
+        setFormError(await parseApiError(res))
+        notyfError('Update failed')
+        return
+      }
+      notyfSuccess(`Gas log #${gasLog.gasLogId} updated successfully.`)
+      popModal()
+      onRefresh?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Update Gas Log #{gasLog.gasLogId}</h3>
+          <span className="text-sm text-base-content/50">Invoice: {gasLog.invoiceId}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-gas-log-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
+              <input
+                type="text"
+                name="invoiceId"
+                className={`input input-bordered w-full${formError.invoiceId ? ' is-invalid' : ''}`}
+                maxLength={16}
+                required
+                value={form.invoiceId}
+                onChange={handleChange}
+              />
+              {formError.invoiceId && <span className="helper-text">{formError.invoiceId}</span>}
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
+              <input
+                type="number"
+                name="amount"
+                className={`input input-bordered w-full${formError.amount ? ' is-invalid' : ''}`}
+                min="0"
+                step="0.01"
+                required
+                value={form.amount}
+                onChange={handleChange}
+              />
+              {formError.amount && <span className="helper-text">{formError.amount}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-gas-log-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--device-floppy] size-4"></span>
+          }
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** L3 modal — replace or attach a document file to a gas log. */
+function ReplaceGasFileModal({ gasLog, onRefresh }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [file, setFile] = useState(null)
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+  const fileRef = useRef(null)
+
+  /** Uploads a new document then links it to the gas log. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!file) { setFormError({ file: 'Please select a file.' }); return }
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setFormError({ file: 'File must be an image (JPG/PNG/GIF/WebP) or PDF.' })
+      return
+    }
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
+      if (!uploadRes.ok) {
+        setFormError(await parseApiError(uploadRes))
+        notyfError('File upload failed')
+        return
+      }
+      const docData = await uploadRes.json()
+      const updateRes = await apiFetch(`/api/vehicle-gas-logs/${gasLog.gasLogId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vehicleLogId: gasLog.vehicleLogId,
+          amount:       gasLog.amount,
+          invoiceId:    gasLog.invoiceId,
+          docuId:       docData.docuId,
+        }),
+      })
+      if (!updateRes.ok) {
+        setFormError(await parseApiError(updateRes))
+        notyfError('Link document failed')
+        return
+      }
+      notyfSuccess(`Gas log #${gasLog.gasLogId} document replaced successfully.`)
+      popModal()
+      onRefresh?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">
+            {gasLog.docuId != null ? 'Replace File' : 'Attach File'} — Gas Log #{gasLog.gasLogId}
+          </h3>
+          <span className="text-sm text-base-content/50">Invoice: {gasLog.invoiceId}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="replace-gas-file-form" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">File <span className="text-error">*</span></label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPTED_EXTENSIONS}
+                className="hidden"
+                onChange={e => setFile(e.target.files?.[0] ?? null)}
+              />
+              <button
+                type="button"
+                className={`btn btn-outline w-full justify-start font-normal${formError.file ? ' btn-error' : ''}`}
+                onClick={() => fileRef.current?.click()}
+              >
+                <span className="icon-[tabler--paperclip] size-4"></span>
+                {file ? file.name : 'Choose file…'}
+              </button>
+              {formError.file && <span className="helper-text">{formError.file}</span>}
+            </div>
+            {formError._general && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{formError._general}</span>
+              </div>
+            )}
+          </div>
+        </form>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="replace-gas-file-form" className="btn btn-primary" disabled={submitting}>
+          {submitting
+            ? <span className="loading loading-spinner loading-sm"></span>
+            : <span className="icon-[tabler--upload] size-4"></span>
+          }
+          Upload
+        </button>
+      </div>
+    </div>
   )
 }
 
 export default function VehicleLogs() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const { vehiclesId } = useParams()
   const location = useLocation()
   const vehiclesIdInt = Number(vehiclesId)
@@ -185,235 +1089,7 @@ export default function VehicleLogs() {
   const [totalElements, setTotalElements] = useState(0)
   const [refreshKey, setRefreshKey]       = useState(0)
 
-  // Add modal
-  const [modalOpen, setModalOpen]         = useState(false)
-  const [form, setForm]                   = useState(EMPTY_FORM)
-  const [formError, setFormError]         = useState({})
-  const [submitting, setSubmitting]       = useState(false)
-  const [checkingIncomplete, setCheckingIncomplete] = useState(false)
-  const [incompleteLog, setIncompleteLog] = useState(null)
-  const [odoStartLocked, setOdoStartLocked] = useState(false)
-
-  // Manage menu
-  const [selectedLog, setSelectedLog] = useState(null)
-
-  // Edit modal
-  const [editModalOpen, setEditModalOpen]   = useState(false)
-  const [editingLog, setEditingLog]         = useState(null)
-  const [editForm, setEditForm]             = useState(EMPTY_FORM)
-  const [editFormError, setEditFormError]   = useState({})
-  const [editSubmitting, setEditSubmitting] = useState(false)
-
-  // Picker state — shared between add and edit, pickerFor tracks which form is active
-  const [pickerFor, setPickerFor]               = useState(null) // 'add' | 'edit'
-  const [schedulePickerOpen, setSchedulePickerOpen] = useState(false)
-  const [driverPickerOpen, setDriverPickerOpen] = useState(false)
-  const [addDriverLabel, setAddDriverLabel]     = useState('')
-  const [editDriverLabel, setEditDriverLabel]   = useState('')
-
-  // Manage Gas Logs modal
-  const [manageGasLogsOpen, setManageGasLogsOpen]       = useState(false)
-  const [manageGasLogsLog, setManageGasLogsLog]         = useState(null)
-  const [gasLogs, setGasLogs]                           = useState([])
-  const [gasLogsLoading, setGasLogsLoading]             = useState(false)
-  const [gasLogsRefresh, setGasLogsRefresh]             = useState(0)
-  const [addGasLogOpen, setAddGasLogOpen]               = useState(false)
-  const [gasLogForm, setGasLogForm]                     = useState(EMPTY_GAS_FORM)
-  const [gasLogFormError, setGasLogFormError]           = useState({})
-  const [gasLogFormSubmitting, setGasLogFormSubmitting] = useState(false)
-
-  // Update gas log sub-modal
-  const [updateGasLogOpen, setUpdateGasLogOpen]             = useState(false)
-  const [updatingGasLog, setUpdatingGasLog]                 = useState(null)
-  const [updateGasLogForm, setUpdateGasLogForm]             = useState(EMPTY_GAS_FORM)
-  const [updateGasLogFormError, setUpdateGasLogFormError]   = useState({})
-  const [updateGasLogSubmitting, setUpdateGasLogSubmitting] = useState(false)
-
-  // View gas log details sub-modal
-  const [viewGasLog, setViewGasLog] = useState(null)
-
-  // Replace gas log file sub-modal
-  const [replaceGasFileOpen, setReplaceGasFileOpen]         = useState(false)
-  const [replaceGasTarget, setReplaceGasTarget]             = useState(null)
-  const [replaceGasFile, setReplaceGasFile]                 = useState(null)
-  const [replaceGasFileError, setReplaceGasFileError]       = useState({})
-  const [replaceGasFileSubmitting, setReplaceGasFileSubmitting] = useState(false)
-  const replaceGasFileRef = useRef(null)
-
-  // Add gas log file (optional)
-  const addGasFileRef = useRef(null)
-  const [addGasFile, setAddGasFile] = useState(null)
-
-  const canEdit     = hasRole('ADMIN', 'STAFF', 'CREW')
-  const canManageDocs = hasRole('ADMIN', 'STAFF')
-
-  function openSchedulePicker(forForm) {
-    setPickerFor(forForm)
-    setSchedulePickerOpen(true)
-  }
-
-  function openDriverPicker(forForm) {
-    setPickerFor(forForm)
-    setDriverPickerOpen(true)
-  }
-
-  function handleScheduleSelect(schedule) {
-    setSchedulePickerOpen(false)
-    const display = `Sched #${schedule.schedId} · Project #${schedule.projNum} · ${schedule.date ?? '—'}`
-    if (pickerFor === 'add') {
-      setForm(prev => ({ ...prev, schedId: String(schedule.schedId), _scheduleDisplay: display }))
-    } else {
-      setEditForm(prev => ({ ...prev, schedId: String(schedule.schedId), _scheduleDisplay: display }))
-    }
-  }
-
-  function handleDriverSelect(employee) {
-    setDriverPickerOpen(false)
-    const label = `${employee.firstName} ${employee.lastName} — ${employee.position}`
-    if (pickerFor === 'add') {
-      setForm(prev => ({ ...prev, driverEmployeeId: String(employee.employeeId) }))
-      setAddDriverLabel(label)
-    } else {
-      setEditForm(prev => ({ ...prev, driverEmployeeId: String(employee.employeeId) }))
-      setEditDriverLabel(label)
-    }
-  }
-
-  /** Checks for an ongoing trip before opening the new log form. */
-  async function openModal() {
-    setCheckingIncomplete(true)
-    try {
-      const res = await apiFetch(`/api/vehicle-logs/latest-incomplete?vehiclesId=${vehiclesIdInt}`)
-      if (res.status === 200) {
-        setIncompleteLog(await res.json())
-        return
-      }
-      // No incomplete log — prefill odometerStart from last completed log
-      let prefillOdo = ''
-      const lastRes = await apiFetch(
-        `/api/vehicle-logs?vehiclesId=${vehiclesIdInt}&sort=addedOn,desc&size=1`
-      )
-      if (lastRes.ok) {
-        const lastData = await lastRes.json()
-        const lastLog = lastData.content?.[0]
-        if (lastLog?.odometerEnd != null) prefillOdo = String(lastLog.odometerEnd)
-      }
-      setOdoStartLocked(prefillOdo !== '')
-      setForm({ ...EMPTY_FORM, odometerStart: prefillOdo })
-      setFormError({})
-      setAddDriverLabel('')
-      setModalOpen(true)
-    } finally {
-      setCheckingIncomplete(false)
-    }
-  }
-
-  function closeModal() {
-    setModalOpen(false)
-    setForm(EMPTY_FORM)
-    setFormError({})
-    setAddDriverLabel('')
-    setOdoStartLocked(false)
-  }
-
-  /** Opens the edit modal pre-populated with the given log's data. */
-  function openEditModal(log) {
-    const schedDisplay = log.schedId
-      ? `Sched #${log.schedId}`
-      : ''
-    setEditForm({
-      purpose:          log.purpose,
-      schedId:          log.schedId != null ? String(log.schedId) : '',
-      _scheduleDisplay: schedDisplay,
-      destination:      log.destination,
-      driverEmployeeId: String(log.driverEmployeeId),
-      odometerStart:    String(log.odometerStart),
-      odometerEnd:      log.odometerEnd != null ? String(log.odometerEnd) : '',
-      status:           log.status,
-    })
-    setEditDriverLabel(log.driverName)
-    setEditingLog(log)
-    setEditFormError({})
-    setEditModalOpen(true)
-  }
-
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingLog(null)
-    setEditForm(EMPTY_FORM)
-    setEditFormError({})
-    setEditDriverLabel('')
-  }
-
-  function handleFormChange(e) {
-    const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  function handleEditFormChange(e) {
-    const { name, value } = e.target
-    setEditForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  // — Manage Gas Logs —
-
-  function openManageGasLogs(log) {
-    setManageGasLogsLog(log)
-    setGasLogsRefresh(0)
-    setAddGasLogOpen(false)
-    setGasLogForm(EMPTY_GAS_FORM)
-    setGasLogFormError({})
-    setAddGasFile(null)
-    setManageGasLogsOpen(true)
-  }
-
-  function closeManageGasLogs() {
-    setManageGasLogsOpen(false)
-    setManageGasLogsLog(null)
-    setGasLogs([])
-    setAddGasLogOpen(false)
-    setGasLogForm(EMPTY_GAS_FORM)
-    setGasLogFormError({})
-    setAddGasFile(null)
-  }
-
-  function handleGasLogFormChange(e) {
-    const { name, value } = e.target
-    setGasLogForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  function openUpdateGasLog(g) {
-    setUpdateGasLogForm({ invoiceId: g.invoiceId, amount: String(g.amount) })
-    setUpdatingGasLog(g)
-    setUpdateGasLogFormError({})
-    setUpdateGasLogOpen(true)
-  }
-
-  function closeUpdateGasLog() {
-    setUpdateGasLogOpen(false)
-    setUpdatingGasLog(null)
-    setUpdateGasLogForm(EMPTY_GAS_FORM)
-    setUpdateGasLogFormError({})
-  }
-
-  function handleUpdateGasLogFormChange(e) {
-    const { name, value } = e.target
-    setUpdateGasLogForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  function openReplaceGasFile(g) {
-    setReplaceGasTarget(g)
-    setReplaceGasFile(null)
-    setReplaceGasFileError({})
-    setReplaceGasFileOpen(true)
-  }
-
-  function closeReplaceGasFile() {
-    setReplaceGasFileOpen(false)
-    setReplaceGasTarget(null)
-    setReplaceGasFile(null)
-    setReplaceGasFileError({})
-  }
+  const canEdit = hasRole('ADMIN', 'STAFF', 'CREW')
 
   /** Fetches vehicle logs filtered by vehicle ID. */
   useEffect(() => {
@@ -442,24 +1118,6 @@ export default function VehicleLogs() {
     return () => { active = false }
   }, [apiFetch, page, vehiclesIdInt, refreshKey])
 
-  /** Fetches gas logs for the selected vehicle log. */
-  useEffect(() => {
-    if (!manageGasLogsOpen || !manageGasLogsLog) { setGasLogs([]); return }
-    let active = true
-    setGasLogsLoading(true)
-    const params = new URLSearchParams({
-      vehicleLogId: String(manageGasLogsLog.vehicleLogId),
-      size: '100',
-      sort: 'gasLogId,asc',
-    })
-    apiFetch(`/api/vehicle-gas-logs?${params}`)
-      .then(res => res.ok ? res.json() : Promise.reject())
-      .then(data => { if (active) setGasLogs(data.content ?? []) })
-      .catch(() => { if (active) setGasLogs([]) })
-      .finally(() => { if (active) setGasLogsLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, manageGasLogsOpen, manageGasLogsLog, gasLogsRefresh])
-
   const filtered = logs.filter(l => {
     if (search === '') return true
     const q = search.toLowerCase()
@@ -470,205 +1128,6 @@ export default function VehicleLogs() {
       l.destination.toLowerCase().includes(q)
     )
   })
-
-  /** Builds the request body from a form state object. */
-  function buildBody(f) {
-    return {
-      vehiclesId:       vehiclesIdInt,
-      purpose:          f.purpose,
-      schedId:          f.schedId ? Number(f.schedId) : null,
-      destination:      f.destination,
-      driverEmployeeId: f.driverEmployeeId ? Number(f.driverEmployeeId) : null,
-      odometerStart:    f.odometerStart !== '' ? Number(f.odometerStart) : null,
-      odometerEnd:      f.odometerEnd !== '' ? Number(f.odometerEnd) : null,
-      status:           f.status,
-    }
-  }
-
-  /** Submits the new log form. */
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/vehicle-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody(form)),
-      })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Add failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeModal()
-      setTimeout(() => notyfSuccess(`Log #${data.vehicleLogId} added successfully.`), 150)
-      setPage(0)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  /** Submits the update log form. */
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setEditFormError({})
-    setEditSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/vehicle-logs/${editingLog.vehicleLogId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody(editForm)),
-      })
-      if (!res.ok) {
-        setEditFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`Log #${editingLog.vehicleLogId} updated successfully.`), 150)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setEditFormError({ _general: err.message })
-    } finally {
-      setEditSubmitting(false)
-    }
-  }
-
-  /** Submits the add gas log form, optionally uploading a document first. */
-  async function handleAddGasLogSubmit(e) {
-    e.preventDefault()
-    setGasLogFormError({})
-    setGasLogFormSubmitting(true)
-    try {
-      let docuId = null
-      if (addGasFile) {
-        const fd = new FormData()
-        fd.append('file', addGasFile)
-        const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
-        if (!uploadRes.ok) {
-          setGasLogFormError(await parseApiError(uploadRes))
-          notyfError('File upload failed')
-          return
-        }
-        const docData = await uploadRes.json()
-        docuId = docData.docuId
-      }
-
-      const res = await apiFetch('/api/vehicle-gas-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehicleLogId: manageGasLogsLog.vehicleLogId,
-          amount:       Number(gasLogForm.amount),
-          invoiceId:    gasLogForm.invoiceId,
-          docuId,
-        }),
-      })
-      if (!res.ok) {
-        setGasLogFormError(await parseApiError(res))
-        notyfError('Add gas log failed')
-        return
-      }
-      setAddGasLogOpen(false)
-      setGasLogForm(EMPTY_GAS_FORM)
-      setGasLogFormError({})
-      setAddGasFile(null)
-      notyfSuccess('Gas log added successfully.')
-      setGasLogsRefresh(k => k + 1)
-    } catch (err) {
-      setGasLogFormError({ _general: err.message })
-    } finally {
-      setGasLogFormSubmitting(false)
-    }
-  }
-
-  /** Submits the update gas log form. */
-  async function handleUpdateGasLogSubmit(e) {
-    e.preventDefault()
-    setUpdateGasLogFormError({})
-    setUpdateGasLogSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/vehicle-gas-logs/${updatingGasLog.gasLogId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehicleLogId: updatingGasLog.vehicleLogId,
-          amount:       Number(updateGasLogForm.amount),
-          invoiceId:    updateGasLogForm.invoiceId,
-          docuId:       updatingGasLog.docuId ?? null,
-        }),
-      })
-      if (!res.ok) {
-        setUpdateGasLogFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeUpdateGasLog()
-      notyfSuccess(`Gas log #${updatingGasLog.gasLogId} updated successfully.`)
-      setGasLogsRefresh(k => k + 1)
-    } catch (err) {
-      setUpdateGasLogFormError({ _general: err.message })
-    } finally {
-      setUpdateGasLogSubmitting(false)
-    }
-  }
-
-  /** Uploads a new document file then links it to the gas log. */
-  async function handleReplaceGasFileSubmit(e) {
-    e.preventDefault()
-    if (!replaceGasFile) {
-      setReplaceGasFileError({ file: 'Please select a file.' })
-      return
-    }
-    if (!ACCEPTED_TYPES.includes(replaceGasFile.type)) {
-      setReplaceGasFileError({ file: 'File must be an image (JPG/PNG/GIF/WebP) or PDF.' })
-      return
-    }
-    setReplaceGasFileError({})
-    setReplaceGasFileSubmitting(true)
-    try {
-      // Step 1: upload new document
-      const fd = new FormData()
-      fd.append('file', replaceGasFile)
-      const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
-      if (!uploadRes.ok) {
-        setReplaceGasFileError(await parseApiError(uploadRes))
-        notyfError('File upload failed')
-        return
-      }
-      const docData = await uploadRes.json()
-      const newDocuId = docData.docuId
-
-      // Step 2: update gas log with new docuId
-      const updateRes = await apiFetch(`/api/vehicle-gas-logs/${replaceGasTarget.gasLogId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehicleLogId: replaceGasTarget.vehicleLogId,
-          amount:       replaceGasTarget.amount,
-          invoiceId:    replaceGasTarget.invoiceId,
-          docuId:       newDocuId,
-        }),
-      })
-      if (!updateRes.ok) {
-        setReplaceGasFileError(await parseApiError(updateRes))
-        notyfError('Link document failed')
-        return
-      }
-      closeReplaceGasFile()
-      notyfSuccess(`Gas log #${replaceGasTarget.gasLogId} document replaced successfully.`)
-      setGasLogsRefresh(k => k + 1)
-    } catch (err) {
-      setReplaceGasFileError({ _general: err.message })
-    } finally {
-      setReplaceGasFileSubmitting(false)
-    }
-  }
 
   return (
     <Layout activePage="vehicles">
@@ -683,13 +1142,9 @@ export default function VehicleLogs() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={openModal}
-              disabled={checkingIncomplete}
+              onClick={() => pushModal(<NewVehicleLogModal vehiclesId={vehiclesIdInt} vehicleLabel={vehicleLabel} onSuccess={() => { setPage(0); setRefreshKey(k => k + 1) }} />)}
             >
-              {checkingIncomplete
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
+              <span className="icon-[tabler--plus] size-4"></span>
               New Log
             </button>
           )}
@@ -772,7 +1227,7 @@ export default function VehicleLogs() {
                       <td>
                         <button
                           className="btn btn-soft btn-primary btn-sm"
-                          onClick={() => setSelectedLog(l)}
+                          onClick={() => pushModal(<ManageLogModal log={l} onRefresh={() => setRefreshKey(k => k + 1)} />)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           Manage
@@ -800,506 +1255,27 @@ export default function VehicleLogs() {
           )}
         </>
       )}
-
-      {/* Log Manage Menu */}
-      <ManageMenu
-        title={selectedLog ? `Log #${selectedLog.vehicleLogId}` : ''}
-        subtitle={selectedLog ? `${selectedLog.vehicleModel} · ${selectedLog.vehiclePlateNum}` : ''}
-        item={selectedLog}
-        details={selectedLog ? [
-          { label: 'Vehicle',        value: `${selectedLog.vehicleModel} (${selectedLog.vehiclePlateNum})` },
-          { label: 'Schedule',       value: selectedLog.schedId != null ? `Sched #${selectedLog.schedId}` : '—' },
-          { label: 'Purpose',        value: selectedLog.purpose },
-          { label: 'Driver',         value: selectedLog.driverName },
-          { label: 'Status',         value: selectedLog.status.charAt(0).toUpperCase() + selectedLog.status.slice(1) },
-          { label: 'Date',           value: formatDate(selectedLog.addedOn) },
-          { label: 'Odometer Start', value: `${selectedLog.odometerStart?.toLocaleString()} km` },
-          { label: 'Odometer End',   value: selectedLog.odometerEnd != null ? `${selectedLog.odometerEnd?.toLocaleString()} km` : '—' },
-          { label: 'Destination',    value: selectedLog.destination, fullWidth: true },
-        ] : []}
-        isOpen={!!selectedLog}
-        onClose={() => setSelectedLog(null)}
-        hasRole={hasRole}
-        menuItems={LOG_MENU_ITEMS}
-        onMenuSelect={(key, log) => {
-          setSelectedLog(null)
-          if (key === 'update') openEditModal(log)
-          if (key === 'manage-gas-logs') openManageGasLogs(log)
-        }}
-      />
-
-      {/* Manage Gas Logs Modal */}
-      <Modal
-        isOpen={manageGasLogsOpen}
-        onClose={addGasLogOpen ? undefined : closeManageGasLogs}
-        hideClose={addGasLogOpen}
-        title={`Gas Logs — Log #${manageGasLogsLog?.vehicleLogId ?? ''}`}
-        size="max-w-2xl"
-        footer={!addGasLogOpen && (
-          <button type="button" className="btn btn-soft btn-secondary" onClick={closeManageGasLogs}>
-            Close
-          </button>
-        )}
-      >
-        {addGasLogOpen ? (
-          <form onSubmit={handleAddGasLogSubmit}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
-                <input
-                  type="text"
-                  name="invoiceId"
-                  className={`input input-bordered w-full${gasLogFormError.invoiceId ? ' is-invalid' : ''}`}
-                  placeholder="e.g. INV-001"
-                  maxLength={16}
-                  required
-                  value={gasLogForm.invoiceId}
-                  onChange={handleGasLogFormChange}
-                />
-                {gasLogFormError.invoiceId && <span className="helper-text">{gasLogFormError.invoiceId}</span>}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
-                <input
-                  type="number"
-                  name="amount"
-                  className={`input input-bordered w-full${gasLogFormError.amount ? ' is-invalid' : ''}`}
-                  placeholder="e.g. 500.00"
-                  min="0"
-                  step="0.01"
-                  required
-                  value={gasLogForm.amount}
-                  onChange={handleGasLogFormChange}
-                />
-                {gasLogFormError.amount && <span className="helper-text">{gasLogFormError.amount}</span>}
-              </div>
-
-              {canManageDocs && (
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label className="label-text font-medium">Document <span className="text-base-content/40 font-normal">(optional)</span></label>
-                  <input
-                    ref={addGasFileRef}
-                    type="file"
-                    accept={ACCEPTED_EXTENSIONS}
-                    className="hidden"
-                    onChange={e => setAddGasFile(e.target.files?.[0] ?? null)}
-                  />
-                  <button
-                    type="button"
-                    className={`btn btn-outline w-full justify-start font-normal${gasLogFormError.file ? ' btn-error' : ''}`}
-                    onClick={() => addGasFileRef.current?.click()}
-                  >
-                    <span className="icon-[tabler--paperclip] size-4"></span>
-                    {addGasFile ? addGasFile.name : 'Choose file…'}
-                  </button>
-                  {gasLogFormError.file && <span className="helper-text">{gasLogFormError.file}</span>}
-                </div>
-              )}
-
-              {gasLogFormError._general && (
-                <div className="sm:col-span-2 alert alert-error py-2">
-                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                  <span className="text-sm">{gasLogFormError._general}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <button
-                type="button"
-                className="btn btn-soft btn-secondary btn-sm"
-                onClick={() => { setAddGasLogOpen(false); setGasLogForm(EMPTY_GAS_FORM); setGasLogFormError({}); setAddGasFile(null) }}
-              >
-                Cancel
-              </button>
-              <button type="submit" className="btn btn-primary btn-sm" disabled={gasLogFormSubmitting}>
-                {gasLogFormSubmitting
-                  ? <span className="loading loading-spinner loading-xs"></span>
-                  : <span className="icon-[tabler--plus] size-4"></span>
-                }
-                Add Gas Log
-              </button>
-            </div>
-          </form>
-        ) : (
-          <>
-            <div className="flex justify-end mb-3">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => { setGasLogForm(EMPTY_GAS_FORM); setGasLogFormError({}); setAddGasFile(null); setAddGasLogOpen(true) }}
-              >
-                <span className="icon-[tabler--plus] size-4"></span>
-                Add Gas Log
-              </button>
-            </div>
-
-            {gasLogsLoading ? (
-              <div className="flex justify-center py-6">
-                <span className="loading loading-spinner loading-sm text-primary"></span>
-              </div>
-            ) : gasLogs.length === 0 ? (
-              <div className="text-center py-6 text-base-content/40 text-sm">
-                No gas logs linked to this vehicle log.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-box border border-base-300">
-                <table className="table table-zebra table-sm w-full">
-                  <thead>
-                    <tr>
-                      <th>Gas Log #</th>
-                      <th>Invoice ID</th>
-                      <th>Amount</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {gasLogs.map(g => (
-                      <tr key={g.gasLogId}>
-                        <td className="font-mono text-xs">{g.gasLogId}</td>
-                        <td className="text-sm">{g.invoiceId}</td>
-                        <td className="text-sm">{formatCurrency(g.amount)}</td>
-                        <td>
-                          <div className="flex gap-1 flex-wrap">
-                            <button
-                              className="btn btn-soft btn-primary btn-xs"
-                              onClick={() => setViewGasLog(g)}
-                            >
-                              <span className="icon-[tabler--info-circle] size-3"></span>
-                              View
-                            </button>
-                            <button
-                              className="btn btn-soft btn-secondary btn-xs"
-                              onClick={() => openUpdateGasLog(g)}
-                            >
-                              <span className="icon-[tabler--pencil] size-3"></span>
-                              Update
-                            </button>
-                            {canManageDocs && (
-                              g.docuId != null ? (
-                                <button
-                                  className="btn btn-soft btn-warning btn-xs"
-                                  onClick={() => openReplaceGasFile(g)}
-                                >
-                                  <span className="icon-[tabler--file-upload] size-3"></span>
-                                  Replace File
-                                </button>
-                              ) : (
-                                <button
-                                  className="btn btn-soft btn-accent btn-xs"
-                                  onClick={() => openReplaceGasFile(g)}
-                                >
-                                  <span className="icon-[tabler--paperclip] size-3"></span>
-                                  Attach File
-                                </button>
-                              )
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-      </Modal>
-
-      {/* View Gas Log Details Sub-modal */}
-      <GasLogDetailsModal
-        gasLog={viewGasLog}
-        onClose={() => setViewGasLog(null)}
-        apiFetch={apiFetch}
-      />
-
-      {/* Update Gas Log Sub-modal */}
-      {updateGasLogOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeUpdateGasLog} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Update Gas Log #{updatingGasLog?.gasLogId}</h3>
-                  <span className="text-sm text-base-content/50">Invoice: {updatingGasLog?.invoiceId}</span>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-                  onClick={closeUpdateGasLog}
-                >
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="update-gas-log-form" onSubmit={handleUpdateGasLogSubmit}>
-                  <div className="flex flex-col gap-4">
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Invoice ID <span className="text-error">*</span></label>
-                      <input
-                        type="text"
-                        name="invoiceId"
-                        className={`input input-bordered w-full${updateGasLogFormError.invoiceId ? ' is-invalid' : ''}`}
-                        maxLength={16}
-                        required
-                        value={updateGasLogForm.invoiceId}
-                        onChange={handleUpdateGasLogFormChange}
-                      />
-                      {updateGasLogFormError.invoiceId && <span className="helper-text">{updateGasLogFormError.invoiceId}</span>}
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">Amount <span className="text-error">*</span></label>
-                      <input
-                        type="number"
-                        name="amount"
-                        className={`input input-bordered w-full${updateGasLogFormError.amount ? ' is-invalid' : ''}`}
-                        min="0"
-                        step="0.01"
-                        required
-                        value={updateGasLogForm.amount}
-                        onChange={handleUpdateGasLogFormChange}
-                      />
-                      {updateGasLogFormError.amount && <span className="helper-text">{updateGasLogFormError.amount}</span>}
-                    </div>
-
-                    {updateGasLogFormError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{updateGasLogFormError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdateGasLog}>
-                  Cancel
-                </button>
-                <button type="submit" form="update-gas-log-form" className="btn btn-primary" disabled={updateGasLogSubmitting}>
-                  {updateGasLogSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--device-floppy] size-4"></span>
-                  }
-                  Save Changes
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Replace Gas Log File Sub-modal */}
-      {replaceGasFileOpen && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" onClick={closeReplaceGasFile} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">
-                    {replaceGasTarget?.docuId != null ? 'Replace File' : 'Attach File'} — Gas Log #{replaceGasTarget?.gasLogId}
-                  </h3>
-                  <span className="text-sm text-base-content/50">Invoice: {replaceGasTarget?.invoiceId}</span>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-                  onClick={closeReplaceGasFile}
-                >
-                  <span className="icon-[tabler--x] size-4"></span>
-                </button>
-              </div>
-              <div className="modal-body">
-                <form id="replace-gas-file-form" onSubmit={handleReplaceGasFileSubmit}>
-                  <div className="flex flex-col gap-4">
-
-                    <div className="flex flex-col gap-1">
-                      <label className="label-text font-medium">File <span className="text-error">*</span></label>
-                      <input
-                        ref={replaceGasFileRef}
-                        type="file"
-                        accept={ACCEPTED_EXTENSIONS}
-                        className="hidden"
-                        onChange={e => setReplaceGasFile(e.target.files?.[0] ?? null)}
-                      />
-                      <button
-                        type="button"
-                        className={`btn btn-outline w-full justify-start font-normal${replaceGasFileError.file ? ' btn-error' : ''}`}
-                        onClick={() => replaceGasFileRef.current?.click()}
-                      >
-                        <span className="icon-[tabler--paperclip] size-4"></span>
-                        {replaceGasFile ? replaceGasFile.name : 'Choose file…'}
-                      </button>
-                      {replaceGasFileError.file && <span className="helper-text">{replaceGasFileError.file}</span>}
-                    </div>
-
-                    {replaceGasFileError._general && (
-                      <div className="alert alert-error py-2">
-                        <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                        <span className="text-sm">{replaceGasFileError._general}</span>
-                      </div>
-                    )}
-                  </div>
-                </form>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-soft btn-secondary" onClick={closeReplaceGasFile}>
-                  Cancel
-                </button>
-                <button type="submit" form="replace-gas-file-form" className="btn btn-primary" disabled={replaceGasFileSubmitting}>
-                  {replaceGasFileSubmitting
-                    ? <span className="loading loading-spinner loading-sm"></span>
-                    : <span className="icon-[tabler--upload] size-4"></span>
-                  }
-                  Upload
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Blocking modal — vehicle is still on a trip with no end odometer */}
-      {incompleteLog && (
-        <>
-          <div className="fixed inset-0 bg-base-300/40 z-[55]" />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="modal-content w-full max-w-sm shadow-xl">
-              <div className="modal-header">
-                <div>
-                  <h3 className="modal-title">Vehicle Still Out</h3>
-                  <span className="text-sm text-base-content/50">{vehicleLabel}</span>
-                </div>
-              </div>
-              <div className="modal-body flex flex-col gap-4">
-                <div className="alert alert-error py-3">
-                  <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                  <span className="text-sm">
-                    This vehicle has an ongoing trip with no end odometer recorded. Return the vehicle and log the end odometer before adding a new trip.
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Log #</span>
-                    <span className="font-medium font-mono">{incompleteLog.vehicleLogId}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Driver</span>
-                    <span className="font-medium">{incompleteLog.driverName}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Purpose</span>
-                    <span className="font-medium">{incompleteLog.purpose}</span>
-                  </div>
-                  <div>
-                    <span className="text-xs text-base-content/50 block">Odometer Start</span>
-                    <span className="font-medium">{incompleteLog.odometerStart?.toLocaleString()} km</span>
-                  </div>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-primary" onClick={() => setIncompleteLog(null)}>
-                  OK
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* New Log Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title="New Vehicle Log"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeModal}>
-              Cancel
-            </button>
-            <button type="submit" form="new-log-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Log
-            </button>
-          </>
-        }
-      >
-        <form id="new-log-form" onSubmit={handleSubmit}>
-          <LogFormFields
-            form={form}
-            formError={formError}
-            onChange={handleFormChange}
-            onSetForm={setForm}
-            driverLabel={addDriverLabel}
-            odoStartLocked={odoStartLocked}
-            onOpenSchedulePicker={() => openSchedulePicker('add')}
-            onOpenDriverPicker={() => openDriverPicker('add')}
-          />
-        </form>
-      </Modal>
-
-      {/* Edit Log Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title={`Update Log #${editingLog?.vehicleLogId}`}
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="edit-log-form" className="btn btn-primary" disabled={editSubmitting}>
-              {editSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="edit-log-form" onSubmit={handleUpdate}>
-          <LogFormFields
-            form={editForm}
-            formError={editFormError}
-            onChange={handleEditFormChange}
-            onSetForm={setEditForm}
-            driverLabel={editDriverLabel}
-            onOpenSchedulePicker={() => openSchedulePicker('edit')}
-            onOpenDriverPicker={() => openDriverPicker('edit')}
-          />
-        </form>
-      </Modal>
-
-      {/* Schedule Picker */}
-      <AnySchedulePickerModal
-        isOpen={schedulePickerOpen}
-        onClose={() => setSchedulePickerOpen(false)}
-        onSelect={handleScheduleSelect}
-      />
-
-      {/* Driver Picker */}
-      <EmployeePickerModal
-        isOpen={driverPickerOpen}
-        onClose={() => setDriverPickerOpen(false)}
-        onSelect={handleDriverSelect}
-      />
     </Layout>
   )
 }
 
-/** Shared form fields used by both the add and edit modals. */
-function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoStartLocked, onOpenSchedulePicker, onOpenDriverPicker }) {
+/** Shared form fields used by both add and edit log modals. */
+function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoMin = 0, onOpenSchedulePicker, onOpenDriverPicker }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      <div className="flex flex-col gap-1">
+        <label className="label-text font-medium">Date <span className="text-error">*</span></label>
+        <input
+          type="date"
+          name="date"
+          required
+          className={`input input-bordered w-full${formError.date ? ' is-invalid' : ''}`}
+          value={form.date}
+          onChange={onChange}
+        />
+        {formError.date && <span className="helper-text">{formError.date}</span>}
+      </div>
 
       <div className="sm:col-span-2 flex flex-col gap-1">
         <label className="label-text font-medium">Purpose <span className="text-error">*</span></label>
@@ -1379,23 +1355,21 @@ function LogFormFields({ form, formError, onChange, onSetForm, driverLabel, odoS
       <div className="flex flex-col gap-1">
         <label className="label-text font-medium">
           Odometer Start (km) <span className="text-error">*</span>
-          {odoStartLocked && (
+          {odoMin > 0 && (
             <span className="ml-2 text-xs font-normal text-base-content/40">
-              <span className="icon-[tabler--lock] size-3 inline-block align-middle mr-0.5"></span>
-              from previous log
+              min {odoMin.toLocaleString()} km
             </span>
           )}
         </label>
         <input
           type="number"
           name="odometerStart"
-          min={0}
+          min={odoMin}
           required
-          readOnly={odoStartLocked}
-          className={`input input-bordered w-full${odoStartLocked ? ' bg-base-200 cursor-not-allowed' : ''}${formError.odometerStart ? ' is-invalid' : ''}`}
+          className={`input input-bordered w-full${formError.odometerStart ? ' is-invalid' : ''}`}
           placeholder="e.g. 12500"
           value={form.odometerStart}
-          onChange={odoStartLocked ? undefined : onChange}
+          onChange={onChange}
         />
         {formError.odometerStart && <span className="helper-text">{formError.odometerStart}</span>}
       </div>

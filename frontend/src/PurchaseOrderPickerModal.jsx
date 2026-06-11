@@ -30,10 +30,11 @@ const renderCard = (o, onSelect) => (
 )
 
 /** Picker modal for selecting a Purchase Order. Wraps PickerModal with PO-specific config. */
-export default function PurchaseOrderPickerModal({ isOpen, onClose, onSelect }) {
+export default function PurchaseOrderPickerModal({ isOpen, onClose, onSelect, asLayer = false }) {
   return (
     <PickerModal
-      isOpen={isOpen}
+      asLayer={asLayer}
+      isOpen={asLayer ? true : isOpen}
       onClose={onClose}
       onSelect={onSelect}
       title="Select Purchase Order"

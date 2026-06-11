@@ -35,6 +35,10 @@ public record ServiceReportResponse(
         @Schema(description = "Scheduled service date", example = "2026-01-08")
         LocalDate scheduleDate,
 
+        @Schema(description = "Status of the linked schedule",
+                example = "completed", allowableValues = {"pending", "confirmed", "completed", "cancelled"})
+        String scheduleStatus,
+
         @Schema(description = "Linked document ID; null if none", example = "2")
         Integer docuId,
 

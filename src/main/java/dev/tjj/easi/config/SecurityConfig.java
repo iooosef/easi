@@ -47,18 +47,20 @@ public class SecurityConfig {
                                 .sessionManagement(session -> session.sessionCreationPolicy(
                                                 SessionCreationPolicy.STATELESS))
                                 .authorizeHttpRequests(auth -> auth
-                                                .requestMatchers("/api/auth/**").permitAll()
+                                                .requestMatchers("/api/auth/**", "/api/config").permitAll()
                                                 .requestMatchers("/", "/index.html", "/test", "/assets/**",
                                                                 "/favicon.svg", "/icons.svg", "/favicon.png")
+                                                .permitAll()
+                                                // SPA client-side routes: permit any GET that isn't an API/asset call
+                                                .requestMatchers(request -> "GET".equals(request.getMethod())
+                                                                && !request.getRequestURI().startsWith("/api/")
+                                                                && !request.getRequestURI().contains("."))
                                                 .permitAll()
                                                 .requestMatchers(
                                                                 "/swagger-ui/**",
                                                                 "/swagger-ui.html",
                                                                 "/v3/api-docs/**",
                                                                 "/v3/api-docs.yaml")
-                                                .permitAll()
-                                                .requestMatchers("/api/users/forgot-password", "/api/users/verify-otp",
-                                                                "/api/users/reset-password")
                                                 .permitAll()
                                                 .requestMatchers("/api/users/admin-reset-password")
                                                 .hasAnyRole("ADMIN", "HR")

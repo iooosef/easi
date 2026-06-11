@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useAuth } from './auth'
 import Layout from './Layout'
-import Modal from './Modal'
-import ManageMenu from './ManageMenu'
+import ModalNav from './modals/ModalNav.jsx'
+import { useModal } from './modals/index.js'
 import { notyfSuccess, notyfError } from './notyf'
 
 const FINDING_MENU_ITEMS_MODAL = [
@@ -11,42 +11,29 @@ const FINDING_MENU_ITEMS_MODAL = [
 ]
 
 /**
- * Modal component for managing findings of a specific service report.
- * Opens when `report` is non-null; closes by calling `onClose`.
+ * Layer 2 — findings list for a service report, pushed from ManageSRModal.
+ * Fetches its own findings and AC units; pushes add/manage layers on top.
  */
-export function ManageFindingsModal({ report, apiFetch, hasRole, onClose }) {
-  const srNumberInt = report?.srNumber ?? null
-  const projNum     = report?.projNum ?? null
+export function FindingsModal({ report, onRefresh }) {
+  const { pushModal, popModal } = useModal()
+  const { apiFetch, hasRole } = useAuth()
+  const srNumber = report.srNumber
+  const projNum  = report.projNum
 
   const [findings, setFindings]           = useState([])
-  const [loading, setLoading]             = useState(false)
+  const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState(null)
   const [page, setPage]                   = useState(0)
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
   const [refreshKey, setRefreshKey]       = useState(0)
-
-  const [acUnits, setAcUnits] = useState([])
-
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
-  const [submitting, setSubmitting] = useState(false)
-
-  const [selectedFinding, setSelectedFinding] = useState(null)
-
-  const [editModalOpen, setEditModalOpen]   = useState(false)
-  const [editingFinding, setEditingFinding] = useState(null)
-  const [editForm, setEditForm]             = useState(EMPTY_FORM)
-  const [editFormError, setEditFormError]   = useState({})
-  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [acUnits, setAcUnits]             = useState([])
 
   const canEdit = hasRole('ADMIN', 'STAFF', 'CREW')
 
-  // Reset page when report changes
-  useEffect(() => { setPage(0); setRefreshKey(0) }, [srNumberInt])
+  function refresh() { setRefreshKey(k => k + 1); onRefresh?.() }
 
-  /** Loads AC units for the project. */
+  /** Loads AC units for the dropdown in add/edit forms. */
   useEffect(() => {
     if (!projNum) return
     apiFetch(`/api/ac-units?projNum=${projNum}&size=100&sort=acNum,asc`)
@@ -55,151 +42,48 @@ export function ManageFindingsModal({ report, apiFetch, hasRole, onClose }) {
       .catch(() => {})
   }, [apiFetch, projNum])
 
-  /** Fetches findings for the current service report. */
+  /** Fetches findings for this service report. */
   useEffect(() => {
-    if (!srNumberInt) { setFindings([]); return }
     let active = true
     setLoading(true)
     setError(null)
-    const params = new URLSearchParams({
-      page:     String(page),
-      size:     '20',
-      sort:     'srFindingsNumber,asc',
-      srNumber: String(srNumberInt),
-    })
+    const params = new URLSearchParams({ page: String(page), size: '20', sort: 'srFindingsNumber,asc', srNumber: String(srNumber) })
     apiFetch(`/api/service-report-findings?${params}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`Failed to load findings (${res.status})`)
-        return res.json()
-      })
-      .then(data => {
-        if (!active) return
-        setFindings(data.content ?? [])
-        setTotalPages(data.totalPages ?? 0)
-        setTotalElements(data.totalElements ?? 0)
-      })
+      .then(res => { if (!res.ok) throw new Error(`Failed to load findings (${res.status})`); return res.json() })
+      .then(data => { if (!active) return; setFindings(data.content ?? []); setTotalPages(data.totalPages ?? 0); setTotalElements(data.totalElements ?? 0) })
       .catch(err => { if (active) setError(err.message) })
       .finally(() => { if (active) setLoading(false) })
     return () => { active = false }
-  }, [apiFetch, page, srNumberInt, refreshKey])
-
-  function openAdd() { setForm(EMPTY_FORM); setFormError({}); setModalOpen(true) }
-  function closeAdd() { setModalOpen(false); setForm(EMPTY_FORM); setFormError({}) }
-
-  function openEdit(finding) {
-    setEditForm({ findingType: finding.findingType ?? 'GOOD', partModel: finding.partModel ?? '', acNum: finding.acNum ?? '', remarks: finding.remarks ?? '' })
-    setEditingFinding(finding)
-    setEditFormError({})
-    setEditModalOpen(true)
-  }
-  function closeEdit() { setEditModalOpen(false); setEditingFinding(null); setEditForm(EMPTY_FORM); setEditFormError({}) }
-
-  /** Submits the new finding form. */
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/service-report-findings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          srNumber:    srNumberInt,
-          findingType: form.findingType || null,
-          partModel:   form.partModel   || null,
-          acNum:       form.acNum       ? Number(form.acNum) : null,
-          remarks:     form.remarks     || null,
-        }),
-      })
-      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Add failed'); return }
-      const data = await res.json().catch(() => ({}))
-      closeAdd()
-      notyfSuccess(`Finding #${data.srFindingsNumber} added successfully.`)
-      setPage(0)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  /** Submits the update finding form. */
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setEditFormError({})
-    setEditSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/service-report-findings/${editingFinding.srFindingsNumber}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          srNumber:    srNumberInt,
-          findingType: editForm.findingType || null,
-          partModel:   editForm.partModel   || null,
-          acNum:       editForm.acNum       ? Number(editForm.acNum) : null,
-          remarks:     editForm.remarks     || null,
-        }),
-      })
-      if (!res.ok) { setEditFormError(await parseApiError(res)); notyfError('Update failed'); return }
-      closeEdit()
-      notyfSuccess(`Finding #${editingFinding.srFindingsNumber} updated successfully.`)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setEditFormError({ _general: err.message })
-    } finally {
-      setEditSubmitting(false)
-    }
-  }
+  }, [apiFetch, page, srNumber, refreshKey])
 
   return (
-    <>
-      {/* Main Findings Modal */}
-      <Modal
-        isOpen={!!report}
-        onClose={onClose}
-        title={`Findings — SR #${srNumberInt}`}
-        size="max-w-4xl"
-        footer={
-          <div className="flex gap-2 w-full">
-            <button type="button" className="btn btn-soft btn-secondary" onClick={onClose}>Close</button>
-            {canEdit && (
-              <button type="button" className="btn btn-primary ml-auto" onClick={openAdd}>
-                <span className="icon-[tabler--plus] size-4"></span>
-                New Finding
-              </button>
-            )}
-          </div>
-        }
-      >
-        {/* SR summary */}
-        <div className="mb-4 p-3 rounded-box bg-base-200 text-sm flex flex-wrap gap-4">
+    <div className="modal-content w-full max-w-4xl my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Findings — SR #{srNumber}</h3>
+          <span className="text-sm text-base-content/50">{report.projectName}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="p-3 rounded-box bg-base-200 text-sm flex flex-wrap gap-4">
           <div className="flex flex-col gap-0.5">
             <span className="text-base-content/50 text-xs uppercase tracking-wide">Project</span>
-            <span className="font-medium">{report?.projectName}</span>
+            <span className="font-medium">{report.projectName}</span>
           </div>
           <div className="flex flex-col gap-0.5 flex-1 min-w-0">
             <span className="text-base-content/50 text-xs uppercase tracking-wide">Complaint</span>
-            <span className="line-clamp-1">{report?.complaint ?? '—'}</span>
+            <span className="line-clamp-1">{report.complaint ?? '—'}</span>
           </div>
         </div>
 
-        {loading && (
-          <div className="flex justify-center py-12">
-            <span className="loading loading-spinner loading-lg text-primary"></span>
-          </div>
-        )}
-        {error && (
-          <div className="alert alert-error py-2">
-            <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-            <span className="text-sm">{error}</span>
-          </div>
-        )}
+        {loading && <div className="flex justify-center py-12"><span className="loading loading-spinner loading-lg text-primary"></span></div>}
+        {error && <div className="alert alert-error py-2"><span className="icon-[tabler--alert-circle] size-4 shrink-0"></span><span className="text-sm">{error}</span></div>}
         {!loading && !error && (
           <>
-            <p className="text-sm text-base-content/50 mb-3">
-              {totalElements} finding{totalElements !== 1 ? 's' : ''} total
-            </p>
+            <p className="text-sm text-base-content/50">{totalElements} finding{totalElements !== 1 ? 's' : ''} total</p>
             {findings.length === 0 ? (
               <div className="text-center py-10 text-base-content/40">
                 <span className="icon-[tabler--checklist] size-10 mx-auto mb-2 block"></span>
@@ -209,36 +93,20 @@ export function ManageFindingsModal({ report, apiFetch, hasRole, onClose }) {
               <div className="overflow-x-auto rounded-box border border-base-300">
                 <table className="table table-zebra table-sm w-full">
                   <thead>
-                    <tr>
-                      <th>Finding #</th>
-                      <th>AC Unit #</th>
-                      <th>Type</th>
-                      <th>Part / Model</th>
-                      <th>Remarks</th>
-                      <th>Actions</th>
-                    </tr>
+                    <tr><th>Finding #</th><th>AC Unit #</th><th>Type</th><th>Part / Model</th><th>Remarks</th><th>Actions</th></tr>
                   </thead>
                   <tbody>
                     {findings.map(f => (
                       <tr key={f.srFindingsNumber}>
                         <td className="font-mono font-semibold">{f.srFindingsNumber}</td>
                         <td className="font-mono">{f.acNum ?? '—'}</td>
-                        <td>
-                          <span className={`badge badge-soft ${findingTypeBadgeClass(f.findingType)} text-xs`}>
-                            {f.findingType ?? '—'}
-                          </span>
-                        </td>
+                        <td><span className={`badge badge-soft ${findingTypeBadgeClass(f.findingType)} text-xs`}>{f.findingType ?? '—'}</span></td>
                         <td className="text-sm">{f.partModel ?? '—'}</td>
-                        <td className="max-w-48">
-                          <span className="line-clamp-2 text-sm" title={f.remarks}>{f.remarks ?? '—'}</span>
-                        </td>
+                        <td className="max-w-48"><span className="line-clamp-2 text-sm" title={f.remarks}>{f.remarks ?? '—'}</span></td>
                         <td>
-                          <button
-                            className="btn btn-soft btn-primary btn-sm"
-                            onClick={() => setSelectedFinding(f)}
-                          >
-                            <span className="icon-[tabler--settings] size-4"></span>
-                            Manage
+                          <button className="btn btn-soft btn-primary btn-sm"
+                            onClick={() => pushModal(<ManageFindingModal finding={f} srNumber={srNumber} acUnits={acUnits} onRefresh={refresh} />)}>
+                            <span className="icon-[tabler--settings] size-4"></span>Manage
                           </button>
                         </td>
                       </tr>
@@ -249,35 +117,143 @@ export function ManageFindingsModal({ report, apiFetch, hasRole, onClose }) {
             )}
             {totalPages > 1 && (
               <div className="flex items-center justify-center gap-2 mt-4">
-                <button className="btn btn-sm btn-secondary" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
-                  <span className="icon-[tabler--chevron-left] size-4"></span>Prev
-                </button>
+                <button className="btn btn-sm btn-secondary" disabled={page === 0} onClick={() => setPage(p => p - 1)}><span className="icon-[tabler--chevron-left] size-4"></span>Prev</button>
                 <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
-                <button className="btn btn-sm btn-secondary" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
-                  Next<span className="icon-[tabler--chevron-right] size-4"></span>
-                </button>
+                <button className="btn btn-sm btn-secondary" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>Next<span className="icon-[tabler--chevron-right] size-4"></span></button>
               </div>
             )}
           </>
         )}
-      </Modal>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Close</button>
+        {canEdit && (
+          <button type="button" className="btn btn-primary"
+            onClick={() => pushModal(<AddFindingModal srNumber={srNumber} acUnits={acUnits} onSuccess={() => { setPage(0); refresh() }} />)}>
+            <span className="icon-[tabler--plus] size-4"></span>New Finding
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
 
-      {/* Add Finding Sub-modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeAdd}
-        title="New Finding"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAdd}>Cancel</button>
-            <button type="submit" form="mfm-new-finding-form" className="btn btn-primary" disabled={submitting}>
-              {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--plus] size-4"></span>}
-              Add Finding
-            </button>
-          </>
-        }
-      >
-        <form id="mfm-new-finding-form" onSubmit={handleSubmit}>
+/**
+ * Layer 3 — detail and action menu for a single finding.
+ * Pushed from FindingsModal; pushes UpdateFindingModal on top.
+ */
+function ManageFindingModal({ finding: initialFinding, srNumber, acUnits, onRefresh }) {
+  const { pushModal, popModal } = useModal()
+  const { hasRole, apiFetch } = useAuth()
+  const [finding, setFinding] = useState(initialFinding)
+
+  async function refreshFinding() {
+    try {
+      const res = await apiFetch(`/api/service-report-findings/${finding.srFindingsNumber}`)
+      if (res.ok) setFinding(await res.json())
+    } catch (_) {}
+    onRefresh?.()
+  }
+
+  function handleAction(key) {
+    if (key === 'update') pushModal(<UpdateFindingModal finding={finding} srNumber={srNumber} acUnits={acUnits} onSuccess={refreshFinding} />)
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">Finding #{finding.srFindingsNumber}</h3>
+          <span className="text-sm text-base-content/50">AC Unit #{finding.acNum}</span>
+        </div>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body flex flex-col gap-4">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Finding Type</span>
+            <span className={`badge badge-soft ${findingTypeBadgeClass(finding.findingType)} text-xs w-fit`}>{finding.findingType ?? '—'}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">AC Unit #</span>
+            <span className="font-medium">{finding.acNum}</span>
+          </div>
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Part / Model</span>
+            <span className="font-medium">{finding.partModel ?? '—'}</span>
+          </div>
+          <div className="col-span-2 flex flex-col gap-0.5">
+            <span className="text-xs text-base-content/50 uppercase tracking-wide">Remarks</span>
+            <span className="font-medium">{finding.remarks ?? '—'}</span>
+          </div>
+        </div>
+        <ModalNav
+          title="Manage"
+          items={FINDING_MENU_ITEMS_MODAL}
+          hasRole={hasRole}
+          onSelect={handleAction}
+        />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Layer 4 — edit form for an existing finding.
+ * Pushed from ManageFindingModal; calls popModal on success or cancel.
+ */
+function UpdateFindingModal({ finding, srNumber, acUnits, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({
+    findingType: finding.findingType ?? 'GOOD',
+    partModel:   finding.partModel ?? '',
+    acNum:       finding.acNum ?? '',
+    remarks:     finding.remarks ?? '',
+  })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  /** Submits the update and closes this layer on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch(`/api/service-report-findings/${finding.srFindingsNumber}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber,
+          findingType: form.findingType || null,
+          partModel:   form.partModel   || null,
+          acNum:       form.acNum       ? Number(form.acNum) : null,
+          remarks:     form.remarks     || null,
+        }),
+      })
+      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Update failed'); return }
+      popModal()
+      setTimeout(() => notyfSuccess(`Finding #${finding.srFindingsNumber} updated successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">Update Finding #{finding.srFindingsNumber}</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="update-finding-form" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">AC Unit <span className="text-error">*</span></label>
@@ -322,106 +298,125 @@ export function ManageFindingsModal({ report, apiFetch, hasRole, onClose }) {
             )}
           </div>
         </form>
-      </Modal>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="update-finding-form" className="btn btn-primary" disabled={submitting}>
+          {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--device-floppy] size-4"></span>}
+          Save Changes
+        </button>
+      </div>
+    </div>
+  )
+}
 
-      {/* Edit Finding Sub-modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEdit}
-        title={`Update Finding #${editingFinding?.srFindingsNumber}`}
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEdit}>Cancel</button>
-            <button type="submit" form="mfm-edit-finding-form" className="btn btn-primary" disabled={editSubmitting}>
-              {editSubmitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--device-floppy] size-4"></span>}
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="mfm-edit-finding-form" onSubmit={handleUpdate}>
+/**
+ * Add new finding form pushed from FindingsModal.
+ * Calls popModal on success or cancel.
+ */
+function AddFindingModal({ srNumber, acUnits, onSuccess }) {
+  const { popModal } = useModal()
+  const { apiFetch } = useAuth()
+  const [form, setForm] = useState({ findingType: 'GOOD', partModel: '', acNum: '', remarks: '' })
+  const [formError, setFormError] = useState({})
+  const [submitting, setSubmitting] = useState(false)
+
+  /** Submits the new finding and closes this layer on success. */
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setFormError({})
+    setSubmitting(true)
+    try {
+      const res = await apiFetch('/api/service-report-findings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          srNumber,
+          findingType: form.findingType || null,
+          partModel:   form.partModel   || null,
+          acNum:       form.acNum       ? Number(form.acNum) : null,
+          remarks:     form.remarks     || null,
+        }),
+      })
+      if (!res.ok) { setFormError(await parseApiError(res)); notyfError('Add failed'); return }
+      const data = await res.json().catch(() => ({}))
+      popModal()
+      setTimeout(() => notyfSuccess(`Finding #${data.srFindingsNumber} added successfully.`), 150)
+      onSuccess?.()
+    } catch (err) {
+      setFormError({ _general: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="modal-content w-full max-w-lg my-auto">
+      <div className="modal-header">
+        <h3 className="modal-title">New Finding</h3>
+        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+      <div className="modal-body">
+        <form id="add-finding-form" onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">AC Unit <span className="text-error">*</span></label>
               <select name="acNum" required
-                className={`select select-bordered w-full${editFormError.acNum ? ' is-invalid' : ''}`}
-                value={editForm.acNum} onChange={e => setEditForm(p => ({ ...p, acNum: e.target.value }))}>
+                className={`select select-bordered w-full${formError.acNum ? ' is-invalid' : ''}`}
+                value={form.acNum} onChange={e => setForm(p => ({ ...p, acNum: e.target.value }))}>
                 <option value="">Select AC unit...</option>
                 {acUnits.map(u => <option key={u.acNum} value={u.acNum}>#{u.acNum} — {u.brand} {u.model}</option>)}
               </select>
-              {editFormError.acNum && <span className="helper-text">{editFormError.acNum}</span>}
+              {formError.acNum && <span className="helper-text">{formError.acNum}</span>}
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Finding Type</label>
               <select name="findingType"
-                className={`select select-bordered w-full${editFormError.findingType ? ' is-invalid' : ''}`}
-                value={editForm.findingType} onChange={e => setEditForm(p => ({ ...p, findingType: e.target.value }))}>
+                className={`select select-bordered w-full${formError.findingType ? ' is-invalid' : ''}`}
+                value={form.findingType} onChange={e => setForm(p => ({ ...p, findingType: e.target.value }))}>
                 {FINDING_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
-              {editFormError.findingType && <span className="helper-text">{editFormError.findingType}</span>}
+              {formError.findingType && <span className="helper-text">{formError.findingType}</span>}
             </div>
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Part / Model</label>
               <input type="text" name="partModel" maxLength={60}
-                className={`input input-bordered w-full${editFormError.partModel ? ' is-invalid' : ''}`}
+                className={`input input-bordered w-full${formError.partModel ? ' is-invalid' : ''}`}
                 placeholder="e.g. Capacitor 35/5 MFD"
-                value={editForm.partModel} onChange={e => setEditForm(p => ({ ...p, partModel: e.target.value }))} />
-              {editFormError.partModel && <span className="helper-text">{editFormError.partModel}</span>}
+                value={form.partModel} onChange={e => setForm(p => ({ ...p, partModel: e.target.value }))} />
+              {formError.partModel && <span className="helper-text">{formError.partModel}</span>}
             </div>
             <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="label-text font-medium">Remarks</label>
               <textarea name="remarks" rows={4} maxLength={1200}
-                className={`textarea textarea-bordered w-full${editFormError.remarks ? ' is-invalid' : ''}`}
+                className={`textarea textarea-bordered w-full${formError.remarks ? ' is-invalid' : ''}`}
                 placeholder="Describe the finding in detail..."
-                value={editForm.remarks} onChange={e => setEditForm(p => ({ ...p, remarks: e.target.value }))} />
-              {editFormError.remarks && <span className="helper-text">{editFormError.remarks}</span>}
+                value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} />
+              {formError.remarks && <span className="helper-text">{formError.remarks}</span>}
             </div>
-            {editFormError._general && (
+            {formError._general && (
               <div className="sm:col-span-2 alert alert-error py-2">
                 <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{editFormError._general}</span>
+                <span className="text-sm">{formError._general}</span>
               </div>
             )}
           </div>
         </form>
-      </Modal>
-
-      {/* Finding Manage Menu Sub-modal */}
-      <ManageMenu
-        title={selectedFinding ? `Finding #${selectedFinding.srFindingsNumber}` : ''}
-        subtitle={selectedFinding ? `AC Unit #${selectedFinding.acNum}` : ''}
-        item={selectedFinding}
-        details={selectedFinding ? [
-          { label: 'Finding Type', value: selectedFinding.findingType ?? '—' },
-          { label: 'AC Unit #',    value: selectedFinding.acNum },
-          { label: 'Part / Model', value: selectedFinding.partModel ?? '—', fullWidth: true },
-          { label: 'Remarks',      value: selectedFinding.remarks ?? '—',   fullWidth: true },
-        ] : []}
-        isOpen={!!selectedFinding}
-        onClose={() => setSelectedFinding(null)}
-        hasRole={hasRole}
-        menuItems={FINDING_MENU_ITEMS_MODAL}
-        onMenuSelect={(key, finding) => {
-          setSelectedFinding(null)
-          if (key === 'update') openEdit(finding)
-        }}
-      />
-    </>
+      </div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
+        <button type="submit" form="add-finding-form" className="btn btn-primary" disabled={submitting}>
+          {submitting ? <span className="loading loading-spinner loading-sm"></span> : <span className="icon-[tabler--plus] size-4"></span>}
+          Add Finding
+        </button>
+      </div>
+    </div>
   )
 }
 
 const FINDING_TYPE_OPTIONS = ['GOOD', 'DEFECT', 'WORN', 'DIRTY', 'LEAK', 'FAIL']
-
-const FINDING_MENU_ITEMS = [
-  { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF', 'CREW'] },
-]
-
-const EMPTY_FORM = {
-  findingType: 'GOOD',
-  partModel: '',
-  acNum: '',
-  remarks: '',
-}
 
 /**
  * Parses a failed API response into field-level or general error object.
@@ -444,35 +439,22 @@ const PAGE_SIZE = 10
 
 export default function ServiceReportFindings() {
   const { apiFetch, hasRole } = useAuth()
+  const { pushModal } = useModal()
   const { srNumber } = useParams()
   const srNumberInt = Number(srNumber)
   const location = useLocation()
   const projectName = location.state?.projectName ?? '...'
   const projNum = location.state?.projNum
 
-  const [findings, setFindings]             = useState([])
-  const [loading, setLoading]               = useState(true)
-  const [error, setError]                   = useState(null)
-  const [search, setSearch]                 = useState('')
-  const [page, setPage]                     = useState(0)
-  const [totalPages, setTotalPages]         = useState(0)
-  const [totalElements, setTotalElements]   = useState(0)
-  const [refreshKey, setRefreshKey]         = useState(0)
-
-  const [acUnits, setAcUnits] = useState([])
-
-  const [modalOpen, setModalOpen]   = useState(false)
-  const [form, setForm]             = useState(EMPTY_FORM)
-  const [formError, setFormError]   = useState({})
-  const [submitting, setSubmitting] = useState(false)
-
-  const [selectedFinding, setSelectedFinding] = useState(null)
-
-  const [editModalOpen, setEditModalOpen]     = useState(false)
-  const [editingFinding, setEditingFinding]   = useState(null)
-  const [editForm, setEditForm]               = useState(EMPTY_FORM)
-  const [editFormError, setEditFormError]     = useState({})
-  const [editSubmitting, setEditSubmitting]   = useState(false)
+  const [findings, setFindings]           = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [error, setError]                 = useState(null)
+  const [search, setSearch]               = useState('')
+  const [page, setPage]                   = useState(0)
+  const [totalPages, setTotalPages]       = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [refreshKey, setRefreshKey]       = useState(0)
+  const [acUnits, setAcUnits]             = useState([])
 
   const canEdit = hasRole('ADMIN', 'STAFF', 'CREW')
 
@@ -484,44 +466,6 @@ export default function ServiceReportFindings() {
       .then(data => setAcUnits(data.content ?? []))
       .catch(() => {})
   }, [apiFetch, projNum])
-
-  function openModal() { setModalOpen(true) }
-
-  function closeModal() {
-    setModalOpen(false)
-    setForm(EMPTY_FORM)
-    setFormError({})
-  }
-
-  /** Opens the edit modal pre-populated with the given finding's data. */
-  function openEditModal(finding) {
-    setEditForm({
-      findingType: finding.findingType ?? 'GOOD',
-      partModel:   finding.partModel ?? '',
-      acNum:       finding.acNum ?? '',
-      remarks:     finding.remarks ?? '',
-    })
-    setEditingFinding(finding)
-    setEditFormError({})
-    setEditModalOpen(true)
-  }
-
-  function closeEditModal() {
-    setEditModalOpen(false)
-    setEditingFinding(null)
-    setEditForm(EMPTY_FORM)
-    setEditFormError({})
-  }
-
-  function handleFormChange(e) {
-    const { name, value } = e.target
-    setForm(prev => ({ ...prev, [name]: value }))
-  }
-
-  function handleEditFormChange(e) {
-    const { name, value } = e.target
-    setEditForm(prev => ({ ...prev, [name]: value }))
-  }
 
   /** Fetches findings for this service report. */
   useEffect(() => {
@@ -561,71 +505,7 @@ export default function ServiceReportFindings() {
     )
   })
 
-  /** Submits the new finding form. */
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const res = await apiFetch('/api/service-report-findings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          srNumber:    srNumberInt,
-          findingType: form.findingType || null,
-          partModel:   form.partModel   || null,
-          acNum:       form.acNum       ? Number(form.acNum) : null,
-          remarks:     form.remarks     || null,
-        }),
-      })
-      if (!res.ok) {
-        setFormError(await parseApiError(res))
-        notyfError('Add failed')
-        return
-      }
-      const data = await res.json().catch(() => ({}))
-      closeModal()
-      setTimeout(() => notyfSuccess(`Finding #${data.srFindingsNumber} added successfully.`), 150)
-      setPage(0)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  /** Submits the update finding form. */
-  async function handleUpdate(e) {
-    e.preventDefault()
-    setEditFormError({})
-    setEditSubmitting(true)
-    try {
-      const res = await apiFetch(`/api/service-report-findings/${editingFinding.srFindingsNumber}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          srNumber:    srNumberInt,
-          findingType: editForm.findingType || null,
-          partModel:   editForm.partModel   || null,
-          acNum:       editForm.acNum       ? Number(editForm.acNum) : null,
-          remarks:     editForm.remarks     || null,
-        }),
-      })
-      if (!res.ok) {
-        setEditFormError(await parseApiError(res))
-        notyfError('Update failed')
-        return
-      }
-      closeEditModal()
-      setTimeout(() => notyfSuccess(`Finding #${editingFinding.srFindingsNumber} updated successfully.`), 150)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setEditFormError({ _general: err.message })
-    } finally {
-      setEditSubmitting(false)
-    }
-  }
+  function handleRefresh() { setRefreshKey(k => k + 1) }
 
   return (
     <Layout activePage="service-report">
@@ -645,7 +525,7 @@ export default function ServiceReportFindings() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={openModal}
+              onClick={() => pushModal(<AddFindingModal srNumber={srNumberInt} acUnits={acUnits} onSuccess={() => { setPage(0); handleRefresh() }} />)}
             >
               <span className="icon-[tabler--plus] size-4"></span>
               New Finding
@@ -726,7 +606,7 @@ export default function ServiceReportFindings() {
                       <td>
                         <button
                           className="btn btn-soft btn-primary btn-sm"
-                          onClick={() => setSelectedFinding(f)}
+                          onClick={() => pushModal(<ManageFindingModal finding={f} srNumber={srNumberInt} acUnits={acUnits} onRefresh={handleRefresh} />)}
                         >
                           <span className="icon-[tabler--settings] size-4"></span>
                           Manage
@@ -755,178 +635,6 @@ export default function ServiceReportFindings() {
         </>
       )}
 
-      {/* New Finding Modal */}
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title="New Finding"
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeModal}>
-              Cancel
-            </button>
-            <button type="submit" form="new-finding-form" className="btn btn-primary" disabled={submitting}>
-              {submitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--plus] size-4"></span>
-              }
-              Add Finding
-            </button>
-          </>
-        }
-      >
-        <form id="new-finding-form" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">AC Unit <span className="text-error">*</span></label>
-              <select name="acNum" required
-                className={`select select-bordered w-full${formError.acNum ? ' is-invalid' : ''}`}
-                value={form.acNum} onChange={handleFormChange}>
-                <option value="">Select AC unit...</option>
-                {acUnits.map(u => (
-                  <option key={u.acNum} value={u.acNum}>#{u.acNum} — {u.brand} {u.model}</option>
-                ))}
-              </select>
-              {formError.acNum && <span className="helper-text">{formError.acNum}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Finding Type</label>
-              <select name="findingType"
-                className={`select select-bordered w-full${formError.findingType ? ' is-invalid' : ''}`}
-                value={form.findingType} onChange={handleFormChange}>
-                {FINDING_TYPE_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o}</option>
-                ))}
-              </select>
-              {formError.findingType && <span className="helper-text">{formError.findingType}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Part / Model</label>
-              <input type="text" name="partModel" maxLength={60}
-                className={`input input-bordered w-full${formError.partModel ? ' is-invalid' : ''}`}
-                placeholder="e.g. Capacitor 35/5 MFD"
-                value={form.partModel} onChange={handleFormChange} />
-              {formError.partModel && <span className="helper-text">{formError.partModel}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Remarks</label>
-              <textarea name="remarks" rows={4} maxLength={1200}
-                className={`textarea textarea-bordered w-full${formError.remarks ? ' is-invalid' : ''}`}
-                placeholder="Describe the finding in detail..."
-                value={form.remarks} onChange={handleFormChange} />
-              {formError.remarks && <span className="helper-text">{formError.remarks}</span>}
-            </div>
-
-            {formError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Edit Finding Modal */}
-      <Modal
-        isOpen={editModalOpen}
-        onClose={closeEditModal}
-        title={`Update Finding #${editingFinding?.srFindingsNumber}`}
-        footer={
-          <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeEditModal}>
-              Cancel
-            </button>
-            <button type="submit" form="edit-finding-form" className="btn btn-primary" disabled={editSubmitting}>
-              {editSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <form id="edit-finding-form" onSubmit={handleUpdate}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">AC Unit <span className="text-error">*</span></label>
-              <select name="acNum" required
-                className={`select select-bordered w-full${editFormError.acNum ? ' is-invalid' : ''}`}
-                value={editForm.acNum} onChange={handleEditFormChange}>
-                <option value="">Select AC unit...</option>
-                {acUnits.map(u => (
-                  <option key={u.acNum} value={u.acNum}>#{u.acNum} — {u.brand} {u.model}</option>
-                ))}
-              </select>
-              {editFormError.acNum && <span className="helper-text">{editFormError.acNum}</span>}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Finding Type</label>
-              <select name="findingType"
-                className={`select select-bordered w-full${editFormError.findingType ? ' is-invalid' : ''}`}
-                value={editForm.findingType} onChange={handleEditFormChange}>
-                {FINDING_TYPE_OPTIONS.map(o => (
-                  <option key={o} value={o}>{o}</option>
-                ))}
-              </select>
-              {editFormError.findingType && <span className="helper-text">{editFormError.findingType}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Part / Model</label>
-              <input type="text" name="partModel" maxLength={60}
-                className={`input input-bordered w-full${editFormError.partModel ? ' is-invalid' : ''}`}
-                placeholder="e.g. Capacitor 35/5 MFD"
-                value={editForm.partModel} onChange={handleEditFormChange} />
-              {editFormError.partModel && <span className="helper-text">{editFormError.partModel}</span>}
-            </div>
-
-            <div className="sm:col-span-2 flex flex-col gap-1">
-              <label className="label-text font-medium">Remarks</label>
-              <textarea name="remarks" rows={4} maxLength={1200}
-                className={`textarea textarea-bordered w-full${editFormError.remarks ? ' is-invalid' : ''}`}
-                placeholder="Describe the finding in detail..."
-                value={editForm.remarks} onChange={handleEditFormChange} />
-              {editFormError.remarks && <span className="helper-text">{editFormError.remarks}</span>}
-            </div>
-
-            {editFormError._general && (
-              <div className="sm:col-span-2 alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{editFormError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </Modal>
-
-      {/* Finding Manage Menu */}
-      <ManageMenu
-        title={selectedFinding ? `Finding #${selectedFinding.srFindingsNumber}` : ''}
-        subtitle={selectedFinding ? `AC Unit #${selectedFinding.acNum}` : ''}
-        item={selectedFinding}
-        details={selectedFinding ? [
-          { label: 'Finding Type', value: selectedFinding.findingType ?? '—' },
-          { label: 'AC Unit #',    value: selectedFinding.acNum },
-          { label: 'Part / Model', value: selectedFinding.partModel ?? '—', fullWidth: true },
-          { label: 'Remarks',      value: selectedFinding.remarks ?? '—',   fullWidth: true },
-        ] : []}
-        isOpen={!!selectedFinding}
-        onClose={() => setSelectedFinding(null)}
-        hasRole={hasRole}
-        menuItems={FINDING_MENU_ITEMS}
-        onMenuSelect={(key, finding) => {
-          setSelectedFinding(null)
-          if (key === 'update') openEditModal(finding)
-        }}
-      />
     </Layout>
   )
 }

@@ -7,107 +7,34 @@ import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.LogSeverity;
 import dev.tjj.easi.entity.LogType;
 import dev.tjj.easi.entity.Role;
-import dev.tjj.easi.entity.TokenPurpose;
 import dev.tjj.easi.entity.User;
-import dev.tjj.easi.entity.VerificationToken;
 import dev.tjj.easi.repository.EmployeeRepository;
 import dev.tjj.easi.repository.UserRepository;
-import dev.tjj.easi.repository.VerificationTokenRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 
-/** Handles user account operations such as password reset via OTP. */
+/** Handles user account operations such as registration and password management. */
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
-    private final VerificationTokenRepository tokenRepository;
-    private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final LogService logService;
 
-    private static final int OTP_EXPIRY_MINUTES = 10;
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     public UserService(UserRepository userRepository,
                        EmployeeRepository employeeRepository,
-                       VerificationTokenRepository tokenRepository,
-                       EmailService emailService,
                        PasswordEncoder passwordEncoder,
                        LogService logService) {
         this.userRepository = userRepository;
         this.employeeRepository = employeeRepository;
-        this.tokenRepository = tokenRepository;
-        this.emailService = emailService;
         this.passwordEncoder = passwordEncoder;
         this.logService = logService;
-    }
-
-    /**
-     * Generates a 6-digit OTP for password reset and emails it to the user.
-     * Silently succeeds when the email is not registered to prevent user enumeration.
-     */
-    @Transactional
-    public void sendPasswordResetOtp(String email) {
-        userRepository.findByEmail(email).ifPresent(user -> {
-            tokenRepository.deleteByUserAndPurpose(user, TokenPurpose.PASSWORD_RESET);
-
-            String otp = generateOtp();
-
-            VerificationToken token = new VerificationToken();
-            token.setToken(otp);
-            token.setUser(user);
-            token.setPurpose(TokenPurpose.PASSWORD_RESET);
-            token.setExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
-            tokenRepository.save(token);
-
-            emailService.sendOtp(email, otp, "password reset");
-            logService.log(email, LogType.SECURITY, LogSeverity.INFO, "OTP_REQUEST", "User", String.valueOf(user.getUserId()), "Password reset OTP sent to " + email, null);
-        });
-    }
-
-    /** Checks that the OTP is valid and unexpired without consuming it. Throws if invalid. */
-    @Transactional(readOnly = true)
-    public void verifyOtp(String email, String otp) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
-
-        VerificationToken token = tokenRepository
-                .findByUserAndTokenAndPurpose(user, otp, TokenPurpose.PASSWORD_RESET)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
-
-        if (token.isUsed() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Invalid or expired OTP.");
-        }
-    }
-
-    /** Verifies the OTP and updates the password if the token is valid and unused. */
-    @Transactional
-    public void resetPassword(String email, String otp, String newPassword) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
-
-        VerificationToken token = tokenRepository
-                .findByUserAndTokenAndPurpose(user, otp, TokenPurpose.PASSWORD_RESET)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired OTP."));
-
-        if (token.isUsed() || token.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Invalid or expired OTP.");
-        }
-
-        token.setUsed(true);
-        tokenRepository.save(token);
-
-        user.setPassword(passwordEncoder.encode(newPassword));
-        userRepository.save(user);
-        logService.log(email, LogType.SECURITY, LogSeverity.INFO, "UPDATE", "User", String.valueOf(user.getUserId()), "Password reset via OTP for user #" + user.getUserId(), null);
     }
 
     /**
@@ -233,7 +160,4 @@ public class UserService {
         );
     }
 
-    private String generateOtp() {
-        return String.format("%06d", RANDOM.nextInt(1_000_000));
-    }
 }

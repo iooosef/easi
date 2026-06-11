@@ -11,6 +11,7 @@ public class BackupProperties {
     private String backupDir = "backups";
     private String pgDump = "pg_dump";
     private String pgRestore = "pg_restore";
+    private String psql = "psql";
 
     public String getBackupDir() { return backupDir; }
     public void setBackupDir(String backupDir) { this.backupDir = backupDir; }
@@ -20,4 +21,7 @@ public class BackupProperties {
 
     public String getPgRestore() { return pgRestore; }
     public void setPgRestore(String pgRestore) { this.pgRestore = pgRestore; }
+
+    public String getPsql() { return psql; }
+    public void setPsql(String psql) { this.psql = psql; }
 }

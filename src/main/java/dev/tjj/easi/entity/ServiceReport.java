@@ -22,7 +22,7 @@ public class ServiceReport {
     @Setter
     private String complaint;
 
-    @Column(name = "work_done", length = 900, nullable = false)
+    @Column(name = "work_done", length = 900)
     @Getter
     @Setter
     private String workDone;
