@@ -67,7 +67,7 @@ java -Dspring.datasource.url=jdbc:postgresql://localhost:5432/easi \
      -Dspring.datasource.password=yourpassword \
      -DJWT_SECRET=yoursecretkey \
      -DMAIL_PASSWORD=yourmailpassword \
-     -jar easi-2.5.jar
+     -jar easi-3.0.jar
 ```
 
 The app will be accessible at `http://localhost:8080`.
