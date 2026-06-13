@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from './auth'
-import { useModal } from './modals/index.js'
-import Layout from './Layout'
-import { notyfSuccess, notyfError } from './notyf'
-import AnySchedulePickerModal from './AnySchedulePickerModal'
-import EmployeePickerModal from './EmployeePickerModal'
+import { useAuth } from '../auth'
+import { useModal } from '../modals/index.js'
+import Layout from '../components/Layout'
+import { notyfSuccess, notyfError } from '../notyf'
+import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
+import EmployeePickerModal from '../pickers/EmployeePickerModal'
 
 const EMPTY_LOG_FORM = {
   purpose: '',

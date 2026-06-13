@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
-import { useAuth } from './auth'
-import Layout from './Layout'
-import ModalNav from './modals/ModalNav.jsx'
-import { useModal } from './modals/index.js'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import Layout from '../components/Layout'
+import ModalNav from '../modals/ModalNav.jsx'
+import { useModal } from '../modals/index.js'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const FINDING_MENU_ITEMS_MODAL = [
   { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF', 'CREW'] },

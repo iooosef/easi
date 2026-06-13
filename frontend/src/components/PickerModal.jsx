@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from './auth'
+import { useAuth } from '../auth'
 
 /**
  * Base reusable picker modal: search bar, paginated item grid, and selection callback.

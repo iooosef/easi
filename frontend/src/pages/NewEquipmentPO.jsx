@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from './auth'
-import Layout from './Layout'
-import PickerInput from './PickerInput'
-import ProjectPickerModal from './ProjectPickerModal'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import Layout from '../components/Layout'
+import PickerInput from '../components/PickerInput'
+import ProjectPickerModal from '../pickers/ProjectPickerModal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const STEPS = [
   { number: 1, label: 'Purchase Order' },

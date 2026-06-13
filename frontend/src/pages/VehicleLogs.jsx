@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
-import { useAuth } from './auth'
-import { useModal } from './modals/index.js'
-import Layout from './Layout'
-import ModalNav from './modals/ModalNav.jsx'
-import AnySchedulePickerModal from './AnySchedulePickerModal'
-import EmployeePickerModal from './EmployeePickerModal'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import { useModal } from '../modals/index.js'
+import Layout from '../components/Layout'
+import ModalNav from '../modals/ModalNav.jsx'
+import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
+import EmployeePickerModal from '../pickers/EmployeePickerModal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const STATUS_OPTIONS = ['driving', 'completed']
 

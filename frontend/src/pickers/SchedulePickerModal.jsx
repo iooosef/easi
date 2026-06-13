@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import PickerModal from './PickerModal'
+import PickerModal from '../components/PickerModal'
 
 const searchFilter = (s, q) =>
   q === '' ||

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from './auth'
-import Layout from './Layout'
-import ServiceReportPickerModal from './ServiceReportPickerModal'
+import { useAuth } from '../auth'
+import Layout from '../components/Layout'
+import ServiceReportPickerModal from '../pickers/ServiceReportPickerModal'
 
 /** Navigation items shown as icon cards on the Reports page. */
 const REPORT_NAV_ITEMS = [

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAuth } from './auth'
-import { useModal } from './modals/index.js'
-import Layout from './Layout'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import { useModal } from '../modals/index.js'
+import Layout from '../components/Layout'
+import { notyfSuccess, notyfError } from '../notyf'
 
 /** Parses a failed API response into field-level or general errors. */
 async function parseApiError(res) {

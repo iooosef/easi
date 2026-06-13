@@ -1,11 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useAuth } from './auth'
+import { useAuth } from '../auth'
 import CalendarPanel, { statusDotColor } from './CalendarPanel'
 import PickerInput from './PickerInput'
-import ProjectPickerModal from './ProjectPickerModal'
-import CrewPickerModal from './CrewPickerModal'
-import EquipmentPickerModal from './EquipmentPickerModal'
-import { notyfSuccess, notyfError } from './notyf'
+import ProjectPickerModal from '../pickers/ProjectPickerModal'
+import CrewPickerModal from '../pickers/CrewPickerModal'
+import EquipmentPickerModal from '../pickers/EquipmentPickerModal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const EMPTY_FORM = { projNum: '', projName: '', purpose: '', date: '' }
 

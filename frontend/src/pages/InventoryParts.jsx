@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAuth } from './auth'
-import { useModal } from './modals/index.js'
-import Layout from './Layout'
-import ModalNav from './modals/ModalNav.jsx'
-import SupplierPickerModal from './SupplierPickerModal'
-import PurchaseOrderPickerModal from './PurchaseOrderPickerModal'
-import ServiceReportPickerModal from './ServiceReportPickerModal'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import { useModal } from '../modals/index.js'
+import Layout from '../components/Layout'
+import ModalNav from '../modals/ModalNav.jsx'
+import SupplierPickerModal from '../pickers/SupplierPickerModal'
+import PurchaseOrderPickerModal from '../pickers/PurchaseOrderPickerModal'
+import ServiceReportPickerModal from '../pickers/ServiceReportPickerModal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 /** Parses a failed API response into field-level or general errors. */
 async function parseApiError(res) {

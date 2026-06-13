@@ -1,4 +1,4 @@
-import PickerModal from './PickerModal'
+import PickerModal from '../components/PickerModal'
 
 // Stable module-level references required by PickerModal's useEffect
 const fetchUrl = page =>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from './auth'
+import { useAuth } from '../auth'
 
 /**
  * Two-step picker modal: first select a Project, then select a Service Report from it.

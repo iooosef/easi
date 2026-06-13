@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import PickerModal from './PickerModal'
+import PickerModal from '../components/PickerModal'
 
 const fullName = e =>
   [e.lastName, e.firstName, e.middleName].filter(Boolean).join(', ')

@@ -1,4 +1,4 @@
-import PickerModal from './PickerModal'
+import PickerModal from '../components/PickerModal'
 
 const fetchUrl = page =>
   `/api/purchase-orders?${new URLSearchParams({ page: String(page), size: '12', sort: 'poNum,asc' })}`

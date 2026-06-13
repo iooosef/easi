@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from './auth'
-import Layout from './Layout'
-import { useModal } from './modals/index.js'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import Layout from '../components/Layout'
+import { useModal } from '../modals/index.js'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
 const TYPE_OPTIONS   = ['ESTABLISHMENT', 'HOUSEHOLD']

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
-import { useAuth } from './auth'
-import Layout from './Layout'
-import Modal from './modals/Modal'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import Layout from '../components/Layout'
+import Modal from '../modals/Modal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
 const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'

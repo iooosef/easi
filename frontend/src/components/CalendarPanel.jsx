@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useAuth } from './auth'
+import { useAuth } from '../auth'
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH_NAMES = [

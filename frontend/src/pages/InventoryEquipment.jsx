@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAuth } from './auth'
-import { useModal } from './modals/index.js'
-import Layout from './Layout'
-import ModalNav from './modals/ModalNav.jsx'
-import AnySchedulePickerModal from './AnySchedulePickerModal'
-import PickerInput from './PickerInput'
-import ProjectPickerModal from './ProjectPickerModal'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import { useModal } from '../modals/index.js'
+import Layout from '../components/Layout'
+import ModalNav from '../modals/ModalNav.jsx'
+import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
+import PickerInput from '../components/PickerInput'
+import ProjectPickerModal from '../pickers/ProjectPickerModal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 
 async function parseApiError(res) {

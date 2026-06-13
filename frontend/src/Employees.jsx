@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAuth } from '../auth'
-import { useModal } from '../modals/index.js'
-import Layout from '../components/Layout'
-import ModalNav from '../modals/ModalNav.jsx'
-import { notyfSuccess, notyfError } from '../notyf'
+import { useAuth } from './auth'
+import { useModal } from './modals/index.js'
+import Layout from './Layout'
+import ModalNav from './modals/ModalNav.jsx'
+import { notyfSuccess, notyfError } from './notyf'
 
 const PAGE_SIZE = 15
 
@@ -798,7 +798,6 @@ export default function Employees() {
   const [page, setPage]                   = useState(0)
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
-
 
   async function fetchEmployees() {
     setLoading(true)

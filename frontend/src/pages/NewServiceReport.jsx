@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from './auth'
-import Layout from './Layout'
-import PickerInput from './PickerInput'
-import ProjectPickerModal from './ProjectPickerModal'
-import SchedulePickerModal from './SchedulePickerModal'
-import EmployeePickerModal from './EmployeePickerModal'
-import { notyfSuccess, notyfError } from './notyf'
+import { useAuth } from '../auth'
+import Layout from '../components/Layout'
+import PickerInput from '../components/PickerInput'
+import ProjectPickerModal from '../pickers/ProjectPickerModal'
+import SchedulePickerModal from '../pickers/SchedulePickerModal'
+import EmployeePickerModal from '../pickers/EmployeePickerModal'
+import { notyfSuccess, notyfError } from '../notyf'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']

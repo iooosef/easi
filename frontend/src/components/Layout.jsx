@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, Link } from 'react-router-dom'
-import { useAuth } from './auth'
-import logoImg from './assets/logo.png'
+import { useAuth } from '../auth'
+import logoImg from '../assets/logo.png'
 
 export const NAV_ITEMS = [
   { page: 'home',            label: 'Home',             icon: 'icon-[tabler--home]',        path: '/',                 roles: null },

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import Layout from './Layout'
-import { useAuth } from './auth'
+import Layout from '../components/Layout'
+import { useAuth } from '../auth'
 
 // ---------------------------------------------------------------------------
 // Static data

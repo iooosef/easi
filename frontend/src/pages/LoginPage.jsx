@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useAuth } from './auth'
-import logoImg from './assets/logo.png'
+import { useAuth } from '../auth'
+import logoImg from '../assets/logo.png'
 
 export default function LoginPage() {
   const { handleLogin } = useAuth()

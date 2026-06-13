@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
-import Layout from './Layout'
-import NewScheduleForm from './NewScheduleForm'
+import Layout from '../components/Layout'
+import NewScheduleForm from '../components/NewScheduleForm'
 
 /** Page wrapper for creating a new schedule — renders the form with a side calendar. */
 export default function NewSchedule() {
