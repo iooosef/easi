@@ -4,8 +4,7 @@ import { useAuth } from '../auth'
 import { useModal } from '../modals/index.js'
 import Layout from '../components/Layout'
 import ModalNav from '../modals/ModalNav.jsx'
-import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
-import EmployeePickerModal from '../pickers/EmployeePickerModal'
+import { SchedulePickerLayer, DriverPickerLayer } from '../pickers/PickerLayers'
 import { notyfSuccess, notyfError } from '../notyf'
 
 const STATUS_OPTIONS = ['driving', 'completed']
@@ -62,32 +61,6 @@ function formatCurrency(value) {
 
 const PAGE_SIZE = 10
 
-/** Schedule picker pushed as a modal stack layer. */
-function SchedulePickerLayer({ onSelect }) {
-  const { popModal } = useModal()
-  return (
-    <AnySchedulePickerModal
-      isOpen={true}
-      onClose={popModal}
-      onSelect={s => { popModal(); onSelect(s) }}
-      asLayer={true}
-    />
-  )
-}
-
-/** Driver picker (Crew only) pushed as a modal stack layer. */
-function DriverPickerLayer({ onSelect }) {
-  const { popModal } = useModal()
-  return (
-    <EmployeePickerModal
-      isOpen={true}
-      onClose={popModal}
-      onSelect={e => { popModal(); onSelect(e) }}
-      position="Crew"
-      asLayer={true}
-    />
-  )
-}
 
 /** Modal for adding a new vehicle log, including incomplete trip check on mount. */
 function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {

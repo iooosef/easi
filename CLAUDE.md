@@ -68,7 +68,7 @@ Each field renders:
 General (non-field) errors use key `_general` and render as a compact alert at the bottom of the form. Reset `formError` to `{}` (not `null`) when opening or closing a modal.
 
 ### modal system
-The app uses a layered modal system in `frontend/src/modal/`.
+The app uses a layered modal system in `frontend/src/modals/`.
 
 **BEFORE writing any modal code, re-read this section.**
 
@@ -157,7 +157,7 @@ function openManage(item) {
 
 ### ModalNav — action grid inside modals
 
-Use `ModalNav` (`frontend/src/ModalNav.jsx`) whenever a modal needs to present a list of navigable actions (e.g. a "Manage" panel). It renders a labelled grid of icon cards, one per action.
+Use `ModalNav` (`frontend/src/modals/ModalNav.jsx`) whenever a modal needs to present a list of navigable actions (e.g. a "Manage" panel). It renders a labelled grid of icon cards, one per action.
 
 ```jsx
 import ModalNav from './modals/ModalNav.jsx'
