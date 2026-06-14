@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useModal } from '../modals/index.js'
@@ -27,9 +27,6 @@ const EMPTY_FORM = {
 }
 
 const EMPTY_GAS_FORM = { invoiceId: '', amount: '' }
-
-const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
 
 /**
  * Parses a failed API response into field-level or general error object.
@@ -465,11 +462,10 @@ function UpdateLogModal({ log, onRefresh }) {
 /** L2 modal — manage gas logs for a vehicle log. */
 function ManageGasLogsModal({ log }) {
   const { pushModal, popModal } = useModal()
-  const { apiFetch, hasRole } = useAuth()
+  const { apiFetch } = useAuth()
   const [gasLogs, setGasLogs] = useState([])
   const [gasLoading, setGasLoading] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
-  const canManageDocs = hasRole('ADMIN', 'STAFF')
 
   /** Fetches gas logs for this vehicle log. */
   useEffect(() => {
@@ -551,25 +547,6 @@ function ManageGasLogsModal({ log }) {
                           <span className="icon-[tabler--pencil] size-3"></span>
                           Update
                         </button>
-                        {canManageDocs && (
-                          g.docuId != null ? (
-                            <button
-                              className="btn btn-soft btn-warning btn-xs"
-                              onClick={() => pushModal(<ReplaceGasFileModal gasLog={g} onRefresh={refresh} />)}
-                            >
-                              <span className="icon-[tabler--file-upload] size-3"></span>
-                              Replace File
-                            </button>
-                          ) : (
-                            <button
-                              className="btn btn-soft btn-accent btn-xs"
-                              onClick={() => pushModal(<ReplaceGasFileModal gasLog={g} onRefresh={refresh} />)}
-                            >
-                              <span className="icon-[tabler--paperclip] size-3"></span>
-                              Attach File
-                            </button>
-                          )
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -583,41 +560,12 @@ function ManageGasLogsModal({ log }) {
   )
 }
 
-/** L3 modal — view a single gas log's details with document preview. */
+/** L3 modal — view a single gas log's details. */
 function GasLogDetailsModal({ gasLog }) {
   const { popModal } = useModal()
-  const { apiFetch } = useAuth()
-  const [docBlobUrl, setDocBlobUrl] = useState(null)
-  const [docIsImage, setDocIsImage] = useState(false)
-  const [docLoading, setDocLoading] = useState(false)
-  const [docError, setDocError] = useState(null)
-
-  useEffect(() => {
-    if (!gasLog?.docuId) { setDocBlobUrl(null); setDocIsImage(false); return }
-    let active = true
-    let blobUrl = null
-    setDocLoading(true)
-    setDocError(null)
-    apiFetch(`/api/documents/${gasLog.docuId}/file`)
-      .then(async res => {
-        if (!res.ok) throw new Error('Failed to load document')
-        const contentType = res.headers.get('Content-Type') ?? ''
-        const blob = await res.blob()
-        if (!active) return
-        blobUrl = URL.createObjectURL(blob)
-        setDocBlobUrl(blobUrl)
-        setDocIsImage(contentType.startsWith('image/'))
-      })
-      .catch(() => { if (active) setDocError('Could not load document.') })
-      .finally(() => { if (active) setDocLoading(false) })
-    return () => {
-      active = false
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
-    }
-  }, [gasLog?.docuId, apiFetch])
 
   return (
-    <div className="modal-content w-full max-w-2xl my-auto">
+    <div className="modal-content w-full max-w-sm my-auto">
       <div className="modal-header">
         <div>
           <h3 className="modal-title">Gas Log #{gasLog.gasLogId}</h3>
@@ -632,7 +580,7 @@ function GasLogDetailsModal({ gasLog }) {
           <span className="icon-[tabler--x] size-4"></span>
         </button>
       </div>
-      <div className="modal-body flex flex-col gap-4">
+      <div className="modal-body">
         <div className="grid grid-cols-2 gap-x-6 gap-y-3">
           <div className="flex flex-col gap-0.5">
             <span className="text-xs text-base-content/50 uppercase tracking-wide">Gas Log ID</span>
@@ -651,36 +599,6 @@ function GasLogDetailsModal({ gasLog }) {
             <span className="text-sm font-medium text-primary">{formatCurrency(gasLog.amount)}</span>
           </div>
         </div>
-        {gasLog.docuId != null ? (
-          <div className="flex flex-col gap-2">
-            <span className="text-xs text-base-content/50 uppercase tracking-wide">Document</span>
-            {docLoading && (
-              <div className="flex justify-center py-8">
-                <span className="loading loading-spinner loading-sm text-primary"></span>
-              </div>
-            )}
-            {docError && (
-              <div className="alert alert-error py-2 text-sm">{docError}</div>
-            )}
-            {docBlobUrl && !docLoading && (
-              docIsImage ? (
-                <img
-                  src={docBlobUrl}
-                  alt="Document"
-                  className="w-full rounded-box object-contain max-h-80 border border-base-300 bg-base-200"
-                />
-              ) : (
-                <iframe
-                  src={docBlobUrl}
-                  title="Document preview"
-                  className="w-full h-80 rounded-box border border-base-300"
-                />
-              )
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-base-content/40 italic">No document attached.</p>
-        )}
       </div>
     </div>
   )
@@ -689,42 +607,26 @@ function GasLogDetailsModal({ gasLog }) {
 /** L3 modal — add a new gas log to a vehicle log. */
 function AddGasLogModal({ vehicleLogId, onRefresh }) {
   const { popModal } = useModal()
-  const { apiFetch, hasRole } = useAuth()
+  const { apiFetch } = useAuth()
   const [form, setForm] = useState(EMPTY_GAS_FORM)
   const [formError, setFormError] = useState({})
   const [submitting, setSubmitting] = useState(false)
-  const [file, setFile] = useState(null)
-  const fileRef = useRef(null)
-  const canManageDocs = hasRole('ADMIN', 'STAFF')
 
   function handleChange(e) {
     const { name, value } = e.target
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
-  /** Submits the add gas log form, optionally uploading a document first. */
+  /** Submits the add gas log form. */
   async function handleSubmit(e) {
     e.preventDefault()
     setFormError({})
     setSubmitting(true)
     try {
-      let docuId = null
-      if (file) {
-        const fd = new FormData()
-        fd.append('file', file)
-        const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
-        if (!uploadRes.ok) {
-          setFormError(await parseApiError(uploadRes))
-          notyfError('File upload failed')
-          return
-        }
-        const docData = await uploadRes.json()
-        docuId = docData.docuId
-      }
       const res = await apiFetch('/api/vehicle-gas-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vehicleLogId, amount: Number(form.amount), invoiceId: form.invoiceId, docuId }),
+        body: JSON.stringify({ vehicleLogId, amount: Number(form.amount), invoiceId: form.invoiceId }),
       })
       if (!res.ok) {
         setFormError(await parseApiError(res))
@@ -781,27 +683,6 @@ function AddGasLogModal({ vehicleLogId, onRefresh }) {
               />
               {formError.amount && <span className="helper-text">{formError.amount}</span>}
             </div>
-            {canManageDocs && (
-              <div className="flex flex-col gap-1">
-                <label className="label-text font-medium">Document <span className="text-base-content/40 font-normal">(optional)</span></label>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept={ACCEPTED_EXTENSIONS}
-                  className="hidden"
-                  onChange={e => setFile(e.target.files?.[0] ?? null)}
-                />
-                <button
-                  type="button"
-                  className={`btn btn-outline w-full justify-start font-normal${formError.file ? ' btn-error' : ''}`}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <span className="icon-[tabler--paperclip] size-4"></span>
-                  {file ? file.name : 'Choose file…'}
-                </button>
-                {formError.file && <span className="helper-text">{formError.file}</span>}
-              </div>
-            )}
             {formError._general && (
               <div className="alert alert-error py-2">
                 <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
@@ -851,7 +732,6 @@ function UpdateGasLogModal({ gasLog, onRefresh }) {
           vehicleLogId: gasLog.vehicleLogId,
           amount:       Number(form.amount),
           invoiceId:    form.invoiceId,
-          docuId:       gasLog.docuId ?? null,
         }),
       })
       if (!res.ok) {
@@ -933,117 +813,6 @@ function UpdateGasLogModal({ gasLog, onRefresh }) {
   )
 }
 
-/** L3 modal — replace or attach a document file to a gas log. */
-function ReplaceGasFileModal({ gasLog, onRefresh }) {
-  const { popModal } = useModal()
-  const { apiFetch } = useAuth()
-  const [file, setFile] = useState(null)
-  const [formError, setFormError] = useState({})
-  const [submitting, setSubmitting] = useState(false)
-  const fileRef = useRef(null)
-
-  /** Uploads a new document then links it to the gas log. */
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (!file) { setFormError({ file: 'Please select a file.' }); return }
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      setFormError({ file: 'File must be an image (JPG/PNG/GIF/WebP) or PDF.' })
-      return
-    }
-    setFormError({})
-    setSubmitting(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: fd })
-      if (!uploadRes.ok) {
-        setFormError(await parseApiError(uploadRes))
-        notyfError('File upload failed')
-        return
-      }
-      const docData = await uploadRes.json()
-      const updateRes = await apiFetch(`/api/vehicle-gas-logs/${gasLog.gasLogId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vehicleLogId: gasLog.vehicleLogId,
-          amount:       gasLog.amount,
-          invoiceId:    gasLog.invoiceId,
-          docuId:       docData.docuId,
-        }),
-      })
-      if (!updateRes.ok) {
-        setFormError(await parseApiError(updateRes))
-        notyfError('Link document failed')
-        return
-      }
-      notyfSuccess(`Gas log #${gasLog.gasLogId} document replaced successfully.`)
-      popModal()
-      onRefresh?.()
-    } catch (err) {
-      setFormError({ _general: err.message })
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  return (
-    <div className="modal-content w-full max-w-sm my-auto">
-      <div className="modal-header">
-        <div>
-          <h3 className="modal-title">
-            {gasLog.docuId != null ? 'Replace File' : 'Attach File'} — Gas Log #{gasLog.gasLogId}
-          </h3>
-          <span className="text-sm text-base-content/50">Invoice: {gasLog.invoiceId}</span>
-        </div>
-        <button type="button" className="btn btn-text btn-circle btn-sm absolute end-3 top-3" onClick={popModal}>
-          <span className="icon-[tabler--x] size-4"></span>
-        </button>
-      </div>
-      <div className="modal-body">
-        <form id="replace-gas-file-form" onSubmit={handleSubmit}>
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">File <span className="text-error">*</span></label>
-              <input
-                ref={fileRef}
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                className="hidden"
-                onChange={e => setFile(e.target.files?.[0] ?? null)}
-              />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${formError.file ? ' btn-error' : ''}`}
-                onClick={() => fileRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {file ? file.name : 'Choose file…'}
-              </button>
-              {formError.file && <span className="helper-text">{formError.file}</span>}
-            </div>
-            {formError._general && (
-              <div className="alert alert-error py-2">
-                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
-                <span className="text-sm">{formError._general}</span>
-              </div>
-            )}
-          </div>
-        </form>
-      </div>
-      <div className="modal-footer">
-        <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>Cancel</button>
-        <button type="submit" form="replace-gas-file-form" className="btn btn-primary" disabled={submitting}>
-          {submitting
-            ? <span className="loading loading-spinner loading-sm"></span>
-            : <span className="icon-[tabler--upload] size-4"></span>
-          }
-          Upload
-        </button>
-      </div>
-    </div>
-  )
-}
 
 export default function VehicleLogs() {
   const { apiFetch, hasRole } = useAuth()

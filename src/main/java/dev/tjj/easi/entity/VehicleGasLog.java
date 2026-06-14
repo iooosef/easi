@@ -33,9 +33,4 @@ public class VehicleGasLog {
     @Setter
     private String invoiceId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "docu_id")
-    @Getter
-    @Setter
-    private Document document;
 }
