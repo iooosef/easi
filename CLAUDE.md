@@ -41,6 +41,19 @@ Every service method that adds, updates, or deletes data must call `logService.l
 Frontend in /frontend dir
 Frontend framework is React using FlyonUI (Tailwind CSS component library)
 
+### back button pattern
+Pages that are navigated to from another page (e.g. document sub-pages, AC units) must include a back button in the page header using this exact pattern:
+```jsx
+import { useNavigate } from 'react-router-dom'
+const navigate = useNavigate()
+
+// Inside the header div:
+<button type="button" className="btn btn-secondary btn-sm btn-circle" onClick={() => navigate(-1)}>
+  <span className="icon-[tabler--arrow-left] size-5"></span>
+</button>
+```
+Wrap the button and the title/subtitle in `<div className="flex items-center gap-3">`.
+
 ### shared frontend utilities and components
 
 **`frontend/src/utils/api.js`** — `parseApiError(res)`: parses a failed API response into a field-error map. Import this in every page/component that calls the API — never redefine it locally.

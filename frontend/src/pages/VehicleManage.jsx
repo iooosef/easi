@@ -1,66 +1,69 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth'
-import { useModal } from '../modals/index.js'
-import Layout from '../components/Layout'
-import { NewVehicleModal, UpdateVehicleModal } from './vehicles/VehicleModals'
-import { VehiclePickerModal } from './vehicles/AddVehicleLogFlow'
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth";
+import { useModal } from "../modals/index.js";
+import Layout from "../components/Layout";
+import { NewVehicleModal, UpdateVehicleModal } from "./vehicles/VehicleModals";
+import { VehiclePickerModal } from "./vehicles/AddVehicleLogFlow";
 
 /** Formats a LocalDateTime string to a readable date */
 function formatDate(dt) {
-  if (!dt) return '—'
-  return new Date(dt).toISOString().slice(0, 10)
+  if (!dt) return "—";
+  return new Date(dt).toISOString().slice(0, 10);
 }
 
-const PAGE_SIZE = 12
+const PAGE_SIZE = 12;
 
 /** Page for managing vehicles — add, update, and navigate to trip logs. */
 export default function VehicleManage() {
-  const { apiFetch, hasRole } = useAuth()
-  const { pushModal } = useModal()
-  const navigate = useNavigate()
+  const { apiFetch, hasRole } = useAuth();
+  const { pushModal } = useModal();
+  const navigate = useNavigate();
 
-  const [vehicles, setVehicles]           = useState([])
-  const [loading, setLoading]             = useState(true)
-  const [error, setError]                 = useState(null)
-  const [search, setSearch]               = useState('')
-  const [page, setPage]                   = useState(0)
-  const [totalPages, setTotalPages]       = useState(0)
-  const [totalElements, setTotalElements] = useState(0)
+  const [vehicles, setVehicles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
-  const canEdit   = hasRole('ADMIN', 'STAFF')
-  const canAddLog = hasRole('ADMIN', 'STAFF', 'CREW')
+  const canEdit = hasRole("ADMIN", "STAFF");
+  const canAddLog = hasRole("ADMIN", "STAFF", "CREW");
 
   /** Fetches paginated vehicle list. */
   async function fetchVehicles() {
-    setLoading(true)
-    setError(null)
+    setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: String(page),
         size: String(PAGE_SIZE),
-        sort: 'addedOn,desc',
-      })
-      const res = await apiFetch(`/api/vehicles?${params}`)
-      if (!res.ok) throw new Error(`Failed to load vehicles (${res.status})`)
-      const data = await res.json()
-      setVehicles(data.content ?? [])
-      setTotalPages(data.totalPages ?? 0)
-      setTotalElements(data.totalElements ?? 0)
+        sort: "addedOn,desc",
+      });
+      const res = await apiFetch(`/api/vehicles?${params}`);
+      if (!res.ok) throw new Error(`Failed to load vehicles (${res.status})`);
+      const data = await res.json();
+      setVehicles(data.content ?? []);
+      setTotalPages(data.totalPages ?? 0);
+      setTotalElements(data.totalElements ?? 0);
     } catch (err) {
-      setError(err.message)
+      setError(err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
-  useEffect(() => { fetchVehicles() }, [apiFetch, page])
+  useEffect(() => {
+    fetchVehicles();
+  }, [apiFetch, page]);
 
-  const filtered = vehicles.filter(v =>
-    search === '' ||
-    v.vehicleModel.toLowerCase().includes(search.toLowerCase()) ||
-    v.vehiclePlateNum.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = vehicles.filter(
+    (v) =>
+      search === "" ||
+      v.vehicleModel.toLowerCase().includes(search.toLowerCase()) ||
+      v.vehiclePlateNum.toLowerCase().includes(search.toLowerCase()),
+  );
 
   return (
     <Layout activePage="vehicles">
@@ -69,14 +72,16 @@ export default function VehicleManage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            className="btn btn-ghost btn-sm btn-circle"
-            onClick={() => navigate('/vehicles')}
+            className="btn btn-secondary btn-sm btn-circle"
+            onClick={() => navigate("/vehicles")}
           >
             <span className="icon-[tabler--arrow-left] size-5"></span>
           </button>
           <div>
             <h1 className="text-3xl font-semibold">Manage Vehicles</h1>
-            <p className="text-base-content/60 mt-1">Add and update company vehicles</p>
+            <p className="text-base-content/60 mt-1">
+              Add and update company vehicles
+            </p>
           </div>
         </div>
         <div className="flex gap-2 items-center h-full">
@@ -84,7 +89,9 @@ export default function VehicleManage() {
             <button
               type="button"
               className="btn btn-secondary h-full min-h-0"
-              onClick={() => pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)}
+              onClick={() =>
+                pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)
+              }
             >
               <span className="icon-[tabler--truck] size-4"></span>
               Add Vehicle Log
@@ -94,7 +101,16 @@ export default function VehicleManage() {
             <button
               type="button"
               className="btn btn-primary h-full min-h-0"
-              onClick={() => pushModal(<NewVehicleModal onSuccess={() => { setPage(0); fetchVehicles() }} />)}
+              onClick={() =>
+                pushModal(
+                  <NewVehicleModal
+                    onSuccess={() => {
+                      setPage(0);
+                      fetchVehicles();
+                    }}
+                  />,
+                )
+              }
             >
               <span className="icon-[tabler--plus] size-4"></span>
               New Vehicle
@@ -112,7 +128,7 @@ export default function VehicleManage() {
             className="input input-bordered w-full pl-9"
             placeholder="Search by model or plate number..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
       </div>
@@ -136,7 +152,7 @@ export default function VehicleManage() {
       {!loading && !error && (
         <>
           <p className="text-sm text-base-content/50 mb-3">
-            {totalElements} vehicle{totalElements !== 1 ? 's' : ''} total
+            {totalElements} vehicle{totalElements !== 1 ? "s" : ""} total
             {search && ` · ${filtered.length} shown`}
           </p>
 
@@ -147,29 +163,43 @@ export default function VehicleManage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map(vehicle => (
+              {filtered.map((vehicle) => (
                 <div key={vehicle.vehiclesId} className="group">
                   <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
                     <div className="card-body gap-2">
                       <div className="flex items-start justify-between gap-2">
-                        <h2 className="card-title text-base">{vehicle.vehicleModel}</h2>
+                        <h2 className="card-title text-base">
+                          {vehicle.vehicleModel}
+                        </h2>
                         <span className="badge badge-soft badge-neutral shrink-0 text-xs font-mono">
                           {vehicle.vehiclePlateNum}
                         </span>
                       </div>
-                      <p className="text-sm text-base-content/50">Added {formatDate(vehicle.addedOn)}</p>
+                      <p className="text-sm text-base-content/50">
+                        Added {formatDate(vehicle.addedOn)}
+                      </p>
                       <p className="text-sm text-base-content/60">
                         <span className="icon-[tabler--road] size-3.5 inline-block mr-1 align-middle"></span>
-                        {vehicle.latestOdometer != null
-                          ? <>{vehicle.latestOdometer.toLocaleString()} km</>
-                          : <span className="italic text-base-content/40">No odometer recorded</span>
-                        }
+                        {vehicle.latestOdometer != null ? (
+                          <>{vehicle.latestOdometer.toLocaleString()} km</>
+                        ) : (
+                          <span className="italic text-base-content/40">
+                            No odometer recorded
+                          </span>
+                        )}
                       </p>
                       {canEdit && (
                         <div className="card-actions mt-2">
                           <button
                             className="btn btn-soft btn-secondary btn-sm w-full"
-                            onClick={() => pushModal(<UpdateVehicleModal vehicle={vehicle} onSuccess={fetchVehicles} />)}
+                            onClick={() =>
+                              pushModal(
+                                <UpdateVehicleModal
+                                  vehicle={vehicle}
+                                  onSuccess={fetchVehicles}
+                                />,
+                              )
+                            }
                           >
                             <span className="icon-[tabler--pencil] size-4"></span>
                             Update Vehicle Info
@@ -185,12 +215,22 @@ export default function VehicleManage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-8">
-              <button className="btn btn-sm btn-secondary" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              <button
+                className="btn btn-sm btn-secondary"
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+              >
                 <span className="icon-[tabler--chevron-left] size-4"></span>
                 Prev
               </button>
-              <span className="text-sm text-base-content/60">Page {page + 1} of {totalPages}</span>
-              <button className="btn btn-sm btn-secondary" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+              <span className="text-sm text-base-content/60">
+                Page {page + 1} of {totalPages}
+              </span>
+              <button
+                className="btn btn-sm btn-secondary"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+              >
                 Next
                 <span className="icon-[tabler--chevron-right] size-4"></span>
               </button>
@@ -199,5 +239,5 @@ export default function VehicleManage() {
         </>
       )}
     </Layout>
-  )
+  );
 }

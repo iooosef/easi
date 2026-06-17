@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../auth'
 import Layout from '../components/Layout'
 import Modal from '../modals/Modal'
@@ -17,6 +17,7 @@ export default function PurchaseOrderDocuments() {
   const { apiFetch, hasRole } = useAuth()
   const { srNumber, poNum } = useParams()
   const location = useLocation()
+  const navigate = useNavigate()
   const projectName = location.state?.projectName ?? '...'
   const srNum = location.state?.srNumber ?? srNumber
 
@@ -286,11 +287,20 @@ export default function PurchaseOrderDocuments() {
     <Layout activePage="service-report">
       {/* Header */}
       <div className="flex items-stretch justify-between h-16 mb-6">
-        <div>
-          <h1 className="text-3xl font-semibold">PO Documents — {poNum}</h1>
-          <p className="text-base-content/60 mt-1">
-            {projectName} · SR #{srNum} — Manage documents for this purchase order
-          </p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm btn-circle"
+            onClick={() => navigate(-1)}
+          >
+            <span className="icon-[tabler--arrow-left] size-5"></span>
+          </button>
+          <div>
+            <h1 className="text-3xl font-semibold">PO Documents — {poNum}</h1>
+            <p className="text-base-content/60 mt-1">
+              {projectName} · SR #{srNum} — Manage documents for this purchase order
+            </p>
+          </div>
         </div>
         {canEdit && (
           <div className="flex gap-2 items-center h-full">

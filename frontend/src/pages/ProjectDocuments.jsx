@@ -1,269 +1,366 @@
-import { useState, useEffect } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
-import { useAuth } from '../auth'
-import Layout from '../components/Layout'
-import Modal from '../modals/Modal'
-import { notyfSuccess, notyfError } from '../notyf'
-import { parseApiError } from '../utils/api'
-import { ACCEPTED_TYPES, isImage, fileTypeLabel } from '../utils/documents'
-import DocumentViewer from '../components/DocumentViewer'
-import FilePicker from '../components/FilePicker'
+import { useState, useEffect } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../auth";
+import Layout from "../components/Layout";
+import Modal from "../modals/Modal";
+import { notyfSuccess, notyfError } from "../notyf";
+import { parseApiError } from "../utils/api";
+import { ACCEPTED_TYPES, isImage, fileTypeLabel } from "../utils/documents";
+import DocumentViewer from "../components/DocumentViewer";
+import FilePicker from "../components/FilePicker";
 
 /** Formats a datetime string to YYYY-MM-DD HH:MM */
 function formatDateTime(dt) {
-  if (!dt) return '—'
-  return String(dt).slice(0, 16).replace('T', ' ')
+  if (!dt) return "—";
+  return String(dt).slice(0, 16).replace("T", " ");
 }
-
 
 /**
  * Page for managing multiple documents attached to a project.
  * Supports uploading, viewing, updating description, replacing files, and removing links.
  */
 export default function ProjectDocuments() {
-  const { apiFetch, hasRole } = useAuth()
-  const { projNum } = useParams()
-  const location = useLocation()
-  const projectName = location.state?.projectName ?? `Project #${projNum}`
+  const { apiFetch, hasRole } = useAuth();
+  const { projNum } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const projectName = location.state?.projectName ?? `Project #${projNum}`;
 
-  const canEdit = hasRole('ADMIN', 'STAFF')
+  const canEdit = hasRole("ADMIN", "STAFF");
 
-  const [documents, setDocuments] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [documents, setDocuments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Upload new document modal
-  const [addOpen, setAddOpen] = useState(false)
-  const [addFile, setAddFile] = useState(null)
-  const [addDescription, setAddDescription] = useState('')
-  const [addError, setAddError] = useState({})
-  const [addSubmitting, setAddSubmitting] = useState(false)
+  const [addOpen, setAddOpen] = useState(false);
+  const [addFile, setAddFile] = useState(null);
+  const [addDescription, setAddDescription] = useState("");
+  const [addError, setAddError] = useState({});
+  const [addSubmitting, setAddSubmitting] = useState(false);
 
   // Update description modal
-  const [updateOpen, setUpdateOpen] = useState(false)
-  const [updatingDoc, setUpdatingDoc] = useState(null)
-  const [updateDesc, setUpdateDesc] = useState('')
-  const [updateError, setUpdateError] = useState({})
-  const [updateSubmitting, setUpdateSubmitting] = useState(false)
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updatingDoc, setUpdatingDoc] = useState(null);
+  const [updateDesc, setUpdateDesc] = useState("");
+  const [updateError, setUpdateError] = useState({});
+  const [updateSubmitting, setUpdateSubmitting] = useState(false);
 
   // Replace file modal
-  const [replaceOpen, setReplaceOpen] = useState(false)
-  const [replacingDoc, setReplacingDoc] = useState(null)
-  const [replaceFile, setReplaceFile] = useState(null)
-  const [replaceError, setReplaceError] = useState({})
-  const [replaceSubmitting, setReplaceSubmitting] = useState(false)
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [replacingDoc, setReplacingDoc] = useState(null);
+  const [replaceFile, setReplaceFile] = useState(null);
+  const [replaceError, setReplaceError] = useState({});
+  const [replaceSubmitting, setReplaceSubmitting] = useState(false);
 
   // Remove link confirmation modal
-  const [removeOpen, setRemoveOpen] = useState(false)
-  const [removingDoc, setRemovingDoc] = useState(null)
-  const [removeSubmitting, setRemoveSubmitting] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removingDoc, setRemovingDoc] = useState(null);
+  const [removeSubmitting, setRemoveSubmitting] = useState(false);
 
   // View document modal
-  const [viewOpen, setViewOpen] = useState(false)
-  const [viewDocMeta, setViewDocMeta] = useState(null)
-  const [viewBlobUrl, setViewBlobUrl] = useState(null)
-  const [viewLoading, setViewLoading] = useState(false)
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewDocMeta, setViewDocMeta] = useState(null);
+  const [viewBlobUrl, setViewBlobUrl] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
 
   /** Fetches all document links for this project. */
   useEffect(() => {
-    let active = true
-    setLoading(true)
-    setError(null)
-    apiFetch(`/api/project-documents?projNum=${projNum}&size=100&sort=projDocId,asc`)
-      .then(res => {
-        if (!res.ok) throw new Error(`Failed to load documents (${res.status})`)
-        return res.json()
+    let active = true;
+    setLoading(true);
+    setError(null);
+    apiFetch(
+      `/api/project-documents?projNum=${projNum}&size=100&sort=projDocId,asc`,
+    )
+      .then((res) => {
+        if (!res.ok)
+          throw new Error(`Failed to load documents (${res.status})`);
+        return res.json();
       })
-      .then(data => { if (active) setDocuments(data.content ?? []) })
-      .catch(err => { if (active) setError(err.message) })
-      .finally(() => { if (active) setLoading(false) })
-    return () => { active = false }
-  }, [apiFetch, projNum, refreshKey])
+      .then((data) => {
+        if (active) setDocuments(data.content ?? []);
+      })
+      .catch((err) => {
+        if (active) setError(err.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [apiFetch, projNum, refreshKey]);
 
   // Revoke blob URL on unmount
   useEffect(() => {
-    return () => { if (viewBlobUrl) URL.revokeObjectURL(viewBlobUrl) }
-  }, [viewBlobUrl])
+    return () => {
+      if (viewBlobUrl) URL.revokeObjectURL(viewBlobUrl);
+    };
+  }, [viewBlobUrl]);
 
-  function openAdd() { setAddFile(null); setAddDescription(''); setAddError({}); setAddOpen(true) }
-  function closeAdd() { setAddOpen(false); setAddFile(null); setAddDescription(''); setAddError({}) }
+  function openAdd() {
+    setAddFile(null);
+    setAddDescription("");
+    setAddError({});
+    setAddOpen(true);
+  }
+  function closeAdd() {
+    setAddOpen(false);
+    setAddFile(null);
+    setAddDescription("");
+    setAddError({});
+  }
 
   function handleAddFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
-      setAddError({ file: 'Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.' })
-      setAddFile(null)
-      return
+      setAddError({
+        file: "Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.",
+      });
+      setAddFile(null);
+      return;
     }
-    setAddError({})
-    setAddFile(file)
+    setAddError({});
+    setAddFile(file);
   }
 
   /** Uploads a file, creates a document record, then links it to the project. */
   async function handleAddSubmit(e) {
-    e.preventDefault()
-    setAddError({})
-    if (!addFile) { setAddError({ file: 'Please select a file.' }); return }
-    setAddSubmitting(true)
+    e.preventDefault();
+    setAddError({});
+    if (!addFile) {
+      setAddError({ file: "Please select a file." });
+      return;
+    }
+    setAddSubmitting(true);
     try {
-      const formData = new FormData()
-      formData.append('file', addFile)
-      if (addDescription.trim()) formData.append('description', addDescription.trim())
+      const formData = new FormData();
+      formData.append("file", addFile);
+      if (addDescription.trim())
+        formData.append("description", addDescription.trim());
 
-      const uploadRes = await apiFetch('/api/documents', { method: 'POST', body: formData })
+      const uploadRes = await apiFetch("/api/documents", {
+        method: "POST",
+        body: formData,
+      });
       if (!uploadRes.ok) {
-        setAddError(await parseApiError(uploadRes))
-        notyfError('Upload failed')
-        return
+        setAddError(await parseApiError(uploadRes));
+        notyfError("Upload failed");
+        return;
       }
-      const uploaded = await uploadRes.json()
+      const uploaded = await uploadRes.json();
 
-      const linkRes = await apiFetch('/api/project-documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projNum: Number(projNum), docuId: uploaded.docuId }),
-      })
+      const linkRes = await apiFetch("/api/project-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projNum: Number(projNum),
+          docuId: uploaded.docuId,
+        }),
+      });
       if (!linkRes.ok) {
-        setAddError(await parseApiError(linkRes))
-        notyfError('Failed to link document')
-        return
+        setAddError(await parseApiError(linkRes));
+        notyfError("Failed to link document");
+        return;
       }
 
-      closeAdd()
-      setTimeout(() => notyfSuccess('Document uploaded and linked to project.'), 150)
-      setRefreshKey(k => k + 1)
+      closeAdd();
+      setTimeout(
+        () => notyfSuccess("Document uploaded and linked to project."),
+        150,
+      );
+      setRefreshKey((k) => k + 1);
     } catch (err) {
-      setAddError({ _general: err.message })
+      setAddError({ _general: err.message });
     } finally {
-      setAddSubmitting(false)
+      setAddSubmitting(false);
     }
   }
 
-  function openUpdate(doc) { setUpdatingDoc(doc); setUpdateDesc(doc.description ?? ''); setUpdateError({}); setUpdateOpen(true) }
-  function closeUpdate() { setUpdateOpen(false); setUpdatingDoc(null); setUpdateDesc(''); setUpdateError({}) }
+  function openUpdate(doc) {
+    setUpdatingDoc(doc);
+    setUpdateDesc(doc.description ?? "");
+    setUpdateError({});
+    setUpdateOpen(true);
+  }
+  function closeUpdate() {
+    setUpdateOpen(false);
+    setUpdatingDoc(null);
+    setUpdateDesc("");
+    setUpdateError({});
+  }
 
   /** Updates the description of the linked document. */
   async function handleUpdateSubmit(e) {
-    e.preventDefault()
-    setUpdateError({})
-    setUpdateSubmitting(true)
+    e.preventDefault();
+    setUpdateError({});
+    setUpdateSubmitting(true);
     try {
       const res = await apiFetch(`/api/documents/${updatingDoc.docuId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description: updateDesc }),
-      })
+      });
       if (!res.ok) {
-        setUpdateError(await parseApiError(res))
-        notyfError('Update failed')
-        return
+        setUpdateError(await parseApiError(res));
+        notyfError("Update failed");
+        return;
       }
-      closeUpdate()
-      setTimeout(() => notyfSuccess('Description updated.'), 150)
-      setRefreshKey(k => k + 1)
+      closeUpdate();
+      setTimeout(() => notyfSuccess("Description updated."), 150);
+      setRefreshKey((k) => k + 1);
     } catch (err) {
-      setUpdateError({ _general: err.message })
+      setUpdateError({ _general: err.message });
     } finally {
-      setUpdateSubmitting(false)
+      setUpdateSubmitting(false);
     }
   }
 
-  function openReplace(doc) { setReplacingDoc(doc); setReplaceFile(null); setReplaceError({}); setReplaceOpen(true) }
-  function closeReplace() { setReplaceOpen(false); setReplacingDoc(null); setReplaceFile(null); setReplaceError({}) }
+  function openReplace(doc) {
+    setReplacingDoc(doc);
+    setReplaceFile(null);
+    setReplaceError({});
+    setReplaceOpen(true);
+  }
+  function closeReplace() {
+    setReplaceOpen(false);
+    setReplacingDoc(null);
+    setReplaceFile(null);
+    setReplaceError({});
+  }
 
   function handleReplaceFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
-      setReplaceError({ file: 'Only images and PDFs are accepted.' })
-      setReplaceFile(null)
-      return
+      setReplaceError({ file: "Only images and PDFs are accepted." });
+      setReplaceFile(null);
+      return;
     }
-    setReplaceError({})
-    setReplaceFile(file)
+    setReplaceError({});
+    setReplaceFile(file);
   }
 
   /** Replaces the file of an existing linked document. */
   async function handleReplaceSubmit(e) {
-    e.preventDefault()
-    setReplaceError({})
-    if (!replaceFile) { setReplaceError({ file: 'Please select a file.' }); return }
-    setReplaceSubmitting(true)
+    e.preventDefault();
+    setReplaceError({});
+    if (!replaceFile) {
+      setReplaceError({ file: "Please select a file." });
+      return;
+    }
+    setReplaceSubmitting(true);
     try {
-      const formData = new FormData()
-      formData.append('file', replaceFile)
-      const res = await apiFetch(`/api/documents/${replacingDoc.docuId}/file`, { method: 'PUT', body: formData })
+      const formData = new FormData();
+      formData.append("file", replaceFile);
+      const res = await apiFetch(`/api/documents/${replacingDoc.docuId}/file`, {
+        method: "PUT",
+        body: formData,
+      });
       if (!res.ok) {
-        setReplaceError(await parseApiError(res))
-        notyfError('Replace failed')
-        return
+        setReplaceError(await parseApiError(res));
+        notyfError("Replace failed");
+        return;
       }
-      closeReplace()
-      setTimeout(() => notyfSuccess('File replaced successfully.'), 150)
-      setRefreshKey(k => k + 1)
+      closeReplace();
+      setTimeout(() => notyfSuccess("File replaced successfully."), 150);
+      setRefreshKey((k) => k + 1);
     } catch (err) {
-      setReplaceError({ _general: err.message })
+      setReplaceError({ _general: err.message });
     } finally {
-      setReplaceSubmitting(false)
+      setReplaceSubmitting(false);
     }
   }
 
-  function openRemove(doc) { setRemovingDoc(doc); setRemoveOpen(true) }
-  function closeRemove() { setRemoveOpen(false); setRemovingDoc(null) }
+  function openRemove(doc) {
+    setRemovingDoc(doc);
+    setRemoveOpen(true);
+  }
+  function closeRemove() {
+    setRemoveOpen(false);
+    setRemovingDoc(null);
+  }
 
   /** Removes the project-document link (does not delete the document file). */
   async function handleRemoveConfirm() {
-    setRemoveSubmitting(true)
+    setRemoveSubmitting(true);
     try {
-      const res = await apiFetch(`/api/project-documents/${removingDoc.projDocId}`, { method: 'DELETE' })
+      const res = await apiFetch(
+        `/api/project-documents/${removingDoc.projDocId}`,
+        { method: "DELETE" },
+      );
       if (!res.ok) {
-        notyfError('Remove failed')
-        return
+        notyfError("Remove failed");
+        return;
       }
-      closeRemove()
-      setTimeout(() => notyfSuccess('Document removed from project.'), 150)
-      setRefreshKey(k => k + 1)
+      closeRemove();
+      setTimeout(() => notyfSuccess("Document removed from project."), 150);
+      setRefreshKey((k) => k + 1);
     } catch {
-      notyfError('Remove failed')
+      notyfError("Remove failed");
     } finally {
-      setRemoveSubmitting(false)
+      setRemoveSubmitting(false);
     }
   }
 
   /** Fetches the document file blob and opens the viewer. */
   async function handleViewDocument(doc) {
-    setViewLoading(true)
-    setViewOpen(true)
-    setViewDocMeta(doc)
+    setViewLoading(true);
+    setViewOpen(true);
+    setViewDocMeta(doc);
     try {
-      const res = await apiFetch(`/api/documents/${doc.docuId}/file`)
-      if (!res.ok) { notyfError('Could not load file'); setViewOpen(false); return }
-      const blob = await res.blob()
-      if (viewBlobUrl) URL.revokeObjectURL(viewBlobUrl)
-      setViewBlobUrl(URL.createObjectURL(blob))
+      const res = await apiFetch(`/api/documents/${doc.docuId}/file`);
+      if (!res.ok) {
+        notyfError("Could not load file");
+        setViewOpen(false);
+        return;
+      }
+      const blob = await res.blob();
+      if (viewBlobUrl) URL.revokeObjectURL(viewBlobUrl);
+      setViewBlobUrl(URL.createObjectURL(blob));
     } catch {
-      notyfError('Could not load file')
-      setViewOpen(false)
+      notyfError("Could not load file");
+      setViewOpen(false);
     } finally {
-      setViewLoading(false)
+      setViewLoading(false);
     }
   }
 
   function closeView() {
-    setViewOpen(false)
-    setViewDocMeta(null)
-    if (viewBlobUrl) { URL.revokeObjectURL(viewBlobUrl); setViewBlobUrl(null) }
+    setViewOpen(false);
+    setViewDocMeta(null);
+    if (viewBlobUrl) {
+      URL.revokeObjectURL(viewBlobUrl);
+      setViewBlobUrl(null);
+    }
   }
 
   return (
     <Layout activePage="projects">
       {/* Header */}
       <div className="flex items-stretch justify-between h-16 mb-6">
-        <div>
-          <h1 className="text-3xl font-semibold">Documents — {projectName}</h1>
-          <p className="text-base-content/60 mt-1">Manage documents attached to this project</p>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm btn-circle"
+            onClick={() => navigate(-1)}
+          >
+            <span className="icon-[tabler--arrow-left] size-5"></span>
+          </button>
+          <div>
+            <h1 className="text-3xl font-semibold">
+              Documents — {projectName}
+            </h1>
+            <p className="text-base-content/60 mt-1">
+              Manage documents attached to this project
+            </p>
+          </div>
         </div>
         {canEdit && (
           <div className="flex gap-2 items-center h-full">
-            <button type="button" className="btn btn-primary h-full min-h-0" onClick={openAdd}>
+            <button
+              type="button"
+              className="btn btn-primary h-full min-h-0"
+              onClick={openAdd}
+            >
               <span className="icon-[tabler--upload] size-4"></span>
               Upload Document
             </button>
@@ -291,7 +388,11 @@ export default function ProjectDocuments() {
         <div className="text-center py-24 text-base-content/40">
           <span className="icon-[tabler--files-off] size-16 mx-auto mb-4 block"></span>
           <p className="text-lg font-medium mb-1">No documents attached</p>
-          {canEdit && <p className="text-sm mb-6">Upload a file to attach a document to this project.</p>}
+          {canEdit && (
+            <p className="text-sm mb-6">
+              Upload a file to attach a document to this project.
+            </p>
+          )}
           {canEdit && (
             <button type="button" className="btn btn-primary" onClick={openAdd}>
               <span className="icon-[tabler--upload] size-4"></span>
@@ -305,21 +406,33 @@ export default function ProjectDocuments() {
       {!loading && !error && documents.length > 0 && (
         <>
           <p className="text-sm text-base-content/50 mb-3">
-            {documents.length} document{documents.length !== 1 ? 's' : ''} attached
+            {documents.length} document{documents.length !== 1 ? "s" : ""}{" "}
+            attached
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {documents.map(doc => (
+            {documents.map((doc) => (
               <div key={doc.projDocId} className="group">
                 <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
                   <div className="card-body gap-3">
                     {/* File icon + name */}
                     <div className="flex items-center gap-3">
-                      <span className={`size-8 shrink-0 ${isImage(doc.fileType) ? 'icon-[tabler--photo]' : 'icon-[tabler--file-type-pdf]'} text-primary`}></span>
+                      <span
+                        className={`size-8 shrink-0 ${isImage(doc.fileType) ? "icon-[tabler--photo]" : "icon-[tabler--file-type-pdf]"} text-primary`}
+                      ></span>
                       <div className="min-w-0">
-                        <p className="font-semibold text-sm truncate" title={doc.fileName}>{doc.fileName}</p>
-                        <p className="text-xs text-base-content/50">{fileTypeLabel(doc.fileType)}</p>
+                        <p
+                          className="font-semibold text-sm truncate"
+                          title={doc.fileName}
+                        >
+                          {doc.fileName}
+                        </p>
+                        <p className="text-xs text-base-content/50">
+                          {fileTypeLabel(doc.fileType)}
+                        </p>
                       </div>
-                      <span className="badge badge-soft badge-neutral text-xs ml-auto shrink-0">#{doc.docuId}</span>
+                      <span className="badge badge-soft badge-neutral text-xs ml-auto shrink-0">
+                        #{doc.docuId}
+                      </span>
                     </div>
 
                     {/* Description */}
@@ -328,7 +441,9 @@ export default function ProjectDocuments() {
                         {doc.description}
                       </p>
                     ) : (
-                      <p className="text-sm text-base-content/40 italic">No description.</p>
+                      <p className="text-sm text-base-content/40 italic">
+                        No description.
+                      </p>
                     )}
 
                     {/* Added on */}
@@ -379,12 +494,24 @@ export default function ProjectDocuments() {
         title="Upload Document"
         footer={
           <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeAdd}>Cancel</button>
-            <button type="submit" form="add-proj-doc-form" className="btn btn-primary" disabled={addSubmitting}>
-              {addSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--upload] size-4"></span>
-              }
+            <button
+              type="button"
+              className="btn btn-soft btn-secondary"
+              onClick={closeAdd}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="add-proj-doc-form"
+              className="btn btn-primary"
+              disabled={addSubmitting}
+            >
+              {addSubmitting ? (
+                <span className="loading loading-spinner loading-sm"></span>
+              ) : (
+                <span className="icon-[tabler--upload] size-4"></span>
+              )}
               Upload
             </button>
           </>
@@ -395,21 +522,29 @@ export default function ProjectDocuments() {
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">
                 File <span className="text-error">*</span>
-                <span className="text-xs text-base-content/50 ml-1">(Images or PDF only)</span>
+                <span className="text-xs text-base-content/50 ml-1">
+                  (Images or PDF only)
+                </span>
               </label>
-              <FilePicker file={addFile} onChange={handleAddFileChange} error={addError.file} />
+              <FilePicker
+                file={addFile}
+                onChange={handleAddFileChange}
+                error={addError.file}
+              />
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Description</label>
               <textarea
-                className={`textarea textarea-bordered w-full${addError.description ? ' is-invalid' : ''}`}
+                className={`textarea textarea-bordered w-full${addError.description ? " is-invalid" : ""}`}
                 placeholder="Optional description..."
                 maxLength={600}
                 rows={3}
                 value={addDescription}
-                onChange={e => setAddDescription(e.target.value)}
+                onChange={(e) => setAddDescription(e.target.value)}
               />
-              {addError.description && <span className="helper-text">{addError.description}</span>}
+              {addError.description && (
+                <span className="helper-text">{addError.description}</span>
+              )}
             </div>
             {addError._general && (
               <div className="alert alert-error py-2">
@@ -428,12 +563,24 @@ export default function ProjectDocuments() {
         title="Update Description"
         footer={
           <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeUpdate}>Cancel</button>
-            <button type="submit" form="update-proj-doc-form" className="btn btn-primary" disabled={updateSubmitting}>
-              {updateSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--device-floppy] size-4"></span>
-              }
+            <button
+              type="button"
+              className="btn btn-soft btn-secondary"
+              onClick={closeUpdate}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="update-proj-doc-form"
+              className="btn btn-primary"
+              disabled={updateSubmitting}
+            >
+              {updateSubmitting ? (
+                <span className="loading loading-spinner loading-sm"></span>
+              ) : (
+                <span className="icon-[tabler--device-floppy] size-4"></span>
+              )}
               Save Changes
             </button>
           </>
@@ -444,14 +591,16 @@ export default function ProjectDocuments() {
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Description</label>
               <textarea
-                className={`textarea textarea-bordered w-full${updateError.description ? ' is-invalid' : ''}`}
+                className={`textarea textarea-bordered w-full${updateError.description ? " is-invalid" : ""}`}
                 placeholder="Optional description..."
                 maxLength={600}
                 rows={4}
                 value={updateDesc}
-                onChange={e => setUpdateDesc(e.target.value)}
+                onChange={(e) => setUpdateDesc(e.target.value)}
               />
-              {updateError.description && <span className="helper-text">{updateError.description}</span>}
+              {updateError.description && (
+                <span className="helper-text">{updateError.description}</span>
+              )}
             </div>
             {updateError._general && (
               <div className="alert alert-error py-2">
@@ -467,15 +616,27 @@ export default function ProjectDocuments() {
       <Modal
         isOpen={replaceOpen}
         onClose={closeReplace}
-        title={`Replace File — ${replacingDoc?.fileName ?? ''}`}
+        title={`Replace File — ${replacingDoc?.fileName ?? ""}`}
         footer={
           <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeReplace}>Cancel</button>
-            <button type="submit" form="replace-proj-doc-form" className="btn btn-warning" disabled={replaceSubmitting}>
-              {replaceSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--replace] size-4"></span>
-              }
+            <button
+              type="button"
+              className="btn btn-soft btn-secondary"
+              onClick={closeReplace}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="replace-proj-doc-form"
+              className="btn btn-warning"
+              disabled={replaceSubmitting}
+            >
+              {replaceSubmitting ? (
+                <span className="loading loading-spinner loading-sm"></span>
+              ) : (
+                <span className="icon-[tabler--replace] size-4"></span>
+              )}
               Replace File
             </button>
           </>
@@ -485,14 +646,23 @@ export default function ProjectDocuments() {
           <div className="flex flex-col gap-4">
             <div className="alert alert-warning py-2">
               <span className="icon-[tabler--alert-triangle] size-4 shrink-0"></span>
-              <span className="text-sm">The current file will be permanently replaced. The description is kept.</span>
+              <span className="text-sm">
+                The current file will be permanently replaced. The description
+                is kept.
+              </span>
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">
                 New File <span className="text-error">*</span>
-                <span className="text-xs text-base-content/50 ml-1">(Images or PDF only)</span>
+                <span className="text-xs text-base-content/50 ml-1">
+                  (Images or PDF only)
+                </span>
               </label>
-              <FilePicker file={replaceFile} onChange={handleReplaceFileChange} error={replaceError.file} />
+              <FilePicker
+                file={replaceFile}
+                onChange={handleReplaceFileChange}
+                error={replaceError.file}
+              />
             </div>
             {replaceError._general && (
               <div className="alert alert-error py-2">
@@ -511,12 +681,24 @@ export default function ProjectDocuments() {
         title="Remove Document from Project"
         footer={
           <>
-            <button type="button" className="btn btn-soft btn-secondary" onClick={closeRemove}>Cancel</button>
-            <button type="button" className="btn btn-error" disabled={removeSubmitting} onClick={handleRemoveConfirm}>
-              {removeSubmitting
-                ? <span className="loading loading-spinner loading-sm"></span>
-                : <span className="icon-[tabler--unlink] size-4"></span>
-              }
+            <button
+              type="button"
+              className="btn btn-soft btn-secondary"
+              onClick={closeRemove}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-error"
+              disabled={removeSubmitting}
+              onClick={handleRemoveConfirm}
+            >
+              {removeSubmitting ? (
+                <span className="loading loading-spinner loading-sm"></span>
+              ) : (
+                <span className="icon-[tabler--unlink] size-4"></span>
+              )}
               Remove
             </button>
           </>
@@ -524,11 +706,16 @@ export default function ProjectDocuments() {
       >
         <div className="flex flex-col gap-3">
           <p className="text-sm">
-            Remove <span className="font-semibold">{removingDoc?.fileName}</span> from this project?
+            Remove{" "}
+            <span className="font-semibold">{removingDoc?.fileName}</span> from
+            this project?
           </p>
           <div className="alert alert-warning py-2">
             <span className="icon-[tabler--alert-triangle] size-4 shrink-0"></span>
-            <span className="text-sm">The document file is not deleted — only the link to this project is removed.</span>
+            <span className="text-sm">
+              The document file is not deleted — only the link to this project
+              is removed.
+            </span>
           </div>
         </div>
       </Modal>
@@ -542,5 +729,5 @@ export default function ProjectDocuments() {
         loading={viewLoading}
       />
     </Layout>
-  )
+  );
 }
