@@ -18,5 +18,7 @@ public record VehicleGasLogRequest(
 
         @NotBlank(message = "Invoice ID is required")
         @Size(max = 16, message = "Invoice ID must not exceed 16 characters")
-        String invoiceId
+        String invoiceId,
+
+        Integer docuId
 ) {}

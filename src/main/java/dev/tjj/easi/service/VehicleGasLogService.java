@@ -2,8 +2,10 @@ package dev.tjj.easi.service;
 
 import dev.tjj.easi.dto.VehicleGasLogRequest;
 import dev.tjj.easi.dto.VehicleGasLogResponse;
+import dev.tjj.easi.entity.Document;
 import dev.tjj.easi.entity.VehicleGasLog;
 import dev.tjj.easi.entity.VehicleLog;
+import dev.tjj.easi.repository.DocumentRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
 import dev.tjj.easi.repository.VehicleLogRepository;
 import dev.tjj.easi.entity.LogSeverity;
@@ -21,13 +23,16 @@ public class VehicleGasLogService {
 
     private final VehicleGasLogRepository gasLogRepository;
     private final VehicleLogRepository vehicleLogRepository;
+    private final DocumentRepository documentRepository;
     private final LogService logService;
 
     public VehicleGasLogService(VehicleGasLogRepository gasLogRepository,
                                  VehicleLogRepository vehicleLogRepository,
+                                 DocumentRepository documentRepository,
                                  LogService logService) {
         this.gasLogRepository = gasLogRepository;
         this.vehicleLogRepository = vehicleLogRepository;
+        this.documentRepository = documentRepository;
         this.logService = logService;
     }
 
@@ -81,6 +86,14 @@ public class VehicleGasLogService {
         gasLog.setVehicleLog(vehicleLog);
         gasLog.setAmount(request.amount());
         gasLog.setInvoiceId(request.invoiceId());
+
+        if (request.docuId() != null) {
+            Document document = documentRepository.findById(request.docuId())
+                    .orElseThrow(() -> new IllegalArgumentException("Document not found."));
+            gasLog.setDocument(document);
+        } else {
+            gasLog.setDocument(null);
+        }
     }
 
     private VehicleGasLogResponse toResponse(VehicleGasLog g) {
@@ -88,7 +101,8 @@ public class VehicleGasLogService {
                 g.getGasLogId(),
                 g.getVehicleLog().getVehicleLogId(),
                 g.getAmount(),
-                g.getInvoiceId()
+                g.getInvoiceId(),
+                g.getDocument() != null ? g.getDocument().getDocuId() : null
         );
     }
 }
