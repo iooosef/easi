@@ -199,6 +199,13 @@ public class SecurityConfig {
                                                 .hasAnyRole("ADMIN", "CREW", "STAFF")
                                                 .requestMatchers(HttpMethod.GET, "/api/vehicle-gas-logs",
                                                                 "/api/vehicle-gas-logs/**")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF") // start of new addition
+                                                .requestMatchers(HttpMethod.POST, "/api/vehicle-maintenance-logs")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.PUT, "/api/vehicle-maintenance-logs/**")
+                                                .hasAnyRole("ADMIN", "CREW", "STAFF")
+                                                .requestMatchers(HttpMethod.GET, "/api/vehicle-maintenance-logs",
+                                                "/api/vehicle-maintenance-logs/**")// end of new addition- tj
                                                 .hasAnyRole("ADMIN", "CREW", "STAFF")
                                                 .requestMatchers("/api/maintenance/**").hasRole("ADMIN")
                                                 .requestMatchers(HttpMethod.GET, "/api/logs").hasRole("ADMIN")

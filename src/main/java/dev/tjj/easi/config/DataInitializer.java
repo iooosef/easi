@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import dev.tjj.easi.entity.AirConditioningUnit;
 import dev.tjj.easi.entity.Vehicle;
 import dev.tjj.easi.entity.VehicleGasLog;
+import dev.tjj.easi.entity.VehicleMaintenanceLog; // <-- New Addition 
 import dev.tjj.easi.entity.VehicleLog;
 import dev.tjj.easi.entity.Employee;
 import dev.tjj.easi.entity.Project;
@@ -25,6 +26,7 @@ import dev.tjj.easi.entity.User;
 import dev.tjj.easi.repository.AirConditioningUnitRepository;
 import dev.tjj.easi.repository.VehicleRepository;
 import dev.tjj.easi.repository.VehicleGasLogRepository;
+import dev.tjj.easi.repository.VehicleMaintenanceLogRepository; // <-- New dagdag din
 import dev.tjj.easi.entity.Equipment;
 import dev.tjj.easi.entity.EquipmentUsage;
 import dev.tjj.easi.entity.Part;
@@ -77,6 +79,7 @@ public class DataInitializer implements CommandLineRunner {
     private final VehicleRepository vehicleRepository;
     private final VehicleLogRepository vehicleLogRepository;
     private final VehicleGasLogRepository vehicleGasLogRepository;
+    private final VehicleMaintenanceLogRepository vehicleMaintenanceLogRepository; // <-- new this too
     private final SupplierRepository supplierRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
     private final PartRepository partRepository;
