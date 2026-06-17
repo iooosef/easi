@@ -13,6 +13,8 @@ import NewSchedule from './pages/NewSchedule'
 import NewServiceReport from './pages/NewServiceReport'
 import Vehicles from './pages/Vehicles'
 import VehicleManage from './pages/VehicleManage'
+import VehicleMaintenanceLogs from './pages/VehicleMaintenanceLogs'
+import VehicleMaintenanceDocuments from './pages/VehicleMaintenanceDocuments'
 import MaintenancePage from './pages/MaintenancePage'
 import PurchaseOrders from './pages/PurchaseOrders'
 import PurchaseOrderDocuments from './pages/PurchaseOrderDocuments'
@@ -73,6 +75,8 @@ function App() {
       <Route path="/reports" element={<Private element={<Reports />} />} />
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />
       <Route path="/vehicles/manage" element={<Private element={<VehicleManage />} />} />
+      <Route path="/vehicle-logs/:vehicleLogId/maintenance" element={<Private element={<VehicleMaintenanceLogs />} />} />
+      <Route path="/vehicle-logs/:vehicleLogId/maintenance/:mntLogId/documents" element={<Private element={<VehicleMaintenanceDocuments />} />} />
       <Route path="/employees" element={<Private element={<Employees />} />} />
       <Route path="/employees/:employeeId/documents" element={<Private element={<EmployeeDocuments />} />} />
       <Route path="/help" element={<Private element={<Help />} />} />

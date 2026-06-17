@@ -2,6 +2,8 @@ package dev.tjj.easi.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.LocalDateTime;
+
 public record VehicleMaintenanceLogDocumentResponse(
 
         @Schema(description = "Maintenance log document link ID", example = "1")
@@ -17,6 +19,12 @@ public record VehicleMaintenanceLogDocumentResponse(
         String fileName,
 
         @Schema(description = "Document file type extension", example = "pdf")
-        String fileType
+        String fileType,
+
+        @Schema(description = "Document description", example = "Maintenance invoice for oil change")
+        String description,
+
+        @Schema(description = "Date and time the document was uploaded")
+        LocalDateTime addedOn
 
 ) {}

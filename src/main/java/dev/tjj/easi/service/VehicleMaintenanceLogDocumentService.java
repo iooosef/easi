@@ -118,6 +118,29 @@ public class VehicleMaintenanceLogDocumentService {
                         pageable)
                 .map(this::toResponse);
     }
+    /** Deletes a vehicle maintenance log document link by ID. */
+    @Transactional
+    public void delete(Integer mntLogDocId) {
+        VehicleMaintenanceLogDocument entity =
+                repository.findById(mntLogDocId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "Maintenance log document not found."));
+
+        repository.delete(entity);
+
+        logService.logByEmail(
+                getEmail(),
+                LogType.AUDIT,
+                LogSeverity.INFO,
+                "DELETE",
+                "VehicleMaintenanceLogDocument",
+                String.valueOf(mntLogDocId),
+                "Removed maintenance log document #" + mntLogDocId,
+                null
+        );
+    }
+
     /** Returns a single vehicle maintenance log document record by ID. */
     public VehicleMaintenanceLogDocumentResponse getById(
             Integer mntLogDocId) {
@@ -159,7 +182,9 @@ public class VehicleMaintenanceLogDocumentService {
                 entity.getVehicleMaintenanceLog().getMntLogId(),
                 entity.getDocument().getDocuId(),
                 entity.getDocument().getFileName(),
-                entity.getDocument().getFileType()
+                entity.getDocument().getFileType(),
+                entity.getDocument().getDescription(),
+                entity.getDocument().getAddedOn()
         );
     }
 

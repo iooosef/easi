@@ -673,7 +673,15 @@ public class DataInitializer implements CommandLineRunner {
         vehicleGasLog(vt3, new BigDecimal("2800.00"), "INV-2026-TRK-015");
         vehicleGasLog(vt5, new BigDecimal("3500.00"), "INV-2026-TRK-031");
 
-        log.info("Vehicle seed completed: 2 vehicles, 12 vehicle logs, 6 gas logs.");
+        // --- Maintenance logs ---
+        vehicleMaintenanceLog(vl2, new BigDecimal("2500.00"), "INV-MNT-V001", "Oil Change");
+        vehicleMaintenanceLog(vl4, new BigDecimal("1800.00"), "INV-MNT-V002", "Tire Rotation");
+        vehicleMaintenanceLog(vl5, new BigDecimal("3200.00"), "INV-MNT-V003", "Brake Inspection");
+        vehicleMaintenanceLog(vt1, new BigDecimal("5500.00"), "INV-MNT-T001", "Engine Tune-up");
+        vehicleMaintenanceLog(vt3, new BigDecimal("2200.00"), "INV-MNT-T002", "Coolant Flush");
+        vehicleMaintenanceLog(vt5, new BigDecimal("12000.00"), "INV-MNT-T003", "Tire Replacement");
+
+        log.info("Vehicle seed completed: 2 vehicles, 12 vehicle logs, 6 gas logs, 6 maintenance logs.");
     }
 
     /** Creates and saves a Vehicle. */
@@ -712,6 +720,16 @@ public class DataInitializer implements CommandLineRunner {
         gl.setInvoiceId(invoiceId);
         gl.setDocument(null);
         vehicleGasLogRepository.save(gl);
+    }
+
+    /** Creates and saves a VehicleMaintenanceLog linked to a VehicleLog. */
+    private void vehicleMaintenanceLog(VehicleLog vehicleLog, BigDecimal amount, String invoiceId, String mntType) {
+        VehicleMaintenanceLog ml = new VehicleMaintenanceLog();
+        ml.setVehicleLog(vehicleLog);
+        ml.setAmount(amount);
+        ml.setInvoiceId(invoiceId);
+        ml.setMntType(mntType);
+        vehicleMaintenanceLogRepository.save(ml);
     }
 
     /** Creates and saves a ServiceReportFinding. */

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { useAuth } from "../auth";
 import { useModal } from "../modals/index.js";
@@ -25,6 +25,12 @@ const LOG_MENU_ITEMS = [
     key: "manage-gas-logs",
     label: "Manage Gas Logs",
     icon: "icon-[tabler--gas-station]",
+    roles: ["ADMIN", "STAFF", "CREW"],
+  },
+  {
+    key: "maintenance",
+    label: "Maintenance",
+    icon: "icon-[tabler--tool]",
     roles: ["ADMIN", "STAFF", "CREW"],
   },
 ];
@@ -458,6 +464,7 @@ function EndDriveModal({ log, onSuccess }) {
 export function ManageLogModal({ log: initialLog, onRefresh }) {
   const { pushModal, popModal } = useModal();
   const { hasRole, apiFetch } = useAuth();
+  const navigate = useNavigate();
   const [log, setLog] = useState(initialLog);
 
   async function refreshLog() {
@@ -487,6 +494,10 @@ export function ManageLogModal({ log: initialLog, onRefresh }) {
     if (key === "update")
       pushModal(<UpdateLogModal log={log} onRefresh={refreshLog} />);
     if (key === "manage-gas-logs") pushModal(<ManageGasLogsModal log={log} />);
+    if (key === "maintenance") {
+      popModal();
+      navigate(`/vehicle-logs/${log.vehicleLogId}/maintenance`);
+    }
     // End Drive — push the odometer entry modal on top of this panel
     if (key === "end-drive")
       pushModal(<EndDriveModal log={log} onSuccess={refreshLog} />);

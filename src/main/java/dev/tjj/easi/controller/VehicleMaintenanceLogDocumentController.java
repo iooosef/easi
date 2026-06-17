@@ -81,6 +81,22 @@ public class VehicleMaintenanceLogDocumentController {
         return ResponseEntity.ok(service.getAll(pageable));
     }
 
+    /** Removes a vehicle maintenance log document link by ID. */
+    @Operation(summary = "Remove a maintenance log document link",
+               description = "Deletes the link between a document and a maintenance log. The document record itself is not deleted.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Link removed successfully"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or STAFF role"),
+        @ApiResponse(responseCode = "404", description = "Link not found")
+    })
+    @DeleteMapping("/{mntLogDocId}")
+    public ResponseEntity<Void> delete(
+            @Parameter(description = "Maintenance log document link ID", example = "1") @PathVariable Integer mntLogDocId) {
+        service.delete(mntLogDocId);
+        return ResponseEntity.noContent().build();
+    }
+
     /** Returns a single vehicle maintenance log document link by ID. */
     @Operation(summary = "Get maintenance log document link by ID",
                description = "Returns a single document link record including document metadata.")
