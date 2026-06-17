@@ -10,6 +10,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * REST endpoints for vehicle maintenance log management.
+ * ADMIN, CREW, and STAFF can add, update, and view vehicle maintenance logs.
+ */
+
 @RestController
 @RequestMapping("/api/vehicle-maintenance-logs")
 public class VehicleMaintenanceLogController {
@@ -20,7 +25,7 @@ public class VehicleMaintenanceLogController {
         this.maintenanceLogService = maintenanceLogService;
     }
 
-    /** Adds a new vehicle maintenance log. */
+    /** Adds a new vehicle maintenance log.  */
     @PostMapping
     public ResponseEntity<VehicleMaintenanceLogResponse> add(@Valid @RequestBody VehicleMaintenanceLogRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(maintenanceLogService.add(request));
@@ -40,7 +45,7 @@ public class VehicleMaintenanceLogController {
         return ResponseEntity.ok(maintenanceLogService.getAll(pageable));
     }
 
-    /** Returns a page of vehicle gas log records, optionally filtered by vehicle log ID. Available to ADMIN, CREW, and STAFF.*/
+    /** Returns a page of vehicle maintenance log records, optionally filtered by vehicle log ID.*/
 
     @GetMapping
     public ResponseEntity<Page<VehicleMaintenanceLogResponse>> getAll(
