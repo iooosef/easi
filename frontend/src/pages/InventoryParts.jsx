@@ -899,10 +899,10 @@ export default function InventoryParts() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function commitSearch() {
-    setPage(0)
-    setSearch(inputValue)
-  }
+  useEffect(() => {
+    const timer = setTimeout(() => { setPage(0); setSearch(inputValue) }, 400)
+    return () => clearTimeout(timer)
+  }, [inputValue])
 
   function applyStatusFilter(value) {
     setPage(0)
@@ -939,26 +939,18 @@ export default function InventoryParts() {
             placeholder="Search by name or PO number..."
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') commitSearch() }}
           />
         </div>
-        <button type="button" className="btn btn-secondary shrink-0" onClick={commitSearch}>
-          <span className="icon-[tabler--search] size-4"></span>
-          Search
-        </button>
-        <div className="dropdown relative inline-flex shrink-0">
-          <button id="status-filter-dropdown" type="button" className="dropdown-toggle btn btn-secondary" aria-haspopup="menu" aria-expanded="false" aria-label="Filter by status">
-            <span className="icon-[tabler--filter] size-4"></span>
-            {statusFilter || 'All Status'}
-            <span className="icon-[tabler--chevron-down] dropdown-open:rotate-180 size-4"></span>
-          </button>
-          <ul className="dropdown-menu dropdown-open:opacity-100 hidden min-w-40" role="menu" aria-orientation="vertical" aria-labelledby="status-filter-dropdown">
-            <li><a className={`dropdown-item${statusFilter === '' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('') }}>All Status</a></li>
-            <li><a className={`dropdown-item${statusFilter === 'ordered' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('ordered') }}>ordered</a></li>
-            <li><a className={`dropdown-item${statusFilter === 'received' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('received') }}>received</a></li>
-            <li><a className={`dropdown-item${statusFilter === 'cancelled' ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); applyStatusFilter('cancelled') }}>cancelled</a></li>
-          </ul>
-        </div>
+        <select
+          className="select select-bordered w-40 shrink-0"
+          value={statusFilter}
+          onChange={e => applyStatusFilter(e.target.value)}
+        >
+          <option value="">All Status</option>
+          <option value="ordered">ordered</option>
+          <option value="received">received</option>
+          <option value="cancelled">cancelled</option>
+        </select>
       </div>
 
       {/* Loading */}

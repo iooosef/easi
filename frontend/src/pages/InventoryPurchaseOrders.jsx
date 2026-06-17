@@ -2210,6 +2210,11 @@ export default function InventoryPurchaseOrders() {
   const [refreshKey, setRefreshKey]       = useState(0)
 
   useEffect(() => {
+    const timer = setTimeout(() => { setPage(0); setSearch(inputValue) }, 400)
+    return () => clearTimeout(timer)
+  }, [inputValue])
+
+  useEffect(() => {
     let active = true; setLoading(true); setError(null)
     const params = new URLSearchParams({ page: String(page), size: String(PAGE_SIZE), sort: 'addedOn,desc' })
     if (srNumFilter) params.set('srNum', String(srNumFilter))
@@ -2273,26 +2278,18 @@ export default function InventoryPurchaseOrders() {
         <div className="relative flex-1 min-w-48">
           <span className="icon-[tabler--search] size-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></span>
           <input type="text" className="input input-bordered w-full pl-9" placeholder="Search by PO number or purpose..."
-            value={inputValue} onChange={e => setInputValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { setPage(0); setSearch(inputValue) } }} />
+            value={inputValue} onChange={e => setInputValue(e.target.value)} />
         </div>
-        <button type="button" className="btn btn-secondary shrink-0" onClick={() => { setPage(0); setSearch(inputValue) }}>
-          <span className="icon-[tabler--search] size-4"></span>Search
-        </button>
         {!srNumFilter && (
-          <div className="dropdown relative inline-flex shrink-0">
-            <button type="button" className="dropdown-toggle btn btn-secondary" aria-haspopup="menu" aria-expanded="false">
-              <span className="icon-[tabler--filter] size-4"></span>{filterLabel}
-              <span className="icon-[tabler--chevron-down] dropdown-open:rotate-180 size-4"></span>
-            </button>
-            <ul className="dropdown-menu dropdown-open:opacity-100 hidden min-w-40" role="menu">
-              {[{ value: '', label: 'All' }, { value: 'parts', label: 'Parts' }, { value: 'equipment', label: 'Equipment' }].map(opt => (
-                <li key={opt.value}>
-                  <a className={`dropdown-item${filterBy === opt.value ? ' dropdown-active' : ''}`} href="#"
-                    onClick={e => { e.preventDefault(); setPage(0); setFilterBy(opt.value) }}>{opt.label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <select
+            className="select select-bordered w-40 shrink-0"
+            value={filterBy}
+            onChange={e => { setPage(0); setFilterBy(e.target.value) }}
+          >
+            <option value="">All</option>
+            <option value="parts">Parts</option>
+            <option value="equipment">Equipment</option>
+          </select>
         )}
       </div>
 

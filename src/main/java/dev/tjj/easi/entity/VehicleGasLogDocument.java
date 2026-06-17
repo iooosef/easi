@@ -27,3 +27,5 @@ public class VehicleGasLogDocument {
     @Setter
     private Document document;
 }
+
+
