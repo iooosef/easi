@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { useForm } from "react-hook-form";
 import { useAuth } from "../auth";
 import { useModal } from "../modals/index.js";
 import Layout from "../components/Layout";
@@ -319,6 +320,140 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
   );
 }
 
+/**
+ * L2 modal — ends an active trip by recording the end odometer reading.
+ *
+ * Sends a PUT to /api/vehicle-logs/{vehicleLogId} with all existing log data
+ * preserved, but overrides odometerEnd with the entered value and sets
+ * status to "completed". Only shown when the log's status is "driving".
+ */
+function EndDriveModal({ log, onSuccess }) {
+  const { popModal } = useModal();
+  const { apiFetch } = useAuth();
+
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    defaultValues: { odometerEnd: "" },
+  });
+
+  /**
+   * Submits the end odometer reading.
+   * Re-sends all existing log fields to satisfy the PUT endpoint's required fields,
+   * only changing odometerEnd and status.
+   */
+  async function onSubmit(data) {
+    const res = await apiFetch(`/api/vehicle-logs/${log.vehicleLogId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vehiclesId: log.vehiclesId,
+        purpose: log.purpose,
+        schedId: log.schedId ?? null,
+        destination: log.destination,
+        driverEmployeeId: log.driverEmployeeId ?? null,
+        odometerStart: log.odometerStart ?? null,
+        odometerEnd: Number(data.odometerEnd),
+        status: "completed",
+        date: log.date ?? null,
+      }),
+    });
+    if (!res.ok) {
+      const apiErrors = await parseApiError(res);
+      Object.entries(apiErrors).forEach(([field, message]) => {
+        if (field === "_general") setError("root.serverError", { message });
+        else setError(field, { message });
+      });
+      notyfError("Failed to end drive");
+      return;
+    }
+    popModal();
+    setTimeout(() => notyfSuccess(`Log #${log.vehicleLogId} marked as completed.`), 150);
+    onSuccess?.();
+  }
+
+  return (
+    <div className="modal-content w-full max-w-sm my-auto">
+      <div className="modal-header">
+        <div>
+          <h3 className="modal-title">End Drive — Log #{log.vehicleLogId}</h3>
+          <span className="text-sm text-base-content/50">
+            {log.vehicleModel} · {log.vehiclePlateNum}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
+          onClick={popModal}
+        >
+          <span className="icon-[tabler--x] size-4"></span>
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="modal-body">
+          <div className="flex flex-col gap-4">
+            {/* Show odometer start for context so the user can enter a sensible end value */}
+            <div className="flex items-center justify-between text-sm bg-base-200 rounded-box px-4 py-3">
+              <span className="text-base-content/60">Odometer Start</span>
+              <span className="font-semibold font-mono">
+                {log.odometerStart?.toLocaleString()} km
+              </span>
+            </div>
+
+            {/* End odometer — must be >= odometer start */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">
+                End Odometer (km) <span className="text-error">*</span>
+              </label>
+              <input
+                type="number"
+                className={`input input-bordered w-full${errors.odometerEnd ? " is-invalid" : ""}`}
+                placeholder={`e.g. ${((log.odometerStart ?? 0) + 50).toLocaleString()}`}
+                {...register("odometerEnd", {
+                  required: "End odometer reading is required.",
+                  min: {
+                    value: log.odometerStart ?? 0,
+                    message: `Must be at least ${(log.odometerStart ?? 0).toLocaleString()} km (odometer start).`,
+                  },
+                })}
+              />
+              {errors.odometerEnd && (
+                <span className="helper-text">{errors.odometerEnd.message}</span>
+              )}
+            </div>
+
+            {/* Server / general error fallback */}
+            {errors.root?.serverError && (
+              <div className="alert alert-error py-2">
+                <span className="icon-[tabler--alert-circle] size-4 shrink-0"></span>
+                <span className="text-sm">{errors.root.serverError.message}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="modal-footer">
+          <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-success" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <span className="loading loading-spinner loading-sm"></span>
+            ) : (
+              <span className="icon-[tabler--flag-check] size-4"></span>
+            )}
+            End Drive
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 /** L1 manage panel for a vehicle log — shows details and action menu. */
 export function ManageLogModal({ log: initialLog, onRefresh }) {
   const { pushModal, popModal } = useModal();
@@ -333,10 +468,28 @@ export function ManageLogModal({ log: initialLog, onRefresh }) {
     onRefresh?.();
   }
 
+  // "End Drive" is only shown when the trip is still active (status === "driving")
+  const menuItems = [
+    ...LOG_MENU_ITEMS,
+    ...(log.status === "driving"
+      ? [
+          {
+            key: "end-drive",
+            label: "End Drive",
+            icon: "icon-[tabler--flag-check]",
+            roles: ["ADMIN", "STAFF", "CREW"],
+          },
+        ]
+      : []),
+  ];
+
   function handleAction(key) {
     if (key === "update")
       pushModal(<UpdateLogModal log={log} onRefresh={refreshLog} />);
     if (key === "manage-gas-logs") pushModal(<ManageGasLogsModal log={log} />);
+    // End Drive — push the odometer entry modal on top of this panel
+    if (key === "end-drive")
+      pushModal(<EndDriveModal log={log} onSuccess={refreshLog} />);
   }
 
   return (
@@ -428,7 +581,7 @@ export function ManageLogModal({ log: initialLog, onRefresh }) {
           </div>
         </div>
         <ModalNav
-          items={LOG_MENU_ITEMS}
+          items={menuItems}
           hasRole={hasRole}
           onSelect={handleAction}
           cols={4}
