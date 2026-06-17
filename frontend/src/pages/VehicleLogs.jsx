@@ -255,7 +255,7 @@ function NewVehicleLogModal({ vehiclesId, vehicleLabel, onSuccess }) {
 }
 
 /** L1 manage panel for a vehicle log — shows details and action menu. */
-function ManageLogModal({ log: initialLog, onRefresh }) {
+export function ManageLogModal({ log: initialLog, onRefresh }) {
   const { pushModal, popModal } = useModal()
   const { hasRole, apiFetch } = useAuth()
   const [log, setLog] = useState(initialLog)

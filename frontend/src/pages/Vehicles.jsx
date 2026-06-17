@@ -3,8 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../auth'
 import { useModal } from '../modals/index.js'
 import Layout from '../components/Layout'
-import { NewVehicleModal, UpdateVehicleModal } from './vehicles/VehicleModals'
 import { VehiclePickerModal } from './vehicles/AddVehicleLogFlow'
+import { ManageLogModal } from './VehicleLogs'
 
 /** Formats a LocalDateTime string to a readable date */
 function formatDate(dt) {
@@ -12,7 +12,14 @@ function formatDate(dt) {
   return new Date(dt).toISOString().slice(0, 10)
 }
 
-const PAGE_SIZE = 12
+/** Returns badge class for log status */
+function statusBadgeClass(status) {
+  if (status === 'completed') return 'badge-success'
+  if (status === 'driving')   return 'badge-info'
+  return 'badge-neutral'
+}
+
+const PAGE_SIZE = 10
 
 export default function Vehicles() {
   const { apiFetch, hasRole } = useAuth()
@@ -20,15 +27,18 @@ export default function Vehicles() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [vehicles, setVehicles]           = useState([])
+  const [logs, setLogs]                   = useState([])
   const [loading, setLoading]             = useState(true)
   const [error, setError]                 = useState(null)
   const [search, setSearch]               = useState('')
   const [page, setPage]                   = useState(0)
   const [totalPages, setTotalPages]       = useState(0)
   const [totalElements, setTotalElements] = useState(0)
+  const [refreshKey, setRefreshKey]       = useState(0)
+  const [vehicles, setVehicles]           = useState([])
+  const [vehicleFilter, setVehicleFilter] = useState('')
+  const [statusFilter, setStatusFilter]   = useState('')
 
-  const canEdit   = hasRole('ADMIN', 'STAFF')
   const canAddLog = hasRole('ADMIN', 'STAFF', 'CREW')
 
   /** Auto-open Add Vehicle Log flow when navigated from Home with ?addLog=1 */
@@ -36,39 +46,63 @@ export default function Vehicles() {
     const params = new URLSearchParams(location.search)
     if (params.get('addLog') === '1') {
       navigate(location.pathname, { replace: true })
-      pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)
+      pushModal(<VehiclePickerModal onSuccess={refresh} />)
     }
   }, [])
 
-  async function fetchVehicles() {
+  /** Fetches vehicle list for the filter dropdown. */
+  useEffect(() => {
+    apiFetch('/api/vehicles?size=100&sort=addedOn,desc')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => setVehicles(data.content ?? []))
+      .catch(() => {})
+  }, [apiFetch])
+
+  /** Fetches paginated vehicle logs, optionally filtered by vehiclesId. */
+  useEffect(() => {
+    let active = true
     setLoading(true)
     setError(null)
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        size: String(PAGE_SIZE),
-        sort: 'addedOn,desc',
+    const params = new URLSearchParams({
+      page: String(page),
+      size: String(PAGE_SIZE),
+      sort: 'addedOn,desc',
+    })
+    if (vehicleFilter) params.set('vehiclesId', vehicleFilter)
+    apiFetch(`/api/vehicle-logs?${params}`)
+      .then(res => {
+        if (!res.ok) throw new Error(`Failed to load vehicle logs (${res.status})`)
+        return res.json()
       })
-      const res = await apiFetch(`/api/vehicles?${params}`)
-      if (!res.ok) throw new Error(`Failed to load vehicles (${res.status})`)
-      const data = await res.json()
-      setVehicles(data.content ?? [])
-      setTotalPages(data.totalPages ?? 0)
-      setTotalElements(data.totalElements ?? 0)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+      .then(data => {
+        if (!active) return
+        setLogs(data.content ?? [])
+        setTotalPages(data.totalPages ?? 0)
+        setTotalElements(data.totalElements ?? 0)
+      })
+      .catch(err => { if (active) setError(err.message) })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [apiFetch, page, vehicleFilter, refreshKey])
+
+  function refresh() {
+    setPage(0)
+    setRefreshKey(k => k + 1)
   }
 
-  useEffect(() => { fetchVehicles() }, [apiFetch, page])
-
-  const filtered = vehicles.filter(v =>
-    search === '' ||
-    v.vehicleModel.toLowerCase().includes(search.toLowerCase()) ||
-    v.vehiclePlateNum.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = logs.filter(l => {
+    if (statusFilter && l.status !== statusFilter) return false
+    if (search === '') return true
+    const q = search.toLowerCase()
+    return (
+      String(l.vehicleLogId).includes(q) ||
+      l.vehicleModel.toLowerCase().includes(q) ||
+      l.vehiclePlateNum.toLowerCase().includes(q) ||
+      l.purpose.toLowerCase().includes(q) ||
+      (l.schedId != null && String(l.schedId).includes(q)) ||
+      l.destination.toLowerCase().includes(q)
+    )
+  })
 
   return (
     <Layout activePage="vehicles">
@@ -76,44 +110,63 @@ export default function Vehicles() {
       <div className="flex items-stretch justify-between h-16 mb-6">
         <div>
           <h1 className="text-3xl font-semibold">Vehicles</h1>
-          <p className="text-base-content/60 mt-1">Manage company vehicles and trip records</p>
+          <p className="text-base-content/60 mt-1">All vehicle trip logs</p>
         </div>
         <div className="flex gap-2 items-center h-full">
           {canAddLog && (
             <button
               type="button"
               className="btn btn-secondary h-full min-h-0"
-              onClick={() => pushModal(<VehiclePickerModal onSuccess={fetchVehicles} />)}
+              onClick={() => pushModal(<VehiclePickerModal onSuccess={refresh} />)}
             >
               <span className="icon-[tabler--truck] size-4"></span>
               Add Vehicle Log
             </button>
           )}
-          {canEdit && (
-            <button
-              type="button"
-              className="btn btn-primary h-full min-h-0"
-              onClick={() => pushModal(<NewVehicleModal onSuccess={() => { setPage(0); fetchVehicles() }} />)}
-            >
-              <span className="icon-[tabler--plus] size-4"></span>
-              New Vehicle
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-primary h-full min-h-0"
+            onClick={() => navigate('/vehicles/manage')}
+          >
+            <span className="icon-[tabler--truck] size-4"></span>
+            Manage Vehicles
+          </button>
         </div>
       </div>
 
-      {/* Search row */}
+      {/* Search + vehicle filter row */}
       <div className="flex gap-3 mb-6">
         <div className="relative flex-1">
           <span className="icon-[tabler--search] size-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none"></span>
           <input
             type="text"
             className="input input-bordered w-full pl-9"
-            placeholder="Search by model or plate number..."
+            placeholder="Search by vehicle, plate, log #, purpose, schedule #, or destination..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+        <select
+          className="select select-bordered w-56 shrink-0"
+          value={vehicleFilter}
+          onChange={e => { setVehicleFilter(e.target.value); setPage(0) }}
+        >
+          <option value="">All Vehicles</option>
+          {vehicles.map(v => (
+            <option key={v.vehiclesId} value={String(v.vehiclesId)}>
+              {v.vehicleModel} · {v.vehiclePlateNum}
+            </option>
+          ))}
+        </select>
+        <select
+          className="select select-bordered w-40 shrink-0"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+        >
+          <option value="">All Statuses</option>
+          <option value="driving">Driving</option>
+          <option value="completed">Completed</option>
+        </select>
       </div>
 
       {/* Loading */}
@@ -131,61 +184,65 @@ export default function Vehicles() {
         </div>
       )}
 
-      {/* Vehicle grid */}
+      {/* Table */}
       {!loading && !error && (
         <>
           <p className="text-sm text-base-content/50 mb-3">
-            {totalElements} vehicle{totalElements !== 1 ? 's' : ''} total
+            {totalElements} log{totalElements !== 1 ? 's' : ''} total
             {search && ` · ${filtered.length} shown`}
           </p>
 
           {filtered.length === 0 ? (
             <div className="text-center py-20 text-base-content/40">
-              <span className="icon-[tabler--truck-off] size-12 mx-auto mb-3 block"></span>
-              <p>No vehicles found.</p>
+              <span className="icon-[tabler--road-off] size-12 mx-auto mb-3 block"></span>
+              <p>No vehicle logs found.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map(vehicle => (
-                <div key={vehicle.vehiclesId} className="group">
-                  <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
-                    <div className="card-body gap-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <h2 className="card-title text-base">{vehicle.vehicleModel}</h2>
-                        <span className="badge badge-soft badge-neutral shrink-0 text-xs font-mono">
-                          {vehicle.vehiclePlateNum}
+            <div className="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+              <table className="table table-zebra w-full">
+                <thead>
+                  <tr>
+                    <th>Log #</th>
+                    <th>Vehicle</th>
+                    <th>Date</th>
+                    <th>Purpose</th>
+                    <th>Sched #</th>
+                    <th>Destination</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(l => (
+                    <tr key={l.vehicleLogId}>
+                      <td className="font-mono font-semibold">{l.vehicleLogId}</td>
+                      <td>
+                        <span className="font-medium">{l.vehicleModel}</span>
+                        <span className="text-base-content/40"> · </span>
+                        <span className="font-mono text-xs">{l.vehiclePlateNum}</span>
+                      </td>
+                      <td className="text-sm text-base-content/70">{formatDate(l.addedOn)}</td>
+                      <td className="text-sm">{l.purpose}</td>
+                      <td className="font-mono text-sm">{l.schedId != null ? l.schedId : '—'}</td>
+                      <td className="max-w-[200px] truncate text-sm">{l.destination}</td>
+                      <td>
+                        <span className={`badge badge-soft ${statusBadgeClass(l.status)} text-xs`}>
+                          {l.status.charAt(0).toUpperCase() + l.status.slice(1)}
                         </span>
-                      </div>
-                      <p className="text-sm text-base-content/50">Added {formatDate(vehicle.addedOn)}</p>
-                      <p className="text-sm text-base-content/60">
-                        <span className="icon-[tabler--road] size-3.5 inline-block mr-1 align-middle"></span>
-                        {vehicle.latestOdometer != null
-                          ? <>{vehicle.latestOdometer.toLocaleString()} km</>
-                          : <span className="italic text-base-content/40">No odometer recorded</span>
-                        }
-                      </p>
-                      <div className="card-actions mt-2 flex-col gap-2">
+                      </td>
+                      <td>
                         <button
-                          className="btn btn-soft btn-primary btn-sm w-full"
-                          onClick={() => navigate(`/vehicles/${vehicle.vehiclesId}/logs`, { state: { vehicleModel: vehicle.vehicleModel } })}
+                          className="btn btn-soft btn-primary btn-sm"
+                          onClick={() => pushModal(<ManageLogModal log={l} onRefresh={refresh} />)}
                         >
-                          <span className="icon-[tabler--road] size-4"></span>
-                          Manage Vehicle Logs
+                          <span className="icon-[tabler--settings] size-4"></span>
+                          Manage
                         </button>
-                        {canEdit && (
-                          <button
-                            className="btn btn-soft btn-secondary btn-sm w-full"
-                            onClick={() => pushModal(<UpdateVehicleModal vehicle={vehicle} onSuccess={fetchVehicles} />)}
-                          >
-                            <span className="icon-[tabler--pencil] size-4"></span>
-                            Update Vehicle Info
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
@@ -204,7 +261,6 @@ export default function Vehicles() {
           )}
         </>
       )}
-
     </Layout>
   )
 }
