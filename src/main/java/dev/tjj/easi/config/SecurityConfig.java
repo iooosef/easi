@@ -51,9 +51,11 @@ public class SecurityConfig {
                                                 .requestMatchers("/", "/index.html", "/test", "/assets/**",
                                                                 "/favicon.svg", "/icons.svg", "/favicon.png")
                                                 .permitAll()
-                                                // SPA client-side routes: permit any GET that isn't an API/asset call
+                                                // SPA client-side routes: permit any GET that isn't an API/asset/swagger call
                                                 .requestMatchers(request -> "GET".equals(request.getMethod())
                                                                 && !request.getRequestURI().startsWith("/api/")
+                                                                && !request.getRequestURI().startsWith("/swagger-ui")
+                                                                && !request.getRequestURI().startsWith("/v3/")
                                                                 && !request.getRequestURI().contains("."))
                                                 .permitAll()
                                                 .requestMatchers(
