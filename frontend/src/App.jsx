@@ -7,6 +7,7 @@ import ServiceReports from './pages/ServiceReports'
 import ServiceReportFindings from './pages/ServiceReportFindings'
 import AirConditioningUnits from './pages/AirConditioningUnits'
 import Employees from './pages/Employees'
+import EmployeeDocuments from './pages/EmployeeDocuments'
 import Schedules from './pages/Schedules'
 import NewSchedule from './pages/NewSchedule'
 import NewServiceReport from './pages/NewServiceReport'
@@ -73,6 +74,7 @@ function App() {
       <Route path="/vehicles" element={<Private element={<Vehicles />} />} />
       <Route path="/vehicles/manage" element={<Private element={<VehicleManage />} />} />
       <Route path="/employees" element={<Private element={<Employees />} />} />
+      <Route path="/employees/:employeeId/documents" element={<Private element={<EmployeeDocuments />} />} />
       <Route path="/help" element={<Private element={<Help />} />} />
       <Route path="/maintenance" element={<PrivateRole element={<MaintenancePage />} role="ADMIN" />} />
       <Route path="*" element={<Navigate to="/" replace />} />

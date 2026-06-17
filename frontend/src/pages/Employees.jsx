@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth";
 import { useModal } from "../modals/index.js";
 import Layout from "../components/Layout";
@@ -61,6 +61,7 @@ function formatDate(dt) {
 function ManageEmployeeModal({ emp: initialEmp, onRefresh }) {
   const { pushModal, popModal } = useModal();
   const { hasRole, apiFetch } = useAuth();
+  const navigate = useNavigate();
   const [emp, setEmp] = useState(initialEmp);
 
   async function refreshEmp() {
@@ -101,6 +102,13 @@ function ManageEmployeeModal({ emp: initialEmp, onRefresh }) {
           },
         ]
       : []),
+    // Documents — visible to all roles; navigates to the employee documents page
+    {
+      key: "documents",
+      label: "Documents",
+      icon: "icon-[tabler--files]",
+      roles: null,
+    },
   ];
 
   function handleAction(key) {
@@ -111,6 +119,14 @@ function ManageEmployeeModal({ emp: initialEmp, onRefresh }) {
     if (key === "register-user")
       pushModal(<RegisterUserAccountModal emp={emp} onSuccess={refreshEmp} />);
     if (key === "update-password") pushModal(<UpdatePasswordModal emp={emp} />);
+    if (key === "documents") {
+      // Close the manage panel before navigating so the modal stack is clean
+      popModal();
+      navigate(`/employees/${emp.employeeId}/documents`, {
+        // Pass the employee's full name so the documents page can display it
+        state: { employeeName: fullName(emp) },
+      });
+    }
   }
 
   return (
