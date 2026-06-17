@@ -6,6 +6,7 @@ import ProjectPickerModal from '../pickers/ProjectPickerModal'
 import CrewPickerModal from '../pickers/CrewPickerModal'
 import EquipmentPickerModal from '../pickers/EquipmentPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const EMPTY_FORM = { projNum: '', projName: '', purpose: '', date: '' }
 
@@ -17,13 +18,6 @@ const STEPS = [
   { number: 3, label: 'Select Crew Members' },
   { number: 4, label: 'Select Equipment' },
 ]
-
-/** Parses a failed API response into field-level or general error object */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /**
  * Multi-step schedule creation form shared between the full page and the modal.

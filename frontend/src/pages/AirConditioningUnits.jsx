@@ -5,6 +5,7 @@ import { useModal } from '../modals/index.js'
 import Layout from '../components/Layout'
 import ModalNav from '../modals/ModalNav.jsx'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const STATUS_OPTIONS = ['active', 'inactive', 'maintenance']
 
@@ -19,14 +20,6 @@ const EMPTY_FORM = {
   status: 'active',
 }
 
-/**
- * Parses a failed API response into field-level or general error object.
- */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Returns badge class for AC unit status */
 function statusBadgeClass(status) {

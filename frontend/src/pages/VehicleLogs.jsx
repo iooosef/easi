@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 import ModalNav from '../modals/ModalNav.jsx'
 import { SchedulePickerLayer, DriverPickerLayer } from '../pickers/PickerLayers'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const STATUS_OPTIONS = ['driving', 'completed']
 
@@ -31,14 +32,6 @@ const EMPTY_GAS_FORM = { invoiceId: '', amount: '' }
 const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
 
-/**
- * Parses a failed API response into field-level or general error object.
- */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Formats a LocalDateTime string to a readable date */
 function formatDate(dt) {

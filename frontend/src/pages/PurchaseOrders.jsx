@@ -5,6 +5,7 @@ import { useModal } from '../modals/index.js'
 import Layout from '../components/Layout'
 import ModalNav from '../modals/ModalNav.jsx'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 import SupplierPickerModal from '../pickers/SupplierPickerModal'
 import ServiceReportPickerModal from '../pickers/ServiceReportPickerModal'
 
@@ -18,13 +19,6 @@ function parsePoPaymentMethod(stored) {
   if (lower === 'gcash') return { method: 'ewallet', ewalletType: 'GCash' }
   if (lower.startsWith('ewallet:')) return { method: 'ewallet', ewalletType: stored.slice(8) }
   return { method: '', ewalletType: '' }
-}
-
-/** Parses a failed API response into field-level or general errors. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
 }
 
 /** Returns badge class for part status */

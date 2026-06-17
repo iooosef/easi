@@ -6,13 +6,7 @@ import ModalNav from '../modals/ModalNav.jsx'
 import Layout from '../components/Layout'
 import SupplierPickerModal from '../pickers/SupplierPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
-
-/** Parses a failed API response into a field-level or general error map. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'
 
 /** Formats an ISO date string to YYYY-MM-DD; returns em dash for empty values. */
 function formatDate(dt) {

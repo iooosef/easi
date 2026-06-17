@@ -7,6 +7,7 @@ import ProjectPickerModal from '../pickers/ProjectPickerModal'
 import SchedulePickerModal from '../pickers/SchedulePickerModal'
 import EmployeePickerModal from '../pickers/EmployeePickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const PAYMENT_OPTIONS = ['unset', 'cash', 'check', 'gcash', 'bank']
 const STATUS_OPTIONS = ['unpaid', 'paid', 'partial']
@@ -65,13 +66,6 @@ const EMPTY_PART_FORM = {
   supplierId: '',
   _supplierName: '',
   orderDate: '',
-}
-
-/** Parses a failed API response into field-level or general error object */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
 }
 
 /** Returns badge class for finding type */

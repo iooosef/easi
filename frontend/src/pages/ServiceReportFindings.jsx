@@ -5,6 +5,7 @@ import Layout from '../components/Layout'
 import ModalNav from '../modals/ModalNav.jsx'
 import { useModal } from '../modals/index.js'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const FINDING_MENU_ITEMS_MODAL = [
   { key: 'update', label: 'Update Details', icon: 'icon-[tabler--pencil]', roles: ['ADMIN', 'STAFF', 'CREW'] },
@@ -418,14 +419,6 @@ function AddFindingModal({ srNumber, acUnits, onSuccess }) {
 
 const FINDING_TYPE_OPTIONS = ['GOOD', 'DEFECT', 'WORN', 'DIRTY', 'LEAK', 'FAIL']
 
-/**
- * Parses a failed API response into field-level or general error object.
- */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Returns badge class for finding type */
 function findingTypeBadgeClass(type) {

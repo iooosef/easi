@@ -8,13 +8,7 @@ import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
 import PickerInput from '../components/PickerInput'
 import ProjectPickerModal from '../pickers/ProjectPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
-
-
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'
 
 function formatDate(dt) {
   if (!dt) return '—'

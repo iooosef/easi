@@ -6,6 +6,7 @@ import Modal from '../modals/Modal'
 import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
 import EmployeePickerModal from '../pickers/EmployeePickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const EMPTY_LOG_FORM = {
   purpose: '',
@@ -27,12 +28,6 @@ function findingBadgeClass(type) {
   if (type === 'DEFECT' || type === 'FAIL') return 'badge-error'
   if (type === 'LEAK') return 'badge-warning'
   return 'badge-neutral'
-}
-
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
 }
 
 /** Navigation items shown as Link cards on the Home page. */

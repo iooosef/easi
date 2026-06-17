@@ -8,13 +8,7 @@ import SupplierPickerModal from '../pickers/SupplierPickerModal'
 import PurchaseOrderPickerModal from '../pickers/PurchaseOrderPickerModal'
 import ServiceReportPickerModal from '../pickers/ServiceReportPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
-
-/** Parses a failed API response into field-level or general errors. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'
 
 /** Returns badge class for part status */
 function partStatusBadge(status) {

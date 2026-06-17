@@ -2,12 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../../auth'
 import { useModal } from '../../modals/index.js'
 import { notyfSuccess, notyfError } from '../../notyf'
-
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../../utils/api'
 
 /**
  * Modal for adding a new vehicle.
