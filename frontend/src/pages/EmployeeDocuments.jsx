@@ -16,6 +16,59 @@ function formatDateTime(dt) {
   return String(dt).slice(0, 16).replace("T", " ");
 }
 
+/**
+ * Common employee document type labels shown in the dropdown.
+ * Selecting "Others" reveals a free-text input for custom types.
+ */
+const DOC_TYPES = [
+  "ID Photo",
+  "Signed Contract",
+  "Valid Government ID",
+  "Birth Certificate",
+  "Proof of Address",
+  "Emergency Contact Information",
+  "SSS",
+  "Philhealth",
+  "PAGIBIG",
+  "TIN",
+  "Philhealth MDR",
+  "PAGIBIG MDF",
+];
+
+/**
+ * Builds the final description string from the two form parts.
+ *   - type    : the selected DOC_TYPE label, or the custom type text if "Others"
+ *   - extraInfo : optional additional notes
+ * The two parts are joined with a newline so they remain readable when stored.
+ */
+function buildDescription(docType, customType, extraInfo) {
+  const type = docType === "Others" ? customType.trim() : docType;
+  const extra = extraInfo.trim();
+  if (!type && !extra) return "";
+  if (!extra) return type;
+  if (!type) return extra;
+  return `${type}\n${extra}`;
+}
+
+/**
+ * Parses a stored description string back into the three form fields.
+ * Storage format: "[docType]\n[extraInfo]"
+ *
+ * If the first line matches a known DOC_TYPE it is pre-selected in the dropdown.
+ * If it doesn't match, "Others" is selected and the first line goes into customType.
+ */
+function parseDescription(description) {
+  if (!description) return { docType: "", customType: "", extraInfo: "" };
+  const newlineIdx = description.indexOf("\n");
+  const firstLine = newlineIdx === -1 ? description : description.slice(0, newlineIdx);
+  const rest      = newlineIdx === -1 ? "" : description.slice(newlineIdx + 1);
+  if (DOC_TYPES.includes(firstLine)) {
+    return { docType: firstLine, customType: "", extraInfo: rest };
+  }
+  // First line is a custom type the user typed previously
+  return { docType: firstLine ? "Others" : "", customType: firstLine, extraInfo: rest };
+}
+
 // ─── Upload Document Modal ────────────────────────────────────────────────────
 
 /**
@@ -32,13 +85,17 @@ function UploadDocumentModal({ employeeId, onSuccess }) {
   const { popModal } = useModal();
   const { apiFetch } = useAuth();
 
-  // react-hook-form handles the description textarea
+  // react-hook-form handles all description sub-fields and tracks isSubmitting
   const {
     register,
     handleSubmit,
+    watch,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm({ defaultValues: { description: "" } });
+  } = useForm({ defaultValues: { docType: "", customType: "", extraInfo: "" } });
+
+  // Watch the dropdown so we can conditionally show the "Others" text input
+  const selectedDocType = watch("docType");
 
   // File and its validation error are kept outside RHF because FilePicker
   // returns a File object directly rather than a native change event.
@@ -58,7 +115,8 @@ function UploadDocumentModal({ employeeId, onSuccess }) {
 
   /**
    * Runs on form submit.
-   * Uploads the file first, then creates the employee-document link.
+   * Builds the description from docType + extraInfo, uploads the file,
+   * then creates the employee-document link.
    * On any API failure the inline error is shown and submission stops.
    */
   async function onSubmit(data) {
@@ -69,10 +127,13 @@ function UploadDocumentModal({ employeeId, onSuccess }) {
     }
     setFileError("");
 
+    // Compose the final description string from the structured fields
+    const description = buildDescription(data.docType, data.customType ?? "", data.extraInfo ?? "");
+
     // Step 1 — upload the file to create a document record
     const formData = new FormData();
     formData.append("file", file);
-    if (data.description.trim()) formData.append("description", data.description.trim());
+    if (description) formData.append("description", description);
 
     const uploadRes = await apiFetch("/api/documents", { method: "POST", body: formData });
     if (!uploadRes.ok) {
@@ -131,18 +192,58 @@ function UploadDocumentModal({ employeeId, onSuccess }) {
               <FilePicker file={file} onChange={handleFileChange} error={fileError} />
             </div>
 
-            {/* Description textarea — registered directly with RHF */}
+            {/* Document type dropdown — selecting "Others" reveals a free-text input */}
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Description</label>
+              <label className="label-text font-medium">Document Type</label>
+              <select
+                className={`select select-bordered w-full${errors.docType ? " is-invalid" : ""}`}
+                {...register("docType")}
+              >
+                <option value="">— Select document type —</option>
+                {DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+                <option value="Others">Others</option>
+              </select>
+              {errors.docType && (
+                <span className="helper-text">{errors.docType.message}</span>
+              )}
+            </div>
+
+            {/* Custom type text input — only visible when "Others" is selected */}
+            {selectedDocType === "Others" && (
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">
+                  Specify Type <span className="text-error">*</span>
+                </label>
+                <input
+                  type="text"
+                  className={`input input-bordered w-full${errors.customType ? " is-invalid" : ""}`}
+                  placeholder="e.g. NBI Clearance, Police Clearance..."
+                  maxLength={100}
+                  {...register("customType", {
+                    validate: (v) =>
+                      selectedDocType !== "Others" || v.trim() !== "" || "Please specify the document type.",
+                  })}
+                />
+                {errors.customType && (
+                  <span className="helper-text">{errors.customType.message}</span>
+                )}
+              </div>
+            )}
+
+            {/* Extra information — appended to the description with a newline */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Extra Information</label>
               <textarea
-                className={`textarea textarea-bordered w-full${errors.description ? " is-invalid" : ""}`}
-                placeholder="Optional description..."
-                maxLength={600}
+                className={`textarea textarea-bordered w-full${errors.extraInfo ? " is-invalid" : ""}`}
+                placeholder="Optional extra notes (e.g. expiry date, issuing agency)..."
+                maxLength={500}
                 rows={3}
-                {...register("description")}
+                {...register("extraInfo")}
               />
-              {errors.description && (
-                <span className="helper-text">{errors.description.message}</span>
+              {errors.extraInfo && (
+                <span className="helper-text">{errors.extraInfo.message}</span>
               )}
             </div>
 
@@ -177,30 +278,39 @@ function UploadDocumentModal({ employeeId, onSuccess }) {
 // ─── Update Description Modal ─────────────────────────────────────────────────
 
 /**
- * Modal for editing the text description of an already-linked document.
- * PUTs to /api/documents/{docuId} with the updated description string.
+ * Modal for editing the description of an already-linked document.
+ * PUTs to /api/documents/{docuId} with the rebuilt description string.
  *
- * Pre-populates the textarea with the current description so the user
- * can make targeted edits rather than retyping the whole thing.
+ * The existing description is parsed by parseDescription() back into its
+ * three sub-fields (docType, customType, extraInfo) so the user sees the
+ * same structured form they used when uploading.
  */
 function UpdateDescriptionModal({ doc, onSuccess }) {
   const { popModal } = useModal();
   const { apiFetch } = useAuth();
 
+  // Parse the stored description back into structured form fields
+  const parsed = parseDescription(doc.description ?? "");
+
   const {
     register,
     handleSubmit,
+    watch,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm({ defaultValues: { description: doc.description ?? "" } });
+  } = useForm({ defaultValues: parsed });
 
-  /** Saves the updated description and closes this layer on success. */
+  // Watch the dropdown to conditionally show the "Others" free-text input
+  const selectedDocType = watch("docType");
+
+  /** Rebuilds the description string, saves it, and closes this layer on success. */
   async function onSubmit(data) {
+    const description = buildDescription(data.docType, data.customType ?? "", data.extraInfo ?? "");
     // docuId is the document primary key returned by EmployeeDocumentResponse
     const res = await apiFetch(`/api/documents/${doc.docuId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: data.description }),
+      body: JSON.stringify({ description }),
     });
     if (!res.ok) {
       const apiErrors = await parseApiError(res);
@@ -232,17 +342,58 @@ function UpdateDescriptionModal({ doc, onSuccess }) {
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="modal-body">
           <div className="flex flex-col gap-4">
+            {/* Document type dropdown — pre-selected from the stored description */}
             <div className="flex flex-col gap-1">
-              <label className="label-text font-medium">Description</label>
+              <label className="label-text font-medium">Document Type</label>
+              <select
+                className={`select select-bordered w-full${errors.docType ? " is-invalid" : ""}`}
+                {...register("docType")}
+              >
+                <option value="">— Select document type —</option>
+                {DOC_TYPES.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+                <option value="Others">Others</option>
+              </select>
+              {errors.docType && (
+                <span className="helper-text">{errors.docType.message}</span>
+              )}
+            </div>
+
+            {/* Custom type input — only visible when "Others" is selected */}
+            {selectedDocType === "Others" && (
+              <div className="flex flex-col gap-1">
+                <label className="label-text font-medium">
+                  Specify Type <span className="text-error">*</span>
+                </label>
+                <input
+                  type="text"
+                  className={`input input-bordered w-full${errors.customType ? " is-invalid" : ""}`}
+                  placeholder="e.g. NBI Clearance, Police Clearance..."
+                  maxLength={100}
+                  {...register("customType", {
+                    validate: (v) =>
+                      selectedDocType !== "Others" || v.trim() !== "" || "Please specify the document type.",
+                  })}
+                />
+                {errors.customType && (
+                  <span className="helper-text">{errors.customType.message}</span>
+                )}
+              </div>
+            )}
+
+            {/* Extra information — appended to the description with a newline */}
+            <div className="flex flex-col gap-1">
+              <label className="label-text font-medium">Extra Information</label>
               <textarea
-                className={`textarea textarea-bordered w-full${errors.description ? " is-invalid" : ""}`}
-                placeholder="Optional description..."
-                maxLength={600}
-                rows={4}
-                {...register("description")}
+                className={`textarea textarea-bordered w-full${errors.extraInfo ? " is-invalid" : ""}`}
+                placeholder="Optional extra notes (e.g. expiry date, issuing agency)..."
+                maxLength={500}
+                rows={3}
+                {...register("extraInfo")}
               />
-              {errors.description && (
-                <span className="helper-text">{errors.description.message}</span>
+              {errors.extraInfo && (
+                <span className="helper-text">{errors.extraInfo.message}</span>
               )}
             </div>
 
@@ -384,83 +535,6 @@ function ReplaceFileModal({ doc, onSuccess }) {
               <span className="icon-[tabler--replace] size-4"></span>
             )}
             Replace File
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-// ─── Remove Confirmation Modal ────────────────────────────────────────────────
-
-/**
- * Confirmation modal before removing an employee-document link.
- * DELETEs /api/employee-documents/{empDocId}.
- *
- * The underlying Document record and its stored file are NOT deleted —
- * only the many-to-many link between this employee and the document is removed.
- */
-function RemoveDocumentModal({ doc, onSuccess }) {
-  const { popModal } = useModal();
-  const { apiFetch } = useAuth();
-
-  // isSubmitting is the only RHF value we need here — no fields to register
-  const { handleSubmit, formState: { isSubmitting } } = useForm();
-
-  /** Deletes the employee-document link and closes this layer on success. */
-  async function onSubmit() {
-    const res = await apiFetch(`/api/employee-documents/${doc.empDocId}`, {
-      method: "DELETE",
-    });
-    if (!res.ok) {
-      notyfError("Remove failed");
-      return;
-    }
-    popModal();
-    setTimeout(() => notyfSuccess("Document removed from employee."), 150);
-    onSuccess?.();
-  }
-
-  return (
-    <div className="modal-content w-full max-w-sm my-auto">
-      <div className="modal-header">
-        <h3 className="modal-title">Remove Document</h3>
-        <button
-          type="button"
-          className="btn btn-text btn-circle btn-sm absolute end-3 top-3"
-          onClick={popModal}
-        >
-          <span className="icon-[tabler--x] size-4"></span>
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <div className="modal-body">
-          <div className="flex flex-col gap-3">
-            <p className="text-sm">
-              Remove <span className="font-semibold">{doc.fileName}</span> from this employee?
-            </p>
-            {/* Clarify that only the link is removed, not the physical file */}
-            <div className="alert alert-warning py-2">
-              <span className="icon-[tabler--alert-triangle] size-4 shrink-0"></span>
-              <span className="text-sm">
-                The document file is not deleted — only the link to this employee is removed.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="modal-footer">
-          <button type="button" className="btn btn-soft btn-secondary" onClick={popModal}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-error" disabled={isSubmitting}>
-            {isSubmitting ? (
-              <span className="loading loading-spinner loading-sm"></span>
-            ) : (
-              <span className="icon-[tabler--unlink] size-4"></span>
-            )}
-            Remove
           </button>
         </div>
       </form>
@@ -768,18 +842,6 @@ export default function EmployeeDocuments() {
                             Replace File
                           </button>
 
-                          {/* Remove — deletes only the link, not the file */}
-                          <button
-                            className="btn btn-soft btn-error btn-sm w-full"
-                            onClick={() =>
-                              pushModal(
-                                <RemoveDocumentModal doc={doc} onSuccess={refresh} />,
-                              )
-                            }
-                          >
-                            <span className="icon-[tabler--unlink] size-4"></span>
-                            Remove
-                          </button>
                         </>
                       )}
                     </div>

@@ -37,10 +37,6 @@ The feature lets you:
 | Upload a new document and link it to the employee | ADMIN, STAFF |
 | Edit a document's description | ADMIN, STAFF |
 | Replace the file stored for a document | ADMIN, STAFF |
-| Remove the link between a document and an employee | ADMIN, STAFF |
-
-> **Important distinction:** "removing" a document does NOT delete the file from
-> storage. It only removes the association between that employee and that document.
 
 ---
 
@@ -427,16 +423,6 @@ PUT /api/documents/{docuId}/file    body: FormData with the new file
 ```
 
 Shows a warning alert so the user knows the old file is permanently overwritten.
-
-### RemoveDocumentModal
-
-**Purpose:** Confirm and then delete the employee-document link.
-
-```
-DELETE /api/employee-documents/{empDocId}
-```
-
-Shows a warning alert clarifying that only the **link** is removed, not the file.
 
 ---
 
