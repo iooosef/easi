@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 public class HomeController {
 
-    /** Forwards any unmatched path (no dot = not a static asset) to the React index.html. */
-    @GetMapping(value = { "/", "/{path:(?!assets$)[^\\.]*}", "/{path:(?!assets$)[^\\.]*}/**" })
+    /** Forwards any unmatched path (no dot = not a static asset or swagger route) to the React index.html. */
+    @GetMapping(value = { "/", "/{path:(?!assets$|swagger-ui$|v3$)[^\\.]*}", "/{path:(?!assets$|swagger-ui$|v3$)[^\\.]*}/**" })
     public String spa() {
         return "forward:/index.html";
     }

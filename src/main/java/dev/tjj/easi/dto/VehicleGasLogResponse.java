@@ -6,5 +6,6 @@ public record VehicleGasLogResponse(
         Integer gasLogId,
         Integer vehicleLogId,
         BigDecimal amount,
-        String invoiceId
+        String invoiceId,
+        Integer docuId
 ) {}
