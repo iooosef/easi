@@ -61,7 +61,7 @@ public class EmployeeDocumentService {
 
     /** Returns a page of document links filtered by employee id. */
     public Page<EmployeeDocumentResponse> getByemployee(Integer employee_id, Pageable pageable) {
-        return employeeDocumentRepository.findByEmployee_employee_id(employee_id, pageable).map(this::toResponse);
+        return employeeDocumentRepository.findByEmployeeEmployeeId(employee_id, pageable).map(this::toResponse);
     }
 
     /** Returns all employee document links. */
