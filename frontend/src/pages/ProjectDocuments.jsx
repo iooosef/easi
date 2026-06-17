@@ -1,19 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth'
 import Layout from '../components/Layout'
 import Modal from '../modals/Modal'
 import { notyfSuccess, notyfError } from '../notyf'
-
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
-const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
-
-/** Parses a failed API response into field-level or general errors. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'
+import { ACCEPTED_TYPES, isImage, fileTypeLabel } from '../utils/documents'
+import DocumentViewer from '../components/DocumentViewer'
+import FilePicker from '../components/FilePicker'
 
 /** Formats a datetime string to YYYY-MM-DD HH:MM */
 function formatDateTime(dt) {
@@ -21,17 +15,6 @@ function formatDateTime(dt) {
   return String(dt).slice(0, 16).replace('T', ' ')
 }
 
-/** Returns whether the file type is an image. */
-function isImage(fileType) {
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((fileType ?? '').toLowerCase())
-}
-
-/** Returns a human-readable file type label. */
-function fileTypeLabel(fileType) {
-  if (!fileType) return 'Unknown'
-  const map = { pdf: 'PDF', jpg: 'JPEG Image', jpeg: 'JPEG Image', png: 'PNG Image', gif: 'GIF Image', webp: 'WebP Image' }
-  return map[fileType.toLowerCase()] ?? fileType.toUpperCase()
-}
 
 /**
  * Page for managing multiple documents attached to a project.
@@ -56,7 +39,6 @@ export default function ProjectDocuments() {
   const [addDescription, setAddDescription] = useState('')
   const [addError, setAddError] = useState({})
   const [addSubmitting, setAddSubmitting] = useState(false)
-  const addFileRef = useRef(null)
 
   // Update description modal
   const [updateOpen, setUpdateOpen] = useState(false)
@@ -71,7 +53,6 @@ export default function ProjectDocuments() {
   const [replaceFile, setReplaceFile] = useState(null)
   const [replaceError, setReplaceError] = useState({})
   const [replaceSubmitting, setReplaceSubmitting] = useState(false)
-  const replaceFileRef = useRef(null)
 
   // Remove link confirmation modal
   const [removeOpen, setRemoveOpen] = useState(false)
@@ -108,8 +89,7 @@ export default function ProjectDocuments() {
   function openAdd() { setAddFile(null); setAddDescription(''); setAddError({}); setAddOpen(true) }
   function closeAdd() { setAddOpen(false); setAddFile(null); setAddDescription(''); setAddError({}) }
 
-  function handleAddFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleAddFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setAddError({ file: 'Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.' })
       setAddFile(null)
@@ -191,8 +171,7 @@ export default function ProjectDocuments() {
   function openReplace(doc) { setReplacingDoc(doc); setReplaceFile(null); setReplaceError({}); setReplaceOpen(true) }
   function closeReplace() { setReplaceOpen(false); setReplacingDoc(null); setReplaceFile(null); setReplaceError({}) }
 
-  function handleReplaceFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleReplaceFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setReplaceError({ file: 'Only images and PDFs are accepted.' })
       setReplaceFile(null)
@@ -418,17 +397,7 @@ export default function ProjectDocuments() {
                 File <span className="text-error">*</span>
                 <span className="text-xs text-base-content/50 ml-1">(Images or PDF only)</span>
               </label>
-              <input ref={addFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleAddFileChange} />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${addError.file ? ' btn-error' : ''}`}
-                onClick={() => addFileRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {addFile ? addFile.name : 'Choose file…'}
-              </button>
-              {addError.file && <span className="helper-text">{addError.file}</span>}
-              {addFile && <span className="text-xs text-base-content/50">{(addFile.size / 1024).toFixed(1)} KB</span>}
+              <FilePicker file={addFile} onChange={handleAddFileChange} error={addError.file} />
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Description</label>
@@ -523,17 +492,7 @@ export default function ProjectDocuments() {
                 New File <span className="text-error">*</span>
                 <span className="text-xs text-base-content/50 ml-1">(Images or PDF only)</span>
               </label>
-              <input ref={replaceFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleReplaceFileChange} />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${replaceError.file ? ' btn-error' : ''}`}
-                onClick={() => replaceFileRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {replaceFile ? replaceFile.name : 'Choose file…'}
-              </button>
-              {replaceError.file && <span className="helper-text">{replaceError.file}</span>}
-              {replaceFile && <span className="text-xs text-base-content/50">{(replaceFile.size / 1024).toFixed(1)} KB</span>}
+              <FilePicker file={replaceFile} onChange={handleReplaceFileChange} error={replaceError.file} />
             </div>
             {replaceError._general && (
               <div className="alert alert-error py-2">
@@ -574,32 +533,14 @@ export default function ProjectDocuments() {
         </div>
       </Modal>
 
-      {/* View Document Modal */}
-      {viewOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/60 z-[50]" onClick={closeView} />
-          <div className="fixed inset-0 z-[51] flex flex-col items-center justify-center p-4 gap-3">
-            <div className="flex items-center justify-between w-full max-w-5xl">
-              <span className="text-white font-medium truncate">{viewDocMeta?.fileName ?? 'Document'}</span>
-              <button type="button" className="btn btn-circle btn-sm btn-secondary text-white" onClick={closeView}>
-                <span className="icon-[tabler--x] size-5"></span>
-              </button>
-            </div>
-            <div
-              className="w-full max-w-5xl flex-1 overflow-hidden rounded-box bg-base-100 flex items-center justify-center"
-              style={{ maxHeight: '80vh' }}
-            >
-              {viewLoading ? (
-                <span className="loading loading-spinner loading-lg text-primary"></span>
-              ) : viewBlobUrl && isImage(viewDocMeta?.fileType) ? (
-                <img src={viewBlobUrl} alt={viewDocMeta?.fileName} className="max-w-full max-h-full object-contain" />
-              ) : viewBlobUrl ? (
-                <embed src={viewBlobUrl} type="application/pdf" style={{ width: '100%', height: '70vh' }} />
-              ) : null}
-            </div>
-          </div>
-        </>
-      )}
+      <DocumentViewer
+        isOpen={viewOpen}
+        onClose={closeView}
+        fileName={viewDocMeta?.fileName}
+        fileType={viewDocMeta?.fileType}
+        blobUrl={viewBlobUrl}
+        loading={viewLoading}
+      />
     </Layout>
   )
 }

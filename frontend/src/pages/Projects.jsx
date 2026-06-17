@@ -4,6 +4,7 @@ import { useAuth } from '../auth'
 import Layout from '../components/Layout'
 import { useModal } from '../modals/index.js'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const STATUS_OPTIONS = ['All Status', 'active', 'completed', 'inactive']
 const TYPE_OPTIONS   = ['ESTABLISHMENT', 'HOUSEHOLD']
@@ -29,15 +30,6 @@ const EMPTY_FORM = {
   status: 'active',
 }
 
-/**
- * Parses a failed API response into a field-error map.
- * Returns { fieldName: message } for validation errors, { _general: message } otherwise.
- */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Tiny SVG donut showing installation progress percentage */
 function ProgressDonut({ value = 0 }) {

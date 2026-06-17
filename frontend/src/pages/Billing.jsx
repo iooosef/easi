@@ -6,15 +6,9 @@ import Modal from '../modals/Modal.jsx'
 import { useModal } from '../modals/index.js'
 import ModalNav from '../modals/ModalNav.jsx'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const SR_PAGE_SIZE = 10
-
-/** Parses a failed API response into field-level or general errors. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Formats a date/datetime string to YYYY-MM-DD */
 function formatDate(dt) {

@@ -5,6 +5,7 @@ import Layout from '../components/Layout'
 import PickerInput from '../components/PickerInput'
 import ProjectPickerModal from '../pickers/ProjectPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 
 const STEPS = [
   { number: 1, label: 'Purchase Order' },
@@ -26,13 +27,6 @@ const EMPTY_EQUIP = {
 }
 
 const EMPTY_DOC_FORM = { invoiceId: '', file: null }
-
-/** Parses a failed API response into field-level or general error object */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Page for creating a new Purchase Order with equipment items and optional documents */
 export default function NewEquipmentPO() {

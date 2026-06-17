@@ -4,13 +4,7 @@ import { useAuth } from '../auth'
 import { useModal } from '../modals/index.js'
 import Layout from '../components/Layout'
 import { notyfSuccess, notyfError } from '../notyf'
-
-/** Parses a failed API response into field-level or general errors. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'
 
 /** Formats a datetime string to YYYY-MM-DD */
 function formatDate(dt) {

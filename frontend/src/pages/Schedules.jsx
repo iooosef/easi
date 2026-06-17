@@ -8,19 +8,13 @@ import CrewPickerModal from '../pickers/CrewPickerModal'
 import NewScheduleForm from '../components/NewScheduleForm'
 import EquipmentPickerModal from '../pickers/EquipmentPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
 import CalendarPanel, { statusDotColor } from '../components/CalendarPanel'
 import { ManageSRModal } from './ServiceReports'
 
 const STATUS_OPTIONS = ['pending', 'confirmed', 'completed', 'cancelled']
 const LIST_SIZE = 8
 
-
-/** Parses a failed API response into field-level or general error object */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
 
 /** Returns FlyonUI badge classes for a given schedule status */
 function statusBadge(status) {

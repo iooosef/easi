@@ -1,24 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth'
 import Layout from '../components/Layout'
 import Modal from '../modals/Modal'
 import { notyfSuccess, notyfError } from '../notyf'
-
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
-const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
-
-/** Parses a failed API response into field-level or general errors. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
-
-/** Returns whether the file type is an image. */
-function isImage(fileType) {
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((fileType ?? '').toLowerCase())
-}
+import { parseApiError } from '../utils/api'
+import { ACCEPTED_TYPES, isImage } from '../utils/documents'
+import DocumentViewer from '../components/DocumentViewer'
+import FilePicker from '../components/FilePicker'
 
 /**
  * Page for managing documents attached to a specific purchase order.
@@ -44,7 +33,6 @@ export default function PurchaseOrderDocuments() {
   const [addFile, setAddFile] = useState(null)
   const [addError, setAddError] = useState({})
   const [addSubmitting, setAddSubmitting] = useState(false)
-  const addFileRef = useRef(null)
 
   // Update Invoice ID modal
   const [updateOpen, setUpdateOpen] = useState(false)
@@ -60,7 +48,6 @@ export default function PurchaseOrderDocuments() {
   const [uploadDescription, setUploadDescription] = useState('')
   const [uploadError, setUploadError] = useState({})
   const [uploadSubmitting, setUploadSubmitting] = useState(false)
-  const uploadFileRef = useRef(null)
 
   // Replace file modal
   const [replaceOpen, setReplaceOpen] = useState(false)
@@ -68,7 +55,6 @@ export default function PurchaseOrderDocuments() {
   const [replaceFile, setReplaceFile] = useState(null)
   const [replaceError, setReplaceError] = useState({})
   const [replaceSubmitting, setReplaceSubmitting] = useState(false)
-  const replaceFileRef = useRef(null)
 
   // View document modal
   const [viewOpen, setViewOpen] = useState(false)
@@ -100,8 +86,7 @@ export default function PurchaseOrderDocuments() {
   function openAdd() { setAddInvoiceId(''); setAddFile(null); setAddError({}); setAddOpen(true) }
   function closeAdd() { setAddOpen(false); setAddInvoiceId(''); setAddFile(null); setAddError({}) }
 
-  function handleAddFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleAddFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setAddError(prev => ({ ...prev, file: 'Only images and PDFs are accepted.' }))
       setAddFile(null)
@@ -182,8 +167,7 @@ export default function PurchaseOrderDocuments() {
   function openUpload(doc) { setUploadingDoc(doc); setUploadFile(null); setUploadDescription(''); setUploadError({}); setUploadOpen(true) }
   function closeUpload() { setUploadOpen(false); setUploadingDoc(null); setUploadFile(null); setUploadDescription(''); setUploadError({}) }
 
-  function handleUploadFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleUploadFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setUploadError({ file: 'Only images and PDFs are accepted.' })
       setUploadFile(null)
@@ -233,8 +217,7 @@ export default function PurchaseOrderDocuments() {
   function openReplace(doc) { setReplacingDoc(doc); setReplaceFile(null); setReplaceError({}); setReplaceOpen(true) }
   function closeReplace() { setReplaceOpen(false); setReplacingDoc(null); setReplaceFile(null); setReplaceError({}) }
 
-  function handleReplaceFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleReplaceFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setReplaceError({ file: 'Only images and PDFs are accepted.' })
       setReplaceFile(null)
@@ -453,17 +436,7 @@ export default function PurchaseOrderDocuments() {
               <label className="label-text font-medium">
                 File <span className="text-base-content/50 text-xs ml-1">(optional — images or PDF)</span>
               </label>
-              <input ref={addFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleAddFileChange} />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${addError.file ? ' btn-error' : ''}`}
-                onClick={() => addFileRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {addFile ? addFile.name : 'Choose file…'}
-              </button>
-              {addError.file && <span className="helper-text">{addError.file}</span>}
-              {addFile && <span className="text-xs text-base-content/50">{(addFile.size / 1024).toFixed(1)} KB</span>}
+              <FilePicker file={addFile} onChange={handleAddFileChange} error={addError.file} />
             </div>
             {addError._general && (
               <div className="alert alert-error py-2">
@@ -542,17 +515,7 @@ export default function PurchaseOrderDocuments() {
                 File <span className="text-error">*</span>
                 <span className="text-xs text-base-content/50 ml-1">(images or PDF only)</span>
               </label>
-              <input ref={uploadFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleUploadFileChange} />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${uploadError.file ? ' btn-error' : ''}`}
-                onClick={() => uploadFileRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {uploadFile ? uploadFile.name : 'Choose file…'}
-              </button>
-              {uploadError.file && <span className="helper-text">{uploadError.file}</span>}
-              {uploadFile && <span className="text-xs text-base-content/50">{(uploadFile.size / 1024).toFixed(1)} KB</span>}
+              <FilePicker file={uploadFile} onChange={handleUploadFileChange} error={uploadError.file} />
             </div>
             <div className="flex flex-col gap-1">
               <label className="label-text font-medium">Description</label>
@@ -604,17 +567,7 @@ export default function PurchaseOrderDocuments() {
                 New File <span className="text-error">*</span>
                 <span className="text-xs text-base-content/50 ml-1">(images or PDF only)</span>
               </label>
-              <input ref={replaceFileRef} type="file" accept={ACCEPTED_EXTENSIONS} className="hidden" onChange={handleReplaceFileChange} />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${replaceError.file ? ' btn-error' : ''}`}
-                onClick={() => replaceFileRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {replaceFile ? replaceFile.name : 'Choose file…'}
-              </button>
-              {replaceError.file && <span className="helper-text">{replaceError.file}</span>}
-              {replaceFile && <span className="text-xs text-base-content/50">{(replaceFile.size / 1024).toFixed(1)} KB</span>}
+              <FilePicker file={replaceFile} onChange={handleReplaceFileChange} error={replaceError.file} />
             </div>
             {replaceError._general && (
               <div className="alert alert-error py-2">
@@ -626,32 +579,14 @@ export default function PurchaseOrderDocuments() {
         </form>
       </Modal>
 
-      {/* View Document Modal */}
-      {viewOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/60 z-[50]" onClick={closeView} />
-          <div className="fixed inset-0 z-[51] flex flex-col items-center justify-center p-4 gap-3">
-            <div className="flex items-center justify-between w-full max-w-5xl">
-              <span className="text-white font-medium truncate">{viewDocMeta?.fileName ?? 'Document'}</span>
-              <button type="button" className="btn btn-circle btn-sm btn-secondary text-white" onClick={closeView}>
-                <span className="icon-[tabler--x] size-5"></span>
-              </button>
-            </div>
-            <div
-              className="w-full max-w-5xl flex-1 overflow-hidden rounded-box bg-base-100 flex items-center justify-center"
-              style={{ maxHeight: '80vh' }}
-            >
-              {viewLoading ? (
-                <span className="loading loading-spinner loading-lg text-primary"></span>
-              ) : viewBlobUrl && isImage(viewDocMeta?.fileType) ? (
-                <img src={viewBlobUrl} alt={viewDocMeta?.fileName} className="max-w-full max-h-full object-contain" />
-              ) : viewBlobUrl ? (
-                <embed src={viewBlobUrl} type="application/pdf" style={{ width: '100%', height: '70vh' }} />
-              ) : null}
-            </div>
-          </div>
-        </>
-      )}
+      <DocumentViewer
+        isOpen={viewOpen}
+        onClose={closeView}
+        fileName={viewDocMeta?.fileName}
+        fileType={viewDocMeta?.fileType}
+        blobUrl={viewBlobUrl}
+        loading={viewLoading}
+      />
     </Layout>
   )
 }

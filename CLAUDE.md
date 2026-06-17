@@ -41,18 +41,33 @@ Every service method that adds, updates, or deletes data must call `logService.l
 Frontend in /frontend dir
 Frontend framework is React using FlyonUI (Tailwind CSS component library)
 
+### shared frontend utilities and components
+
+**`frontend/src/utils/api.js`** — `parseApiError(res)`: parses a failed API response into a field-error map. Import this in every page/component that calls the API — never redefine it locally.
+
+**`frontend/src/utils/documents.js`** — `ACCEPTED_TYPES`, `ACCEPTED_EXTENSIONS`, `isImage(fileType)`, `fileTypeLabel(fileType)`: shared constants and helpers for file upload features. Import from here instead of redefining.
+
+**`frontend/src/components/FilePicker.jsx`** — styled file picker (hidden input + button). Use instead of the raw `<input type="file">` + `useRef` pattern:
+```jsx
+import FilePicker from '../components/FilePicker'
+// onChange receives the File object (or null), not a change event
+<FilePicker file={selectedFile} onChange={handleFileChange} error={formError.file} />
+```
+
+**`frontend/src/components/DocumentViewer.jsx`** — fullscreen overlay for viewing a document blob (image or PDF):
+```jsx
+import DocumentViewer from '../components/DocumentViewer'
+<DocumentViewer isOpen={viewOpen} onClose={closeView} fileName={doc.fileName} fileType={doc.fileType} blobUrl={viewBlobUrl} loading={viewLoading} />
+```
+
 ### frontend form validation
 All forms that submit to the API must handle validation errors inline on each field using FlyonUI's `is-invalid` and `helper-text` pattern.
 
 Backend returns `{ "errors": { "fieldName": "message" } }` for `@Valid` violations, or `{ "error": "message" }` for other errors.
 
-Parse errors with this helper (defined per page file):
+Parse errors using the shared helper — import, do not redefine:
 ```js
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'  // adjust path for your file's location
 ```
 
 Form error state is an object `{}` (not a string or null). On a failed response:

@@ -8,13 +8,7 @@ import AnySchedulePickerModal from '../pickers/AnySchedulePickerModal'
 import PickerInput from '../components/PickerInput'
 import ProjectPickerModal from '../pickers/ProjectPickerModal'
 import { notyfSuccess, notyfError } from '../notyf'
-
-
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
+import { parseApiError } from '../utils/api'
 
 function formatDate(dt) {
   if (!dt) return '—'
@@ -1285,7 +1279,10 @@ export default function InventoryEquipment() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function commitSearch() { setPage(0); setSearch(inputValue) }
+  useEffect(() => {
+    const timer = setTimeout(() => { setPage(0); setSearch(inputValue) }, 400)
+    return () => clearTimeout(timer)
+  }, [inputValue])
 
   return (
     <Layout activePage="inventory">
@@ -1314,41 +1311,32 @@ export default function InventoryEquipment() {
             placeholder="Search by name or model..."
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') commitSearch() }}
           />
         </div>
-        <button type="button" className="btn btn-secondary shrink-0" onClick={commitSearch}>
-          <span className="icon-[tabler--search] size-4"></span>
-          Search
-        </button>
 
         {/* Type filter */}
-        <div className="dropdown relative inline-flex shrink-0">
-          <button type="button" className="dropdown-toggle btn btn-secondary" aria-haspopup="menu" aria-expanded="false">
-            <span className="icon-[tabler--filter] size-4"></span>
-            {typeFilter || 'All Types'}
-            <span className="icon-[tabler--chevron-down] dropdown-open:rotate-180 size-4"></span>
-          </button>
-          <ul className="dropdown-menu dropdown-open:opacity-100 hidden min-w-36" role="menu">
-            {['', 'durable', 'consumable'].map(v => (
-              <li key={v}><a className={`dropdown-item${typeFilter === v ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); setPage(0); setTypeFilter(v) }}>{v || 'All Types'}</a></li>
-            ))}
-          </ul>
-        </div>
+        <select
+          className="select select-bordered w-36 shrink-0"
+          value={typeFilter}
+          onChange={e => { setPage(0); setTypeFilter(e.target.value) }}
+        >
+          <option value="">All Types</option>
+          <option value="durable">durable</option>
+          <option value="consumable">consumable</option>
+        </select>
 
         {/* Status filter */}
-        <div className="dropdown relative inline-flex shrink-0">
-          <button type="button" className="dropdown-toggle btn btn-secondary" aria-haspopup="menu" aria-expanded="false">
-            <span className="icon-[tabler--filter] size-4"></span>
-            {statusFilter || 'All Status'}
-            <span className="icon-[tabler--chevron-down] dropdown-open:rotate-180 size-4"></span>
-          </button>
-          <ul className="dropdown-menu dropdown-open:opacity-100 hidden min-w-44" role="menu">
-            {['', 'active', 'under_maintenance', 'retired', 'depleted'].map(v => (
-              <li key={v}><a className={`dropdown-item${statusFilter === v ? ' dropdown-active' : ''}`} href="#" onClick={e => { e.preventDefault(); setPage(0); setStatusFilter(v) }}>{v || 'All Status'}</a></li>
-            ))}
-          </ul>
-        </div>
+        <select
+          className="select select-bordered w-48 shrink-0"
+          value={statusFilter}
+          onChange={e => { setPage(0); setStatusFilter(e.target.value) }}
+        >
+          <option value="">All Status</option>
+          <option value="active">active</option>
+          <option value="under_maintenance">under_maintenance</option>
+          <option value="retired">retired</option>
+          <option value="depleted">depleted</option>
+        </select>
       </div>
 
       {/* Loading */}

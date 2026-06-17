@@ -1,9 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useAuth } from '../auth'
 import Layout from '../components/Layout'
 import Modal from '../modals/Modal'
 import { notyfSuccess, notyfError } from '../notyf'
+import { parseApiError } from '../utils/api'
+import { ACCEPTED_TYPES, isImage, fileTypeLabel } from '../utils/documents'
+import DocumentViewer from '../components/DocumentViewer'
+import FilePicker from '../components/FilePicker'
 
 /**
  * Entity-specific config table for document management.
@@ -20,33 +24,12 @@ const ENTITY_CONFIGS = {
   },
 }
 
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
-const ACCEPTED_EXTENSIONS = '.jpg,.jpeg,.png,.gif,.webp,.pdf'
-
-/** Parses a failed API response into field-level or general error object. */
-async function parseApiError(res) {
-  const data = await res.json().catch(() => ({}))
-  if (data.errors) return data.errors
-  return { _general: data.message ?? data.error ?? `Error ${res.status}` }
-}
-
 /** Formats a datetime string to YYYY-MM-DD HH:MM */
 function formatDateTime(dt) {
   if (!dt) return '—'
   return String(dt).slice(0, 16).replace('T', ' ')
 }
 
-/** Returns a human-readable file type label. */
-function fileTypeLabel(fileType) {
-  if (!fileType) return 'Unknown'
-  const map = { pdf: 'PDF', jpg: 'JPEG Image', jpeg: 'JPEG Image', png: 'PNG Image', gif: 'GIF Image', webp: 'WebP Image' }
-  return map[fileType.toLowerCase()] ?? fileType.toUpperCase()
-}
-
-/** Determines whether the file type is an image (vs PDF). */
-function isImage(fileType) {
-  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes((fileType ?? '').toLowerCase())
-}
 
 /**
  * Reusable document management page.
@@ -81,7 +64,6 @@ export default function Documents() {
   const [addDescription, setAddDescription] = useState('')
   const [addError, setAddError]         = useState({})
   const [addSubmitting, setAddSubmitting] = useState(false)
-  const fileInputRef = useRef(null)
 
   // Update description modal
   const [updateOpen, setUpdateOpen]         = useState(false)
@@ -94,7 +76,6 @@ export default function Documents() {
   const [replaceFile, setReplaceFile]           = useState(null)
   const [replaceError, setReplaceError]         = useState({})
   const [replaceSubmitting, setReplaceSubmitting] = useState(false)
-  const replaceFileInputRef = useRef(null)
 
   // View document modal
   const [viewOpen, setViewOpen]       = useState(false)
@@ -157,8 +138,7 @@ export default function Documents() {
     setReplaceError({})
   }
 
-  function handleReplaceFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleReplaceFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setReplaceError({ file: 'Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.' })
       setReplaceFile(null)
@@ -211,8 +191,7 @@ export default function Documents() {
     setUpdateError({})
   }
 
-  function handleFileChange(e) {
-    const file = e.target.files?.[0] ?? null
+  function handleFileChange(file) {
     if (file && !ACCEPTED_TYPES.includes(file.type)) {
       setAddError({ file: 'Only images (JPEG, PNG, GIF, WebP) and PDFs are accepted.' })
       setAddFile(null)
@@ -475,25 +454,7 @@ export default function Documents() {
                 File <span className="text-error">*</span>
                 <span className="text-xs text-base-content/50 ml-1">(Images or PDF only)</span>
               </label>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${addError.file ? ' btn-error' : ''}`}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {addFile ? addFile.name : 'Choose file…'}
-              </button>
-              {addError.file && <span className="helper-text">{addError.file}</span>}
-              {addFile && (
-                <span className="text-xs text-base-content/50">{(addFile.size / 1024).toFixed(1)} KB</span>
-              )}
+              <FilePicker file={addFile} onChange={handleFileChange} error={addError.file} />
             </div>
 
             <div className="flex flex-col gap-1">
@@ -551,25 +512,7 @@ export default function Documents() {
                 New File <span className="text-error">*</span>
                 <span className="text-xs text-base-content/50 ml-1">(Images or PDF only)</span>
               </label>
-              <input
-                ref={replaceFileInputRef}
-                type="file"
-                accept={ACCEPTED_EXTENSIONS}
-                className="hidden"
-                onChange={handleReplaceFileChange}
-              />
-              <button
-                type="button"
-                className={`btn btn-outline w-full justify-start font-normal${replaceError.file ? ' btn-error' : ''}`}
-                onClick={() => replaceFileInputRef.current?.click()}
-              >
-                <span className="icon-[tabler--paperclip] size-4"></span>
-                {replaceFile ? replaceFile.name : 'Choose file…'}
-              </button>
-              {replaceError.file && <span className="helper-text">{replaceError.file}</span>}
-              {replaceFile && (
-                <span className="text-xs text-base-content/50">{(replaceFile.size / 1024).toFixed(1)} KB</span>
-              )}
+              <FilePicker file={replaceFile} onChange={handleReplaceFileChange} error={replaceError.file} />
             </div>
 
             {replaceError._general && (
@@ -626,42 +569,14 @@ export default function Documents() {
         </form>
       </Modal>
 
-      {/* View Document Modal */}
-      {viewOpen && (
-        <>
-          <div className="fixed inset-0 bg-black/60 z-[50]" onClick={closeView} />
-          <div className="fixed inset-0 z-[51] flex flex-col items-center justify-center p-4 gap-3">
-            <div className="flex items-center justify-between w-full max-w-5xl">
-              <span className="text-white font-medium truncate">{document?.fileName}</span>
-              <button
-                type="button"
-                className="btn btn-circle btn-sm btn-secondary text-white"
-                onClick={closeView}
-              >
-                <span className="icon-[tabler--x] size-5"></span>
-              </button>
-            </div>
-
-            <div className="w-full max-w-5xl flex-1 overflow-hidden rounded-box bg-base-100 flex items-center justify-center" style={{ maxHeight: '80vh' }}>
-              {viewLoading ? (
-                <span className="loading loading-spinner loading-lg text-primary"></span>
-              ) : viewBlobUrl && isImage(document?.fileType) ? (
-                <img
-                  src={viewBlobUrl}
-                  alt={document?.fileName}
-                  className="max-w-full max-h-full object-contain"
-                />
-              ) : viewBlobUrl ? (
-                <embed
-                  src={viewBlobUrl}
-                  type="application/pdf"
-                  style={{ width: '100%', height: '70vh' }}
-                />
-              ) : null}
-            </div>
-          </div>
-        </>
-      )}
+      <DocumentViewer
+        isOpen={viewOpen}
+        onClose={closeView}
+        fileName={document?.fileName}
+        fileType={document?.fileType}
+        blobUrl={viewBlobUrl}
+        loading={viewLoading}
+      />
     </Layout>
   )
 }
