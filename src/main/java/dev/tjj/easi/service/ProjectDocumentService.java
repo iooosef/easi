@@ -17,7 +17,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Handles project document link business logic: creation, deletion, and retrieval. */
+/**
+ * Handles project document link business logic: creation, deletion, and
+ * retrieval.
+ */
 @Service
 public class ProjectDocumentService {
 
@@ -26,10 +29,11 @@ public class ProjectDocumentService {
     private final DocumentRepository documentRepository;
     private final LogService logService;
 
+    /// constructor
     public ProjectDocumentService(ProjectDocumentRepository projectDocumentRepository,
-                                  ProjectRepository projectRepository,
-                                  DocumentRepository documentRepository,
-                                  LogService logService) {
+            ProjectRepository projectRepository,
+            DocumentRepository documentRepository,
+            LogService logService) {
         this.projectDocumentRepository = projectDocumentRepository;
         this.projectRepository = projectRepository;
         this.documentRepository = documentRepository;
@@ -55,7 +59,10 @@ public class ProjectDocumentService {
         return toResponse(saved);
     }
 
-    /** Removes a project-document link by its ID. The document file itself is not deleted. */
+    /**
+     * Removes a project-document link by its ID. The document file itself is not
+     * deleted.
+     */
     @Transactional
     public void delete(Integer projDocId) {
         ProjectDocument pd = projectDocumentRepository.findById(projDocId)
@@ -96,7 +103,6 @@ public class ProjectDocumentService {
                 d.getFileName(),
                 d.getFileType(),
                 d.getDescription(),
-                d.getAddedOn()
-        );
+                d.getAddedOn());
     }
 }
