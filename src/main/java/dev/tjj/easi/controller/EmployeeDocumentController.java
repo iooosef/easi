@@ -2,12 +2,7 @@ package dev.tjj.easi.controller;
 
 import dev.tjj.easi.dto.EmployeeDocumentRequest;
 import dev.tjj.easi.dto.EmployeeDocumentResponse;
-import dev.tjj.easi.dto.ProjectDocumentRequest;
-import dev.tjj.easi.dto.ProjectDocumentResponse;
-import dev.tjj.easi.entity.Employee;
-import dev.tjj.easi.entity.EmployeeDocument;
 import dev.tjj.easi.service.EmployeeDocumentService;
-import dev.tjj.easi.service.ProjectDocumentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -25,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * ADMIN and STAFF can link and remove documents.
  * All authenticated users can view employee document links.
  */
-@Tag(name = "Employee Documents", description = "Manage documents linked to a employee")
+@Tag(name = "Employee Documents", description = "Manage documents linked to an employee")
 @RestController
 @RequestMapping("/api/employee-documents")
 public class EmployeeDocumentController {
@@ -62,14 +57,14 @@ public class EmployeeDocumentController {
     })
     @DeleteMapping("/{emp_doc_id}")
     public ResponseEntity<Void> delete(
-            @Parameter(description = "Employee document link ID", example = "1") @PathVariable Integer employee) {
-        employeeDocumentService.delete(employee);
+            @Parameter(description = "Employee document link ID", example = "1") @PathVariable Integer emp_doc_id) {
+        employeeDocumentService.delete(emp_doc_id);
         return ResponseEntity.noContent().build();
     }
 
     /** Returns employee document links. Filter by employee_id to get documents for a specific employee. */
     @Operation(summary = "List employee document links",
-               description = "Returns a page of emplo document links. Pass projNum to filter by project. Without projNum, returns all links.")
+               description = "Returns a page of employee document links. Pass employee to filter by employee. Without employee, returns all links.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "List returned successfully"),
         @ApiResponse(responseCode = "401", description = "Unauthorized")

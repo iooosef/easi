@@ -2,8 +2,6 @@ package dev.tjj.easi.service;
 
 import dev.tjj.easi.dto.EmployeeDocumentRequest;
 import dev.tjj.easi.dto.EmployeeDocumentResponse;
-import dev.tjj.easi.dto.ProjectDocumentRequest;
-import dev.tjj.easi.dto.ProjectDocumentResponse;
 import dev.tjj.easi.entity.*;
 import dev.tjj.easi.repository.*;
 import org.springframework.data.domain.Page;
@@ -46,7 +44,7 @@ public class EmployeeDocumentService {
 
         EmployeeDocument saved = employeeDocumentRepository.save(ed);
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "CREATE", "EmployeeDocument",
-                String.valueOf(saved.getEmployee()),
+                String.valueOf(saved.getEmployee().getEmployeeId()),
                 "Linked document #" + request.docuId() + " to employee #" + request.employeeId(), null);
         return toResponse(saved);
     }
@@ -58,7 +56,7 @@ public class EmployeeDocumentService {
                 .orElseThrow(() -> new IllegalArgumentException("employee document link not found."));
         employeeDocumentRepository.delete(pd);
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "DELETE", "EmployeeDocument",
-                String.valueOf(emp_doc_id), "Removed employee    document link #" + emp_doc_id, null);
+                String.valueOf(emp_doc_id), "Removed employee document link #" + emp_doc_id, null);
     }
 
     /** Returns a page of document links filtered by employee id. */
