@@ -15,6 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Handles vehicle maintenance log business logic: creation, update, and retrieval. */
 @Service
 public class VehicleMaintenanceLogService {
 
@@ -37,9 +38,8 @@ public class VehicleMaintenanceLogService {
         applyRequest(mntLog, request);
         VehicleMaintenanceLog saved = maintenanceLogRepository.save(mntLog);
         
-        // Linking action to LogService for auditing logs
-        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, 
-            "CREATE", "VehicleMaintenanceLog", String.valueOf(saved.getMntLogId()), 
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO,
+            "CREATE", "VehicleMaintenanceLog", String.valueOf(saved.getMntLogId()),
             "Created vehicle maintenance log #" + saved.getMntLogId(), null);
             
         return toResponse(saved);
@@ -53,9 +53,8 @@ public class VehicleMaintenanceLogService {
         applyRequest(mntLog, request);
         VehicleMaintenanceLog saved = maintenanceLogRepository.save(mntLog);
         
-        // Linking update to LogService for auditing logs
-        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, 
-            "UPDATE", "VehicleMaintenanceLog", String.valueOf(mntLogId), 
+        logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO,
+            "UPDATE", "VehicleMaintenanceLog", String.valueOf(mntLogId),
             "Updated vehicle maintenance log #" + mntLogId, null);
             
         return toResponse(saved);

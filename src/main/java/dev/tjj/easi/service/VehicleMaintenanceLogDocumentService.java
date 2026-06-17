@@ -59,8 +59,8 @@ public class VehicleMaintenanceLogDocumentService {
                 "CREATE",
                 "VehicleMaintenanceLogDocument",
                 String.valueOf(saved.getMntLogDocId()),
-                "Attached document to maintenance log #" +
-                        saved.getMntLogDocId(),
+                "Attached document #" + saved.getDocument().getDocuId() +
+                        " to maintenance log #" + saved.getVehicleMaintenanceLog().getMntLogId(),
                 null
         );
 
