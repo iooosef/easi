@@ -196,8 +196,8 @@ function UpdateDescriptionModal({ doc, onSuccess }) {
 
   /** Saves the updated description and closes this layer on success. */
   async function onSubmit(data) {
-    // docu_Id is the document primary key returned by EmployeeDocumentResponse
-    const res = await apiFetch(`/api/documents/${doc.docu_Id}`, {
+    // docuId is the document primary key returned by EmployeeDocumentResponse
+    const res = await apiFetch(`/api/documents/${doc.docuId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description: data.description }),
@@ -317,7 +317,7 @@ function ReplaceFileModal({ doc, onSuccess }) {
 
     const formData = new FormData();
     formData.append("file", file);
-    const res = await apiFetch(`/api/documents/${doc.docu_Id}/file`, {
+    const res = await apiFetch(`/api/documents/${doc.docuId}/file`, {
       method: "PUT",
       body: formData,
     });
@@ -395,7 +395,7 @@ function ReplaceFileModal({ doc, onSuccess }) {
 
 /**
  * Confirmation modal before removing an employee-document link.
- * DELETEs /api/employee-documents/{emp_doc_id}.
+ * DELETEs /api/employee-documents/{empDocId}.
  *
  * The underlying Document record and its stored file are NOT deleted —
  * only the many-to-many link between this employee and the document is removed.
@@ -409,7 +409,7 @@ function RemoveDocumentModal({ doc, onSuccess }) {
 
   /** Deletes the employee-document link and closes this layer on success. */
   async function onSubmit() {
-    const res = await apiFetch(`/api/employee-documents/${doc.emp_doc_id}`, {
+    const res = await apiFetch(`/api/employee-documents/${doc.empDocId}`, {
       method: "DELETE",
     });
     if (!res.ok) {
@@ -522,7 +522,7 @@ export default function EmployeeDocuments() {
     setError(null);
 
     apiFetch(
-      `/api/employee-documents?employee=${employeeId}&size=100&sort=emp_doc_id,asc`,
+      `/api/employee-documents?employee=${employeeId}&size=100&sort=empDocId,asc`,
     )
       .then((res) => {
         if (!res.ok) throw new Error(`Failed to load documents (${res.status})`);
@@ -557,14 +557,14 @@ export default function EmployeeDocuments() {
 
   /**
    * Fetches the raw file blob for a document and opens the viewer overlay.
-   * Uses docu_Id (the underlying Document PK) to call the file endpoint.
+   * Uses docuId (the underlying Document PK) to call the file endpoint.
    */
   async function handleViewDocument(doc) {
     setViewLoading(true);
     setViewOpen(true);
     setViewDocMeta(doc);
     try {
-      const res = await apiFetch(`/api/documents/${doc.docu_Id}/file`);
+      const res = await apiFetch(`/api/documents/${doc.docuId}/file`);
       if (!res.ok) {
         notyfError("Could not load file");
         setViewOpen(false);
@@ -684,7 +684,7 @@ export default function EmployeeDocuments() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {documents.map((doc) => (
               // Subtle lift animation on hover to make the card feel interactive
-              <div key={doc.emp_doc_id} className="group">
+              <div key={doc.empDocId} className="group">
                 <div className="card bg-base-100 border border-base-300 transition-transform duration-300 group-hover:-translate-y-2 h-full">
                   <div className="card-body gap-3">
 
@@ -710,7 +710,7 @@ export default function EmployeeDocuments() {
                       </div>
                       {/* Badge shows the underlying Document record's PK */}
                       <span className="badge badge-soft badge-neutral text-xs ml-auto shrink-0">
-                        #{doc.docu_Id}
+                        #{doc.docuId}
                       </span>
                     </div>
 

@@ -16,7 +16,7 @@ public class EmployeeDocument {
     @Column(name = "employee_document_id")
     @Getter
     @Setter
-    private Integer emp_doc_id;
+    private Integer empDocId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "employee_id", nullable = false)

@@ -327,7 +327,7 @@ useEffect(() => {
   let active = true;   // guards against setting state after unmount
 
   setLoading(true);
-  apiFetch(`/api/employee-documents?employee=${employeeId}&size=100&sort=emp_doc_id,asc`)
+  apiFetch(`/api/employee-documents?employee=${employeeId}&size=100&sort=empDocId,asc`)
     .then(res => { if (!res.ok) throw new Error(...); return res.json(); })
     .then(data => { if (active) setDocuments(data.content ?? []); })
     .catch(err => { if (active) setError(err.message); })
@@ -413,7 +413,7 @@ the second call creates the relationship.
 **Purpose:** Edit the text description of an existing document.
 
 ```
-PUT /api/documents/{docu_Id}    body: { description: "..." }
+PUT /api/documents/{docuId}    body: { description: "..." }
 ```
 
 Pre-populated with the current description (`defaultValues: { description: doc.description }`).
@@ -423,7 +423,7 @@ Pre-populated with the current description (`defaultValues: { description: doc.d
 **Purpose:** Swap the stored file while keeping the description.
 
 ```
-PUT /api/documents/{docu_Id}/file    body: FormData with the new file
+PUT /api/documents/{docuId}/file    body: FormData with the new file
 ```
 
 Shows a warning alert so the user knows the old file is permanently overwritten.
@@ -433,7 +433,7 @@ Shows a warning alert so the user knows the old file is permanently overwritten.
 **Purpose:** Confirm and then delete the employee-document link.
 
 ```
-DELETE /api/employee-documents/{emp_doc_id}
+DELETE /api/employee-documents/{empDocId}
 ```
 
 Shows a warning alert clarifying that only the **link** is removed, not the file.
@@ -502,7 +502,7 @@ The server stores files as binary data. To display them in the browser, we:
 
 1. Fetch the raw bytes:
    ```jsx
-   const res = await apiFetch(`/api/documents/${doc.docu_Id}/file`);
+   const res = await apiFetch(`/api/documents/${doc.docuId}/file`);
    const blob = await res.blob();   // blob = raw binary data
    ```
 

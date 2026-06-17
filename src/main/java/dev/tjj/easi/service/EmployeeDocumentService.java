@@ -51,12 +51,12 @@ public class EmployeeDocumentService {
 
     /** Removes a employee-document link by its ID. The document file itself is not deleted. */
     @Transactional
-    public void delete(Integer emp_doc_id) {
-        EmployeeDocument pd = employeeDocumentRepository.findById(emp_doc_id)
+    public void delete(Integer empDocId) {
+        EmployeeDocument pd = employeeDocumentRepository.findById(empDocId)
                 .orElseThrow(() -> new IllegalArgumentException("employee document link not found."));
         employeeDocumentRepository.delete(pd);
         logService.logByEmail(getEmail(), LogType.AUDIT, LogSeverity.INFO, "DELETE", "EmployeeDocument",
-                String.valueOf(emp_doc_id), "Removed employee document link #" + emp_doc_id, null);
+                String.valueOf(empDocId), "Removed employee document link #" + empDocId, null);
     }
 
     /** Returns a page of document links filtered by employee id. */
@@ -70,8 +70,8 @@ public class EmployeeDocumentService {
     }
 
     /** Returns a single employee document link by ID. */
-    public EmployeeDocumentResponse getById(Integer emp_doc_id) {
-        return employeeDocumentRepository.findById(emp_doc_id)
+    public EmployeeDocumentResponse getById(Integer empDocId) {
+        return employeeDocumentRepository.findById(empDocId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new IllegalArgumentException("Employee document link not found."));
     }
@@ -84,9 +84,9 @@ public class EmployeeDocumentService {
     private EmployeeDocumentResponse toResponse(EmployeeDocument ed) {
         Document d = ed.getDocument();
         return new EmployeeDocumentResponse(
-                ed.getEmp_doc_id(),
-                ed.getEmployee().getEmployeeId(),
-                d.getDocuId(),
+                ed.getEmpDocId(),    // empDocId
+                ed.getEmployee().getEmployeeId(),  // employeeId
+                d.getDocuId(),       // docuId
                 d.getFileName(),
                 d.getFileType(),
                 d.getDescription(),

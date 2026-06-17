@@ -7,13 +7,13 @@ import java.time.LocalDateTime;
 public record EmployeeDocumentResponse(
 
         @Schema(description = "Employee document link ID", example = "1")
-        Integer emp_doc_id,
+        Integer empDocId,
 
         @Schema(description = "Employee number", example = "1")
-        Integer employee_id,
+        Integer employeeId,
 
         @Schema(description = "Linked document ID", example = "5")
-        Integer docu_Id,
+        Integer docuId,
 
         @Schema(description = "Document file name", example = "report.pdf")
         String fileName,

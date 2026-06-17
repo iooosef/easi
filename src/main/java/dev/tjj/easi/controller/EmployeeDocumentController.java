@@ -55,10 +55,10 @@ public class EmployeeDocumentController {
         @ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or STAFF role"),
         @ApiResponse(responseCode = "404", description = "Link not found")
     })
-    @DeleteMapping("/{emp_doc_id}")
+    @DeleteMapping("/{empDocId}")
     public ResponseEntity<Void> delete(
-            @Parameter(description = "Employee document link ID", example = "1") @PathVariable Integer emp_doc_id) {
-        employeeDocumentService.delete(emp_doc_id);
+            @Parameter(description = "Employee document link ID", example = "1") @PathVariable Integer empDocId) {
+        employeeDocumentService.delete(empDocId);
         return ResponseEntity.noContent().build();
     }
 
@@ -85,9 +85,9 @@ public class EmployeeDocumentController {
         @ApiResponse(responseCode = "401", description = "Unauthorized"),
         @ApiResponse(responseCode = "404", description = "Link not found")
     })
-    @GetMapping("/{emp_doc_id}")
+    @GetMapping("/{empDocId}")
     public ResponseEntity<EmployeeDocumentResponse> getById(
-            @Parameter(description = "Employee document link ID", example = "1") @PathVariable Integer emp_doc_id) {
-        return ResponseEntity.ok(employeeDocumentService.getById(emp_doc_id));
+            @Parameter(description = "Employee document link ID", example = "1") @PathVariable Integer empDocId) {
+        return ResponseEntity.ok(employeeDocumentService.getById(empDocId));
     }
 }
