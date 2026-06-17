@@ -5,21 +5,21 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Entity
-@Table(name = "vehicle_gas_logs_documents")
-public class VehicleGasLogDocument {
+@Table(name = "vehicle_maintenance_log_documents")
+public class VehicleMaintenanceLogDocument {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "proj_doc_id")
+    @Column(name = "mnt_log_doc_id")
     @Getter
     @Setter
-    private Integer projDocId;
+    private Integer mntLogDocId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "gas_log_id", nullable = false)
+    @JoinColumn(name = "mnt_log_id", nullable = false)
     @Getter
     @Setter
-    private VehicleGasLog vehicleGasLog;
+    private VehicleMaintenanceLog vehicleMaintenanceLog;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "docu_id", nullable = false)
